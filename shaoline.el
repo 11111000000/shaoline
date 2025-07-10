@@ -85,9 +85,9 @@ Zen masters say: A log unread is a tree falling in a silent forest."
         (insert msg "\n")))))
 
 (defcustom shaoline-segments
-  '((:left shaoline-segment-icon-and-buffer shaoline-segment-git-branch)
+  '((:left shaoline-segment-icon-and-buffer)
     (:center shaoline-segment-echo-message)
-    (:right shaoline-segment-project-name shaoline-segment-battery shaoline-segment-time))
+    (:right shaoline-segment-project-name shaoline-segment-git-branch shaoline-segment-battery shaoline-segment-time))
   "Alist describing segments for :left, :center and :right.
 Each entry is a list of segment function symbols for that side.
 Tweak segments as calmly as rearranging stones: simply, purposefully."
@@ -125,7 +125,7 @@ Tweak segments as calmly as rearranging stones: simply, purposefully."
   :group 'shaoline)
 
 (defface shaoline-echo-face
-  '((t :inherit (font-lock-comment-face shaoline-base-face) :height 1.0))
+  '((t :inherit (font-lock-string-face shaoline-base-face) :height 1.0))
   "Face for the echo message segment (slightly smaller)."
   :group 'shaoline)
 
