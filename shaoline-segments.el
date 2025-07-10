@@ -141,10 +141,10 @@ will truncate it if necessary."
 
 (shaoline-define-simple-segment shaoline-segment-time
   "Current time with moon phase."
-  (let* ((time (propertize (format-time-string "%H:%M") 'face 'shaoline-time-face))
+  (let* ((time (propertize (format-time-string " %H:%M ") 'face 'shaoline-time-face))
          (phase-number (shaoline--moon-phase-idx))
          (phases ["🌑" "🌒" "🌓" "🌔" "🌕" "🌖" "🌗" "🌘"])
-         (moon (propertize (aref phases phase-number) 'face 'shaoline-time-face)))
+         (moon (propertize (aref phases phase-number) 'face 'shaoline-moon-face)))
     (concat time " " moon "  ")))
 
 (provide 'shaoline-segments)

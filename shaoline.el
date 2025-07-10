@@ -134,6 +134,11 @@ Tweak segments as calmly as rearranging stones: simply, purposefully."
   "Face for the time segment."
   :group 'shaoline)
 
+(defface shaoline-moon-face
+  '((t  :inherit default :height 1.0 :bold nil))
+  "Face for the time segment."
+  :group 'shaoline)
+
 (defface shaoline-battery-face
   '((t :inherit (shaoline-base-face)))
   "Face for battery level segment."
@@ -297,15 +302,13 @@ the window width."
          (right   (mapconcat #'identity
                              (shaoline--collect-segments :right buffer) " "))
          (gap-left (if (string-empty-p left) "" " "))
-         (gap-mid  (if (and (not (string-empty-p center0))
-                            (not (string-empty-p right)))
-                       " " ""))
+         ;; Более корректно: не вычитать лишний пробел или "align-to", чтобы
+         ;; центральный сегмент занимал максимум пространства.
          (avail (max 0 (- (window-width window)
                           (string-width left)
-                          (string-width gap-left)
+                          (if (string-empty-p left) 0 1)
                           (string-width right)
-                          shaoline-right-padding
-                          (string-width gap-mid))))
+                          shaoline-right-padding)))
          (center (if (> (string-width center0) avail)
                      (truncate-string-to-width center0 avail 0 ?\s)
                    center0)))
@@ -313,7 +316,7 @@ the window width."
      left
      gap-left
      center
-     gap-mid
+     ;; Единственный «пробел» управляет выравниванием правого сегмента.
      (propertize
       " "
       'display `(space :align-to (- right ,(+ (string-width right)
@@ -321,10 +324,6 @@ the window width."
                                               1))))
      right
      (make-string shaoline-right-padding ?\s))))
-
-
-
-
 
 ;; ----------------------------------------------------------------------------
 ;; Segments are now located in a separate file.
