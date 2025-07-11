@@ -341,5 +341,32 @@ the window width."
       (error (shaoline--log "Could not load user segments: %s" err)))))
 
 
+;; ----------------------------------------------------------------------------
+;; Prevent flicker: suppress empty `message' calls
+;;
+;; Many commands end with `(message nil)` (or an empty string), which erases the
+;; echo area.  For an echo-area modeline that means a visible blink on every
+;; keystroke.  We wrap `message` and ignore such empty invocations while
+;; `shaoline-mode` is active, letting genuine messages through unchanged.
+
+(defun shaoline--empty-message-p (fmt args)
+  "Return non-nil when calling `message' with FMT/ARGS would show nothing."
+  (or (null fmt)
+      (and (stringp fmt)
+           (string-empty-p (apply #'format fmt args)))))
+
+(defun shaoline--message-around (orig-fmt &rest args)
+  "Advice around `message` to keep Shaoline visible.
+If `shaoline-mode` is active and the message is empty, do nothing; otherwise
+delegate to the real `message`."
+  (if (and (bound-and-true-p shaoline-mode)
+           (shaoline--empty-message-p orig-fmt args))
+      ;; Mimic the usual return value of `(message nil)` without clearing.
+      nil
+    (apply orig-fmt args)))
+
+;; Install the advice once when Shaoline is loaded.
+(advice-add 'message :around #'shaoline--message-around)
+
 (provide 'shaoline)
 ;;; shaoline.el ends here
