@@ -83,16 +83,18 @@ will truncate it if necessary."
                        ((not (featurep 'all-the-icons)) "")
                        ((and percent (string-match "\\([0-9]+\\)" percent))
                         (let* ((n (string-to-number (match-string 1 percent))))
-                          (cond ((>= n 90) (all-the-icons-faicon "battery-full"
-                                                                 :face 'shaoline-battery-face))
+                          (cond
+                           ((>= n 90) (all-the-icons-faicon "battery-full"
+                                                                 :face 'shaoline-battery-face :v-adjust 0))
                                 ((>= n 70) (all-the-icons-faicon "battery-three-quarters"
-                                                                 :face 'shaoline-battery-face))
+                                                                 :face 'shaoline-battery-face :v-adjust 0))
                                 ((>= n 40) (all-the-icons-faicon "battery-half"
-                                                                 :face 'shaoline-battery-face))
+                                                                 :face 'shaoline-battery-face :v-adjust 0))
                                 ((>= n 10) (all-the-icons-faicon "battery-quarter"
-                                                                 :face 'shaoline-battery-face))
+                                                                 :face 'shaoline-battery-face :v-adjust 0))
                                 (t (all-the-icons-faicon "battery-empty"
-                                                        :face 'shaoline-battery-face)))))
+                                                        :face 'shaoline-battery-face :v-adjust 0)))))
+                           
                        ((and status (string-match-p "full" status)) (all-the-icons-faicon "battery-full" :face 'shaoline-battery-face))
                        ((and status (string-match-p "\\<ac\\>" status)) (all-the-icons-octicon "plug" :face 'shaoline-battery-face))
                        ((and status (string-match-p "charging" status)) (all-the-icons-faicon "bolt" :face 'shaoline-battery-face))
