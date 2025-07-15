@@ -72,6 +72,13 @@ Increase if your favorite icons are wider."
   :type 'boolean
   :group 'shaoline)
 
+(defcustom shaoline-enable-dynamic-segments t
+  "If non-nil, enable dynamic segments like time and battery.
+When disabled, these segments return empty strings and do not load any dependencies.
+This purifies Shaoline for minimal setups, aligning with Wu Wei."
+  :type 'boolean
+  :group 'shaoline)
+
 (defvar shaoline--log-buffer "*shaoline-logs*"
   "Buffer name used for debug log. A quiet scroll for Shaoline whispers.")
 
@@ -130,13 +137,23 @@ Tweak segments as calmly as rearranging stones: simply, purposefully."
   :group 'shaoline)
 
 (defface shaoline-time-face
-  '((t :background "#002200" :foreground "#00aa00" :height 1.0 :bold nil :family "Digital Display"))
-  "Face for the time segment."
+  `((t :inherit default  ;; Inherit from default to adapt to themes
+       :height 1.0
+       :bold nil
+       :family "Digital Display"
+       :foreground ,(or (face-foreground 'success nil t) "#00aa00")  ;; Цвет, вычисляемый на этапе загрузки
+       :background ,(or (face-background 'shadow nil t) "#002200")))  ;; Фон, вычисляемый на этапе загрузки
+  "Face for the time segment, adapting to the current theme at load time.
+For full dynamic adaptation, reload after theme changes."
   :group 'shaoline)
 
 (defface shaoline-moon-face
-  '((t  :inherit default :height 1.0 :bold nil))
-  "Face for the time segment."
+  `((t :inherit default
+       :height 1.0
+       :bold nil
+       :foreground ,(or (face-foreground 'warning nil t) "yellow")))  ;; Цвет, вычисляемый на этапе загрузки
+  "Face for the moon phase, adapting to the theme at load time.
+For full dynamic adaptation, reload after theme changes."
   :group 'shaoline)
 
 (defface shaoline-battery-face
@@ -194,6 +211,27 @@ Restored exactly as it was when the mode is toggled off.")
 ;; ----------------------------------------------------------------------------
 ;; Infrastructure (UI, advice, minor mode, etc.) now in shaoline-infra.el.
 (require 'shaoline-infra)
+
+;; Функция для обновления faces при смене темы
+(defun shaoline-update-faces (&rest _)
+  "Update Shaoline faces to match the current theme."
+  (custom-set-faces
+   `(shaoline-time-face
+     ((t :inherit default
+         :height 1.0
+         :bold nil
+         :family "Digital Display"
+         :foreground ,(or (face-foreground 'success nil t) "#00aa00")
+         :background ,(or (face-background 'shadow nil t) "#002200"))))
+   `(shaoline-moon-face
+     ((t :inherit default
+         :height 1.0
+         :bold nil
+         :foreground ,(or (face-foreground 'warning nil t) "yellow"))))))
+
+;; Добавляем хук на смену темы
+(add-hook 'enable-theme-functions #'shaoline-update-faces)
+(add-hook 'disable-theme-functions #'shaoline-update-faces)
 
 ;; ----------------------------------------------------------------------------
 ;; Segment definition macros

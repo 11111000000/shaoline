@@ -9,3 +9,5 @@
 ;;   environment.systemPackages = [ pkgs.emacsPackages.shaoline ];
 ;;   # Add optional deps as needed.
 ;; }
+
+;; Optional: shaoline-enable-dynamic-segments (customize to disable battery/time for minimal deps)
