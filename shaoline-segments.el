@@ -66,59 +66,72 @@ will truncate it if necessary."
 ;;; Battery
 (shaoline-define-simple-segment
  shaoline-segment-battery
- "Show battery percentage and charging status."
- (if (and (fboundp 'battery) battery-status-function)
-     (let* ((data (funcall battery-status-function)))
-       (cond
-        ((and (listp data) (cl-every #'consp data))
-         (let* ((percent (or (cdr (assoc 112 data))
-                             (cdr (assoc "percentage" data))
-                             (cdr (assoc "perc" data))
-                             (cdr (assoc "capacity" data))))
-                (status (or (cdr (assoc 66 data))
-                            (cdr (assoc "status" data))
-                            (cdr (assoc "charging" data))
-                            (cdr (assoc "state" data))))
-                (icon (cond
-                       ((not (featurep 'all-the-icons)) "")
-                       ((and percent (string-match "\\([0-9]+\\)" percent))
-                        (let* ((n (string-to-number (match-string 1 percent))))
-                          (cond
-                           ((>= n 90) (all-the-icons-faicon "battery-full"
-                                                                 :face 'shaoline-battery-face :v-adjust 0))
-                                ((>= n 70) (all-the-icons-faicon "battery-three-quarters"
-                                                                 :face 'shaoline-battery-face :v-adjust 0))
-                                ((>= n 40) (all-the-icons-faicon "battery-half"
-                                                                 :face 'shaoline-battery-face :v-adjust 0))
-                                ((>= n 10) (all-the-icons-faicon "battery-quarter"
-                                                                 :face 'shaoline-battery-face :v-adjust 0))
-                                (t (all-the-icons-faicon "battery-empty"
-                                                        :face 'shaoline-battery-face :v-adjust 0)))))
-                           
-                       ((and status (string-match-p "full" status)) (all-the-icons-faicon "battery-full" :face 'shaoline-battery-face))
-                       ((and status (string-match-p "\\<ac\\>" status)) (all-the-icons-octicon "plug" :face 'shaoline-battery-face))
-                       ((and status (string-match-p "charging" status)) (all-the-icons-faicon "bolt" :face 'shaoline-battery-face))
-                       ((and status (string-match-p "discharging" status)) "")
-                       (t ""))))
-           (if percent
-               (concat
-                (if (and (stringp icon) (not (string-empty-p icon))) (concat icon " "))
-                (propertize (concat (replace-regexp-in-string "%" "" percent) "%")
-                            'face 'shaoline-battery-face))
-             (propertize
-              (if (featurep 'all-the-icons)
-                  (concat (all-the-icons-faicon "battery-empty" :face 'shaoline-battery-face)
-                          " No battery")
-                "No battery")
-              'face '(:inherit shaoline-battery-face :slant italic)))))
-        ((and (stringp data) (not (string-empty-p data)))
-         (propertize data 'face 'shaoline-battery-face))
-        (t (propertize
-            (if (featurep 'all-the-icons)
-                (all-the-icons-faicon "battery-empty" :face 'shaoline-battery-face)
-              "N/A")
-            'face '(:inherit shaoline-battery-face :slant italic)))))
-   ""))
+ "Show battery percentage and charging status (fail-safe)."
+ (let ((safe-n-a
+        (propertize
+         (if (featurep 'all-the-icons)
+             (concat (all-the-icons-faicon "battery-empty" :face 'shaoline-battery-face) " N/A")
+           "N/A")
+         'face '(:inherit shaoline-battery-face :slant italic))))
+   (condition-case err
+       (if (and (fboundp 'battery) battery-status-function)
+           (with-timeout (0.7 safe-n-a)
+             (let* ((data (funcall battery-status-function)))
+               (cond
+                ((and (listp data) (cl-every #'consp data))
+                 (let* ((percent (or (cdr (assoc 112 data))
+                                     (cdr (assoc "percentage" data))
+                                     (cdr (assoc "perc" data))
+                                     (cdr (assoc "capacity" data))))
+                        (status (or (cdr (assoc 66 data))
+                                    (cdr (assoc "status" data))
+                                    (cdr (assoc "charging" data))
+                                    (cdr (assoc "state" data))))
+                        (progn
+                          (shaoline--log "[shaoline] battery percent(raw): %S status(raw): %S"
+                                         percent status))
+                        (icon (cond
+                               ((not (featurep 'all-the-icons)) "")
+                               ((and percent (string-match "\\([0-9]+\\)" percent))
+                                (let* ((n (string-to-number (match-string 1 percent)))
+                                       (icon-face
+                                        (let ((face
+                                               (cond
+                                                ((and status (string-match-p "\\`discharging\\'" status) (< n 25)) '(:foreground "#aa0000"))
+                                                ((and status (string-match-p "\\`charging\\'" status)) '(:foreground "#007700"))
+                                                (t 'shaoline-battery-face))))
+                                        
+                                          (shaoline--log "[shaoline] n (battery %%): %S, icon-face: %S, status: %S"
+                                                         n face status)
+                                          face)))
+                                  (cond
+                                   ((>= n 90) (all-the-icons-faicon "battery-full" :face icon-face :v-adjust 0))
+                                   ((>= n 70) (all-the-icons-faicon "battery-three-quarters" :face icon-face :v-adjust 0))
+                                   ((>= n 40) (all-the-icons-faicon "battery-half" :face icon-face :v-adjust 0))
+                                   ((>= n 10) (all-the-icons-faicon "battery-quarter" :face icon-face :v-adjust 0))
+                                   (t (all-the-icons-faicon "battery-empty" :face icon-face :v-adjust 0)))))
+                               
+                               ((and status (string-match-p "full" status)) (all-the-icons-faicon "battery-full" :face 'shaoline-battery-face))
+                               ((and status (string-match-p "\\<ac\\>" status)) (all-the-icons-octicon "plug" :face 'shaoline-battery-face))
+                               ((and status (string-match-p "charging" status)) (all-the-icons-faicon "bolt" :face '(:foreground "#007700") :v-adjust 0))
+                               ((and status (string-match-p "discharging" status)) (all-the-icons-faicon "battery-empty" :face '(:foreground "#aa0000") :v-adjust 0))
+                               (t ""))))
+                   (if percent
+                       (concat
+                        (if (and (stringp icon) (not (string-empty-p icon))) (concat icon " "))
+                        (propertize (concat (replace-regexp-in-string "%" "" percent) "%")
+                                    'face 'shaoline-battery-face))
+                     (propertize
+                      (if (featurep 'all-the-icons)
+                          (concat (all-the-icons-faicon "battery-empty" :face 'shaoline-battery-face)
+                                  " No battery")
+                        "No battery")
+                      'face '(:inherit shaoline-battery-face :slant italic)))))
+                ((and (stringp data) (not (string-empty-p data)))
+                 (propertize data 'face 'shaoline-battery-face))
+                (t safe-n-a))))
+         safe-n-a)
+     (error safe-n-a))))
 
 ;;; Major-mode with icon
 (shaoline-define-simple-segment shaoline-segment-major-mode
