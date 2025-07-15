@@ -1,11 +1,13 @@
-#+TITLE: Shaoline – Modeline of No-Thingness  
+#+TITLE: Shaoline – Modeline of Nothingness  
 #+AUTHOR: A Wandering Byte (following the Ox-herd)  
 #+EMAIL: (void)  
 #+LANGUAGE: en  
 #+OPTIONS: num:nil ^:nil toc:2
 
-- «The mode-line that can be seen is not the eternal mode-line.»  
-  (Lao-Tsé, ~~approx. 400 B.C.~~ Emacs 27+)
+#+begin_quote
+«The mode-line that can be seen is not the eternal mode-line.»  
+—  (Lao-Tsé, ~~approx. 400 B.C.~~ Emacs 27+)
+#+end_quote
 
 There was a time when every buffer carried a heavy belt of glyphs, numbers and blinking widgets.  
 One day a little Lisp file shaved its head, sat quietly in the echo area and simply /was/.  
@@ -152,7 +154,7 @@ Pure functions only!  Side-effects are karmic debt.
 
 | Symptom            | Likely cause                                             | Quick test                                                  |
 |--------------------+----------------------------------------------------------+-------------------------------------------------------------|
-| Flicker            | Another package sends empty ~message~s                   | Evaluate ~(shaoline-msg-engine)~; check logs                  |
+| Flicker            | Another package sends empty messages                     | Evaluate ~(shaoline-msg-engine)~; check logs                  |
 | No right-side text | Window too narrow                                        | Widen or set =shaoline-right-padding= -2 (negative emptiness) |
 | Battery says N/A   | No battery in machine, or ~battery-status-function~ is nil | Accept impermanence                                         |
 
