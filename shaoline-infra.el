@@ -47,18 +47,14 @@ If BACKUP-RESTORE is non-nil, take or restore backup of the default setting."
 
 (defun shaoline--autohide-modeline-globally ()
   "Hide the classic mode-line in all current and future buffers,
-EXCEPT in modes listed in `shaoline-exclude-modes`."
+EXCEPT in modes listed in `shaoline-exclude-modes`.
 
 The current value of `mode-line-format` is stored buffer-locally as `shaoline--saved-mode-line-format`,
 allowing exact restoration when `shaoline-mode` is disabled."
-  ;; Save the global default (only once) and blank it so *new* buffers
-  ;; inherit the hidden state.
   (unless shaoline--default-mode-line-format-backup
     (setq shaoline--default-mode-line-format-backup
           (default-value 'mode-line-format)))
   (setq-default mode-line-format nil)
-  ;; Hide the mode-line in all currently existing buffers while remembering
-  ;; their individual values.
   (dolist (buf (buffer-list))
     (with-current-buffer buf
       (unless (or (memq major-mode shaoline-exclude-modes)
@@ -72,11 +68,9 @@ allowing exact restoration when `shaoline-mode` is disabled."
 
 The value saved in `shaoline--saved-mode-line-format` is restored and the marker removed.
 If a buffer's mode-line-format was not changed by Shaoline, it is left untouched."
-  ;; Restore the global default.
   (when shaoline--default-mode-line-format-backup
     (setq-default mode-line-format shaoline--default-mode-line-format-backup)
     (setq shaoline--default-mode-line-format-backup nil))
-  ;; Restore per-buffer values carefully.
   (dolist (buf (buffer-list))
     (with-current-buffer buf
       (when (local-variable-p 'shaoline--saved-mode-line-format)
