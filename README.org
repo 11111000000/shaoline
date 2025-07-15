@@ -25,7 +25,7 @@ To walk /its/ Way you do nothing, and yet /everything gets done/.
 
 ---
 
-- Quick sip of tea (TL;DR)
+** Quick sip of tea (TL;DR)
 
 #+begin_src emacs-lisp
 (use-package shaoline
@@ -37,7 +37,7 @@ To walk /its/ Way you do nothing, and yet /everything gets done/.
 Already enlightened?  Skip the rest, go pet a cat.  
 Still here?  Read on.
 
-- Features (the things Shaoline promptly forgets)
+** Features (the things Shaoline promptly forgets)
 
 1. /Echo-area only/ – no child frames, no window hacking, no monkey business.
 2. /Functional core/ – every segment is a pure function: input → string, nothing more.
@@ -54,20 +54,20 @@ Master: «Mu.»
 — classic koan, condensed
 #+end_quote
 
-- Installation
+** Installation
 
-* GNU ELPA / MELPA
+*** GNU ELPA / MELPA
 
 #+begin_src emacs-lisp
 M-x package-install RET shaoline RET
 #+end_src
 
-* Straight / Quelpa / Git
+*** Straight / Quelpa / Git
 
 Clone and add to =load-path= or use your favourite package manager.  
 Requires Emacs 27.1+, a cup of tea optional.
 
-- Philosophy ⇒ Configuration
+** Philosophy ⇒ Configuration
 
 Shaoline’s default setup is sane for /most/ mortals.  
 Yet the Way is personal; tweak as you please.
@@ -103,7 +103,7 @@ M-x customize-group RET shaoline RET
 
 Remember: the fewer settings you touch, the closer you are to Emptiness.
 
-- Standard segments
+** Standard segments
 
 | Symbol                           | What it shows                     | Depends on               |
 |----------------------------------+-----------------------------------+--------------------------|
@@ -116,7 +116,7 @@ Remember: the fewer settings you touch, the closer you are to Emptiness.
 
 Disable what you dislike; enlightenment is light to carry.
 
-- Writing your own segment (become the Master)
+** Writing your own segment (become the Master)
 
 A segment is a function that returns a string; nothing more, nothing less.
 
@@ -132,7 +132,7 @@ A segment is a function that returns a string; nothing more, nothing less.
 
 Pure functions only!  Side-effects are karmic debt.
 
-- FAQ (Frequently Asked Koans)
+** FAQ (Frequently Asked Koans)
 
 1. /Where did my old mode-line go?/  
    It renounced worldly attachments.  Toggle =shaoline-autohide-modeline= to false.
@@ -150,7 +150,7 @@ Pure functions only!  Side-effects are karmic debt.
 5. /Does Shaoline work on TTY?/  
    Absolutely.  Moon glyphs degrade gracefully into ASCII; icons vanish like morning mist.
 
-- Troubleshooting
+** Troubleshooting
 
 | Symptom            | Likely cause                                             | Quick test                                                  |
 |--------------------+----------------------------------------------------------+-------------------------------------------------------------|
@@ -158,7 +158,7 @@ Pure functions only!  Side-effects are karmic debt.
 | No right-side text | Window too narrow                                        | Widen or set =shaoline-right-padding= -2 (negative emptiness) |
 | Battery says N/A   | No battery in machine, or ~battery-status-function~ is nil | Accept impermanence                                         |
 
-- Contributing
+** Contributing
 
 Pull requests, issues, poems, haiku – all welcome at [[https://github.com/11111000000/shaoline][GitHub]].
 
@@ -167,7 +167,7 @@ Pull requests, issues, poems, haiku – all welcome at [[https://github.com/1111
 — Zen proverb (draft)
 #+end_quote
 
-- License
+** License
 
 MIT.  Copy it, fork it, glue it to a kite and let it fly.
 
