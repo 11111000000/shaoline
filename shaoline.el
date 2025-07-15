@@ -349,7 +349,7 @@ Calculates based on the length of left and right segments, including any necessa
 ;; This function is pure: it only computes a string with properties, no UI,
 ;; no global state. It is safe for use in tests and non-UI code.
 
-(defun shaoline-compose-modeline (&optional buffer window _width)
+(defun shaoline-compose-modeline (&optional buffer window width)
   "Return the Shaoline string for the echo area.
 
 Pure function: collects, arranges, and truncates segments for rendering 
@@ -360,6 +360,10 @@ truncated when necessary so that the whole string never exceeds
 the window width."
   (let* ((buffer  (or buffer (current-buffer)))
          (window  (or window  (selected-window)))
+         (echo-width (or width
+                         (let* ((mini (minibuffer-window))
+                                (mini-w (and (window-live-p mini) (window-width mini))))
+                           (or mini-w (frame-width)))))
          (left    (mapconcat #'identity
                              (shaoline--collect-segments :left buffer) " "))
          (center0 (mapconcat #'identity
@@ -369,13 +373,13 @@ the window width."
          (gap-left (if (string-empty-p left) "" " "))
          ;; Более корректно: не вычитать лишний пробел или "align-to", чтобы
          ;; центральный сегмент занимал максимум пространства.
-         (avail (max 0 (- (window-width window)
+         (avail (max 0 (- echo-width
                           (string-width left)
                           (if (string-empty-p left) 0 1)
                           (string-width right)
                           shaoline-right-padding)))
          (center (if (> (string-width center0) avail)
-                     (truncate-string-to-width center0 avail 0 ?\s)
+                     (truncate-string-to-width center0 avail 0 ?\s "...")
                    center0)))
     (concat
      left
@@ -385,8 +389,7 @@ the window width."
      (propertize
       " "
       'display `(space :align-to (- right ,(+ (string-width right)
-                                              shaoline-right-padding
-                                              1))))
+                                              shaoline-right-padding))))
      right
      (make-string shaoline-right-padding ?\s))))
 
