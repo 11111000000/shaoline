@@ -118,12 +118,29 @@ Sometimes, true clarity is emptiness."
 
 ;; ----------------------------------------------------------------------------
 ;; Minor mode
+
+(defvar shaoline--debounce-timer nil
+  "Timer for debouncing Shaoline updates.")
+
+(defun shaoline--debounced-update (&rest _)
+  "Debounce wrapper: schedule update after a short delay."
+  (when (timerp shaoline--debounce-timer)
+    (cancel-timer shaoline--debounce-timer))
+  (setq shaoline--debounce-timer
+        (run-with-timer 0.1 nil #'shaoline--update)))
+
 (defvar shaoline--timer nil
   "Internal timer used by `shaoline-mode' for periodic updates (only when needed).")
 
 (defun shaoline--maybe-start-timer ()
-  "Запускать ленивый таймер только если требуется обновлять динамические сегменты (например, время, батарея)."
-  (when (and (null shaoline--timer) shaoline-mode)
+  "Лениво запускать таймер только если shaoline-enable-dynamic-segments и имеются динамические сегменты во :right или :center."
+  (when (and (null shaoline--timer)
+             shaoline-mode
+             shaoline-enable-dynamic-segments
+             (or (cl-member 'shaoline-segment-time (cdr (assq :right shaoline-segments)))
+                 (cl-member 'shaoline-segment-time (cdr (assq :center shaoline-segments)))
+                 (cl-member 'shaoline-segment-battery (cdr (assq :right shaoline-segments)))
+                 (cl-member 'shaoline-segment-battery (cdr (assq :center shaoline-segments)))))
     (setq shaoline--timer
           (run-with-timer shaoline-timer-interval
                           shaoline-timer-interval
@@ -136,15 +153,18 @@ Sometimes, true clarity is emptiness."
     (setq shaoline--timer nil)))
 
 (defun shaoline--lazy-update ()
-  "Ленивая обновляющая функция: если нет показа echo-message и нет динамического сегмента — убираем себя."
+  "Ленивая обновляющая функция: если нет показа echo-message, нет нужных динамических сегментов или shaoline-enable-dynamic-segments — убираем себя."
   (shaoline--log "shaoline--lazy-update")
   (let ((should-keep
-         (or
-          ;; Центр может включать временной сегмент; присутствует ли он?
-          (cl-member 'shaoline-segment-time (cdr (assq :right shaoline-segments)))
-          (cl-member 'shaoline-segment-time (cdr (assq :center shaoline-segments)))
-          ;; Пользовательское сообщение ещё "живое"
-          (shaoline-msg-active-p shaoline-message-timeout))))
+         (and shaoline-enable-dynamic-segments
+              (or
+               ;; Нужен ли динамический сегмент (time/battery)?
+               (cl-member 'shaoline-segment-time (cdr (assq :right shaoline-segments)))
+               (cl-member 'shaoline-segment-time (cdr (assq :center shaoline-segments)))
+               (cl-member 'shaoline-segment-battery (cdr (assq :right shaoline-segments)))
+               (cl-member 'shaoline-segment-battery (cdr (assq :center shaoline-segments)))
+               ;; Пользовательское сообщение ещё "живое"
+               (shaoline-msg-active-p shaoline-message-timeout)))))
     (shaoline--update)
     (unless should-keep
       (shaoline--maybe-cancel-timer))))
@@ -193,21 +213,24 @@ Only reacts if message from user (not Shaoline's own)."
         ;; Backup and disable vertical resizing of the echo area
         (setq shaoline--resize-mini-windows-backup resize-mini-windows)
         (setq resize-mini-windows nil)
+        ;; Debounce обновление (добавить дебаунсер на хуки)
         (dolist (hook shaoline-update-hooks)
-          (add-hook hook #'shaoline--update))
-        (advice-add 'message :filter-return #'shaoline--message-filter-return)
+          (add-hook hook #'shaoline--debounced-update))
+        ;; НЕ advice-add, а фильтр через add-function (устанавливается в shaoline.el)
         ;; Hide shaoline when echo-area is used for input, then restore afterwards
         (add-hook 'minibuffer-setup-hook    #'shaoline--clear-display)
         (add-hook 'minibuffer-exit-hook     #'shaoline--update)
         (add-hook 'isearch-mode-hook        #'shaoline--clear-display)
         (add-hook 'isearch-mode-end-hook    #'shaoline--update)
         (shaoline--update)
-        (setq shaoline--timer nil) ;; Таймер больше не запускаем автоматически, только лениво.
+        (setq shaoline--timer nil) ;; Таймер ленивый, не запускается автоматически.
         )
     ;; turn off
     (dolist (hook shaoline-update-hooks)
-      (remove-hook hook #'shaoline--update))
-    (advice-remove 'message #'shaoline--message-filter-return)
+      (remove-hook hook #'shaoline--debounced-update))
+    ;; Remove shaoline--message-filter via add-function
+    (when (fboundp 'shaoline--maybe-remove-message-filter)
+      (shaoline--maybe-remove-message-filter))
     (shaoline--clear-display)
     ;; Remove our input hooks
     (remove-hook 'minibuffer-setup-hook    #'shaoline--clear-display)
@@ -220,6 +243,10 @@ Only reacts if message from user (not Shaoline's own)."
     (when (timerp shaoline--timer)
       (cancel-timer shaoline--timer)
       (setq shaoline--timer nil))
+    ;; Cancel debounce timer
+    (when (timerp shaoline--debounce-timer)
+      (cancel-timer shaoline--debounce-timer)
+      (setq shaoline--debounce-timer nil))
     ;; Restore minibuffer resize behavior
     (when shaoline--resize-mini-windows-backup
       (setq resize-mini-windows shaoline--resize-mini-windows-backup)

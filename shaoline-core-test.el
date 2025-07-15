@@ -37,6 +37,17 @@
     ;; Restore features
     (setq features old-features)))
 
+(ert-deftest shaoline-debounce-no-flicker ()
+  "Test that debounce prevents multiple rapid updates."
+  (let ((shaoline--debounce-timer nil)
+        (update-count 0))
+    (advice-add 'shaoline--update :before (lambda (&rest _) (cl-incf update-count)))
+    (shaoline--debounced-update)
+    (shaoline--debounced-update)  ;; Should cancel the first
+    (sit-for 0.2)  ;; Wait for timer
+    (should (= update-count 1))  ;; Only one update
+    (advice-remove 'shaoline--update (lambda (&rest _) (cl-incf update-count)))))
+
 ;;; Add more property-based or ERT tests here as needed
 
 (provide 'shaoline-core-test)

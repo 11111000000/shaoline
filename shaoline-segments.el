@@ -1,20 +1,23 @@
 ;;; shaoline-segments.el --- Standard segments for shaoline -*- lexical-binding: t -*-
 
 (require 'shaoline-msg-engine)
+(eval-when-compile
+  (defvar shaoline-enable-dynamic-segments t "Docstring for eval-when-compile shadowing."))
 
 ;;; Buffer icon & name
 (shaoline-define-segment shaoline-segment-icon-and-buffer (buffer)
   "Цветная иконка буфера (по режиму, как во вкладках) + имя буфера."
-  (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
-  (let* ((icon (when (featurep 'all-the-icons)
-                 (let* ((mode (buffer-local-value 'major-mode buffer))
-                        (raw (all-the-icons-icon-for-mode mode :height 0.9)))
-                   (cond
-                    ((stringp raw) raw)
-                    ((buffer-file-name buffer)
-                     (all-the-icons-icon-for-file
-                      (buffer-file-name buffer) :height 0.9))
-                    (t (all-the-icons-faicon "file-o" :height 0.9))))))
+  (let* ((icon
+          (when (and shaoline-enable-dynamic-segments (featurep 'all-the-icons))
+            (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
+            (let* ((mode (buffer-local-value 'major-mode buffer))
+                   (raw (all-the-icons-icon-for-mode mode :height 0.9)))
+              (cond
+               ((stringp raw) raw)
+               ((buffer-file-name buffer)
+                (all-the-icons-icon-for-file
+                 (buffer-file-name buffer) :height 0.9))
+               (t (all-the-icons-faicon "file-o" :height 0.9))))))
          (name (buffer-name buffer))
          (text (if icon (concat icon " " name) name)))
     (add-face-text-property
@@ -41,12 +44,12 @@
 ;;; Git branch
 (shaoline-define-simple-segment shaoline-segment-git-branch
   "Current Git branch."
-  (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
   (when (and (featurep 'vc-git) (buffer-file-name))
     (let ((branch (vc-git--symbolic-ref (buffer-file-name))))
       (when branch
         (concat
-         (when (featurep 'all-the-icons)
+         (when (and shaoline-enable-dynamic-segments (featurep 'all-the-icons))
+           (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
            (all-the-icons-octicon "git-branch" :v-adjust 0 :height 1.0 :face 'shaoline-git-face))
          " "
          (propertize branch 'face 'shaoline-git-face))))))
@@ -131,9 +134,10 @@ Wanders the Way: returns 'N/A' if nothing is known, but never leaves Emacs distu
 ;;; Major-mode with icon
 (shaoline-define-simple-segment shaoline-segment-major-mode
   "Major mode segment with icon."
-  (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
-  (let ((icon (when (and (featurep 'all-the-icons) major-mode)
-                (all-the-icons-icon-for-mode major-mode :height 0.9))))
+  (let ((icon
+         (when (and shaoline-enable-dynamic-segments (featurep 'all-the-icons) major-mode)
+           (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
+           (all-the-icons-icon-for-mode major-mode :height 0.9))))
     (concat
      (when (and icon (stringp icon))
        (concat icon " "))

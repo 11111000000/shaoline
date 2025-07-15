@@ -33,6 +33,7 @@ No child-frame, nor window-modeline—the Shaoline line danceth solely within th
 - /Segments are by nature simple/: Each—forlorn, pure, unfastened by worldly things—disturbeth not its neighbour.
 - /Effortless Configuration/: Nothing is concealed—all is open before thee.
 - /Time doth Flow/: Even as rain upon the latticework doth Shaoline update—stirred by event, never by haste.
+- Debounced updates: Smooth, flicker-free refreshing via short delays (debounce).
 - /Transparency and Cheer/: In Shaoline is contained nothing that may not be grasped or altered, provided thy spirit remain light.
 - /Simplicity and Candour/: Settings are clear as morning tea sipped in the Valley of Wei.
 - /Beautiful icons/: For vivid file/mode/project icons, install [[https://github.com/domtronn/all-the-icons.el][all-the-icons]] (see FAQ).
