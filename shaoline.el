@@ -91,14 +91,33 @@ Zen masters say: A log unread is a tree falling in a silent forest."
         (goto-char (point-max))
         (insert msg "\n")))))
 
+(defcustom shaoline-available-segments
+  '((shaoline-segment-icon-and-buffer . "Icon and buffer name")
+    (shaoline-segment-project-name . "Project name (if any)")
+    (shaoline-segment-git-branch    . "Git branch")
+    (shaoline-segment-battery       . "Battery state")
+    (shaoline-segment-time          . "Time with moon-phase")
+    (shaoline-segment-echo-message  . "Recent noticed message"))
+  "Plenum of segments that may be included in shaoline. For drag/drop in customize."
+  :type '(alist :key-type symbol :value-type string)
+  :group 'shaoline)
+
 (defcustom shaoline-segments
   '((:left shaoline-segment-icon-and-buffer)
     (:center shaoline-segment-echo-message)
     (:right shaoline-segment-project-name shaoline-segment-git-branch shaoline-segment-battery shaoline-segment-time))
   "Alist describing segments for :left, :center and :right.
 Each entry is a list of segment function symbols for that side.
-Tweak segments as calmly as rearranging stones: simply, purposefully."
-  :type '(alist :key-type symbol :value-type (repeat function))
+May be configured in Custom (see shaoline-available-segments)."
+  :type '(alist
+          :key-type (choice (const :left) (const :center) (const :right))
+          :value-type (set (choice
+                            (const shaoline-segment-icon-and-buffer)
+                            (const shaoline-segment-project-name)
+                            (const shaoline-segment-git-branch)
+                            (const shaoline-segment-battery)
+                            (const shaoline-segment-time)
+                            (const shaoline-segment-echo-message))))
   :group 'shaoline)
 
 (defcustom shaoline-update-hooks
@@ -399,13 +418,19 @@ the window width."
   "Return non-nil when calling `message' with FMT/ARGS would show nothing."
   (or (null fmt)
       (and (stringp fmt)
-           (string-empty-p (apply #'format fmt args)))))
+           (string-empty-p (apply #'format fmt args))))
+      ;; Some packages may call message with "" directly.
+      (and (listp fmt) (equal fmt '(""))))
 
 (defun shaoline--message-filter (orig-fmt &rest args)
-  "Filter for `message` to suppress empty messages when Shaoline is active."
+  "Filter for `message` to suppress empty messages when Shaoline is active.
+If so, simply propagate the *current* echo area unchanged — never erase."
   (if (and (bound-and-true-p shaoline-mode)
            (shaoline--empty-message-p orig-fmt args))
-      nil
+      ;; DO NOT ERASE echo area: return current-message (i.e. leave Shaoline untouched)
+      (let ((curmsg (current-message)))
+        ;; Emacs expects a return value, so we return the current string which preserves the display.
+        (or curmsg ""))
     (apply orig-fmt args)))
 
 ;; Use add-function :around (safer, less intrusive than advice)

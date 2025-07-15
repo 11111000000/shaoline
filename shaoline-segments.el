@@ -165,5 +165,10 @@ Wanders the Way: returns 'N/A' if nothing is known, but never leaves Emacs distu
            (moon (propertize (aref phases phase-number) 'face 'shaoline-moon-face)))
       (concat time " " moon "  "))))
 
+;;; Segment: emptiness (visual spacer, Daoist non-doing)
+(shaoline-define-simple-segment shaoline-segment-emptiness
+  "The emptiest possible segment – a blank."
+  " ")
+
 (provide 'shaoline-segments)
 ;;; shaoline-segments.el ends here

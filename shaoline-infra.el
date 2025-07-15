@@ -70,12 +70,13 @@ allowing exact restoration when `shaoline-mode` is disabled."
 (defun shaoline--unhide-modeline-globally ()
   "Restore the classic mode-line in every buffer.
 
-The value saved in `shaoline--saved-mode-line-format` is restored and the marker removed."
+The value saved in `shaoline--saved-mode-line-format` is restored and the marker removed.
+If a buffer's mode-line-format was not changed by Shaoline, it is left untouched."
   ;; Restore the global default.
   (when shaoline--default-mode-line-format-backup
     (setq-default mode-line-format shaoline--default-mode-line-format-backup)
     (setq shaoline--default-mode-line-format-backup nil))
-  ;; Restore per-buffer values.
+  ;; Restore per-buffer values carefully.
   (dolist (buf (buffer-list))
     (with-current-buffer buf
       (when (local-variable-p 'shaoline--saved-mode-line-format)
@@ -112,10 +113,14 @@ The best display is sometimes none at all."
 
 (defun shaoline--clear-display ()
   "Clear the echo area if the last output was from Shaoline.
-Sometimes, true clarity is emptiness."
+Sometimes, true clarity is emptiness.
+Patched: Never clear if echo area is already empty or suppression is in effect."
   (when (and (stringp shaoline--last-str)
              (string= (current-message) shaoline--last-str))
-    (message nil))
+    ;; call only if really non-empty, or else never clear
+    (unless (or (not (current-message))
+                (string-empty-p (current-message)))
+      (message nil)))
   (setq shaoline--last-str ""))
 
 ;; ----------------------------------------------------------------------------
@@ -125,11 +130,13 @@ Sometimes, true clarity is emptiness."
   "Timer for debouncing Shaoline updates.")
 
 (defun shaoline--debounced-update (&rest _)
-  "Debounce wrapper: schedule update after a short delay."
+  "Debounce wrapper: schedule update after a short delay.
+If called rapidly, (e.g. during fast typing), postpone to just after current redisplay.
+Patched: 0.12s delay, to allow all message-suppressions to finish first."
   (when (timerp shaoline--debounce-timer)
     (cancel-timer shaoline--debounce-timer))
   (setq shaoline--debounce-timer
-        (run-with-timer 0.1 nil #'shaoline--update)))
+        (run-with-timer 0.12 nil #'shaoline--update)))
 
 (defvar shaoline--timer nil
   "Internal timer used by `shaoline-mode' for periodic updates (only when needed).")

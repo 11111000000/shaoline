@@ -61,6 +61,7 @@ Arrange them as stones in a garden: remove, replace, or add—freely, and withou
 | Variable                         | Description                                      |
 |----------------------------------+--------------------------------------------------|
 | shaoline-segments                | Controls the display order of line segments      |
+| shaoline-available-segments      | List of available segments for easy drag-drop    |
 | shaoline-autohide-modeline       | If t, hides the default mode-line                |
 | shaoline-exclude-modes           | List of modes where classic mode-line is not hidden |
 | shaoline-timer-interval          | How often Shaoline updates timed/dynamic segments|
