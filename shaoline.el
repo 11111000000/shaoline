@@ -6,7 +6,7 @@
 ;; Version: 1.0
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: mode-line, minimal, functional, echo-area
-;; URL: https://github.com/11111000000/SHAOLINE
+;; URL: https://github.com/11111000000/shaoline
 ;;
 ;; This file is NOT part of GNU Emacs.
 ;;

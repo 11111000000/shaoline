@@ -1,14 +1,11 @@
 ;;; shaoline-segments.el --- Standard segments for shaoline -*- lexical-binding: t -*-
 
 (require 'shaoline-msg-engine)
-(require 'all-the-icons nil t)
-(require 'projectile nil t)
-(require 'calendar)
-(require 'battery nil t)
 
 ;;; Buffer icon & name
 (shaoline-define-segment shaoline-segment-icon-and-buffer (buffer)
   "Цветная иконка буфера (по режиму, как во вкладках) + имя буфера."
+  (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
   (let* ((icon (when (featurep 'all-the-icons)
                  (let* ((mode (buffer-local-value 'major-mode buffer))
                         (raw (all-the-icons-icon-for-mode mode :height 0.9)))
@@ -29,6 +26,7 @@
 ;;; Project name
 (shaoline-define-simple-segment shaoline-segment-project-name
   "Project name, if available."
+  (unless (featurep 'projectile) (require 'projectile nil t))
   (let* ((project
           (cond
            ((and (featurep 'projectile) (projectile-project-name))
@@ -43,6 +41,7 @@
 ;;; Git branch
 (shaoline-define-simple-segment shaoline-segment-git-branch
   "Current Git branch."
+  (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
   (when (and (featurep 'vc-git) (buffer-file-name))
     (let ((branch (vc-git--symbolic-ref (buffer-file-name))))
       (when branch
@@ -68,6 +67,8 @@ will truncate it if necessary."
  shaoline-segment-battery
  "Show battery percentage and charging status (Dao minimalist, safe).
 Wanders the Way: returns 'N/A' if nothing is known, but never leaves Emacs disturbed."
+ (unless (featurep 'battery) (require 'battery nil t))
+ (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
  (let ((safe-n-a
         (propertize
          (if (featurep 'all-the-icons)
@@ -128,6 +129,7 @@ Wanders the Way: returns 'N/A' if nothing is known, but never leaves Emacs distu
 ;;; Major-mode with icon
 (shaoline-define-simple-segment shaoline-segment-major-mode
   "Major mode segment with icon."
+  (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
   (let ((icon (when (and (featurep 'all-the-icons) major-mode)
                 (all-the-icons-icon-for-mode major-mode :height 0.9))))
     (concat
@@ -139,6 +141,7 @@ Wanders the Way: returns 'N/A' if nothing is known, but never leaves Emacs distu
 ;;; Time + Moon Phase
 (defun shaoline--moon-phase-idx (&optional date)
   "Return moon phase index 0..7 for DATE."
+  (unless (featurep 'calendar) (require 'calendar nil t))
   (let* ((d        (or date (calendar-current-date)))
          (abs-day  (float (calendar-absolute-from-gregorian d)))
          (synodic  29.530588853)
