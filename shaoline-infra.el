@@ -216,9 +216,11 @@ Only reacts if message from user (not Shaoline's own)."
         ;; Backup and disable vertical resizing of the echo area
         (setq shaoline--resize-mini-windows-backup resize-mini-windows)
         (setq resize-mini-windows nil)
-        ;; Debounce обновление (добавить дебаунсер на хуки)
+        ;; Обновление: без дебаунса для post-command, для остальных – с коротким дебаунсером
         (dolist (hook shaoline-update-hooks)
-          (add-hook hook #'shaoline--debounced-update))
+          (add-hook hook (if (eq hook 'post-command-hook)
+                             #'shaoline--update
+                           #'shaoline--debounced-update)))
         ;; НЕ advice-add, а фильтр через add-function (устанавливается в shaoline.el)
         ;; Hide shaoline when echo-area is used for input, then restore afterwards
         (add-hook 'minibuffer-setup-hook    #'shaoline--clear-display)
@@ -230,7 +232,9 @@ Only reacts if message from user (not Shaoline's own)."
         )
     ;; turn off
     (dolist (hook shaoline-update-hooks)
-      (remove-hook hook #'shaoline--debounced-update))
+      (remove-hook hook (if (eq hook 'post-command-hook)
+                            #'shaoline--update
+                          #'shaoline--debounced-update)))
     ;; Remove shaoline--message-filter via add-function (from shaoline.el)
     (when (fboundp 'shaoline--maybe-remove-message-filter)
       (shaoline--maybe-remove-message-filter))
