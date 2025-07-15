@@ -34,6 +34,7 @@ No child-frame, nor window-modeline—the Shaoline line danceth solely within th
 - /Effortless Configuration/: Nothing is concealed—all is open before thee.
 - /Time doth Flow/: Even as rain upon the latticework doth Shaoline update—stirred by event, never by haste.
 - Debounced updates: Smooth, flicker-free refreshing via short delays (debounce).
+- Gentle message handling: Uses `add-function :around` instead of advice to avoid interference.
 - /Transparency and Cheer/: In Shaoline is contained nothing that may not be grasped or altered, provided thy spirit remain light.
 - /Simplicity and Candour/: Settings are clear as morning tea sipped in the Valley of Wei.
 - /Beautiful icons/: For vivid file/mode/project icons, install [[https://github.com/domtronn/all-the-icons.el][all-the-icons]] (see FAQ).
@@ -61,6 +62,7 @@ Arrange them as stones in a garden: remove, replace, or add—freely, and withou
 |----------------------------------+--------------------------------------------------|
 | shaoline-segments                | Controls the display order of line segments      |
 | shaoline-autohide-modeline       | If t, hides the default mode-line                |
+| shaoline-exclude-modes           | List of modes where classic mode-line is not hidden |
 | shaoline-timer-interval          | How often Shaoline updates timed/dynamic segments|
 | shaoline-message-timeout         | Seconds before Shaoline resumes after a message  |
 | shaoline-update-hooks            | Events that trigger Shaoline updates             |

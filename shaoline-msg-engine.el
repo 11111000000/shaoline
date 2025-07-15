@@ -19,9 +19,13 @@
         shaoline-msg--last-user-message-ts (float-time)))
 
 (defun shaoline-msg-active-p (timeout)
-  "Return non-nil if current user message is still to be displayed (timeout not expired)."
+  "Return non-nil if current user message is still to be displayed (timeout not expired).
+If message is longer than 40 chars, display timeout is multiplied by (1 + N/40)."
   (and shaoline-msg--last-user-message
-       (< (float-time (time-since shaoline-msg--last-user-message-ts)) (max 0 timeout))))
+       (let* ((base (max 0 timeout))
+              (mult (max 1.0 (/ (length shaoline-msg--last-user-message) 40.0))))
+         (< (float-time (time-since shaoline-msg--last-user-message-ts))
+            (* base mult)))))
 
 (defun shaoline-msg-current ()
   "Return string of current user message, or nil."

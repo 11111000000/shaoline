@@ -46,7 +46,8 @@ If BACKUP-RESTORE is non-nil, take or restore backup of the default setting."
   (force-mode-line-update t))
 
 (defun shaoline--autohide-modeline-globally ()
-  "Hide the classic mode-line in all current and future buffers.
+  "Hide the classic mode-line in all current and future buffers,
+EXCEPT in modes listed in `shaoline-exclude-modes`."
 
 The current value of `mode-line-format` is stored buffer-locally as `shaoline--saved-mode-line-format`,
 allowing exact restoration when `shaoline-mode` is disabled."
@@ -60,9 +61,10 @@ allowing exact restoration when `shaoline-mode` is disabled."
   ;; their individual values.
   (dolist (buf (buffer-list))
     (with-current-buffer buf
-      (unless (local-variable-p 'shaoline--saved-mode-line-format)
-        (setq-local shaoline--saved-mode-line-format mode-line-format))
-      (setq-local mode-line-format nil)))
+      (unless (or (memq major-mode shaoline-exclude-modes)
+                  (local-variable-p 'shaoline--saved-mode-line-format))
+        (setq-local shaoline--saved-mode-line-format mode-line-format)
+        (setq-local mode-line-format nil))))
   (force-mode-line-update t))
 
 (defun shaoline--unhide-modeline-globally ()
@@ -228,7 +230,7 @@ Only reacts if message from user (not Shaoline's own)."
     ;; turn off
     (dolist (hook shaoline-update-hooks)
       (remove-hook hook #'shaoline--debounced-update))
-    ;; Remove shaoline--message-filter via add-function
+    ;; Remove shaoline--message-filter via add-function (from shaoline.el)
     (when (fboundp 'shaoline--maybe-remove-message-filter)
       (shaoline--maybe-remove-message-filter))
     (shaoline--clear-display)

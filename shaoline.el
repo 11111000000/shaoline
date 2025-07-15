@@ -108,8 +108,16 @@ Tweak segments as calmly as rearranging stones: simply, purposefully."
   :group 'shaoline)
 
 (defcustom shaoline-autohide-modeline t
-  "When non-nil, the traditional mode-line is hidden while `shaoline-mode' is active."
+  "When non-nil, the traditional mode-line is hidden while `shaoline-mode' is active.
+
+You can exclude certain major-modes from hiding using `shaoline-exclude-modes`."
   :type 'boolean
+  :group 'shaoline)
+
+(defcustom shaoline-exclude-modes
+  '(magit-status-mode org-agenda-mode gnus-summary-mode compilation-mode dired-mode)
+  "List of major modes in which classic mode-line should *not* be hidden by shaoline-mode."
+  :type '(repeat symbol)
   :group 'shaoline)
 
 (defcustom shaoline-right-padding 0
@@ -393,18 +401,20 @@ the window width."
       (and (stringp fmt)
            (string-empty-p (apply #'format fmt args)))))
 
-(defun shaoline--message-around (orig-fmt &rest args)
-  "Advice around `message` to keep Shaoline visible.
-If `shaoline-mode` is active and the message is empty, do nothing; otherwise
-delegate to the real `message`."
+(defun shaoline--message-filter (orig-fmt &rest args)
+  "Filter for `message` to suppress empty messages when Shaoline is active."
   (if (and (bound-and-true-p shaoline-mode)
            (shaoline--empty-message-p orig-fmt args))
-      ;; Mimic the usual return value of `(message nil)` without clearing.
       nil
     (apply orig-fmt args)))
 
-;; Install the advice once when Shaoline is loaded.
-(advice-add 'message :around #'shaoline--message-around)
+;; Use add-function :around (safer, less intrusive than advice)
+(add-function :around (symbol-function 'message) #'shaoline--message-filter)
+
+(defun shaoline--maybe-remove-message-filter ()
+  "Remove shaoline--message-filter from `message' if present."
+  (ignore-errors
+    (remove-function (symbol-function 'message) #'shaoline--message-filter)))
 
 (provide 'shaoline)
 ;;; shaoline.el ends here
