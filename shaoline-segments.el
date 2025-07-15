@@ -66,56 +66,49 @@ will truncate it if necessary."
 ;;; Battery
 (shaoline-define-simple-segment
  shaoline-segment-battery
- "Show battery percentage and charging status (fail-safe)."
+ "Show battery percentage and charging status (Dao minimalist, safe).
+Wanders the Way: returns 'N/A' if nothing is known, but never leaves Emacs disturbed."
  (let ((safe-n-a
         (propertize
          (if (featurep 'all-the-icons)
-             (concat (all-the-icons-faicon "battery-empty" :face 'shaoline-battery-face) " N/A")
+             (concat (all-the-icons-faicon "battery-empty" :face 'shaoline-battery-face :v-adjust 0 :height 0.75) " N/A")
            "N/A")
          'face '(:inherit shaoline-battery-face :slant italic))))
-   (condition-case err
+   (condition-case nil
        (if (and (fboundp 'battery) battery-status-function)
            (with-timeout (0.7 safe-n-a)
-             (let* ((data (funcall battery-status-function)))
+             (let ((data (funcall battery-status-function)))
                (cond
                 ((and (listp data) (cl-every #'consp data))
-                 (let* ((percent (or (cdr (assoc 112 data))
+                 (let* ((percent (or (cdr (assoc 112 data))   ; ?p
                                      (cdr (assoc "percentage" data))
                                      (cdr (assoc "perc" data))
                                      (cdr (assoc "capacity" data))))
-                        (status (or (cdr (assoc 66 data))
+                        (status (or (cdr (assoc 66 data))     ; ?b
                                     (cdr (assoc "status" data))
                                     (cdr (assoc "charging" data))
                                     (cdr (assoc "state" data))))
-                        (progn
-                          (shaoline--log "[shaoline] battery percent(raw): %S status(raw): %S"
-                                         percent status))
-                        (icon (cond
-                               ((not (featurep 'all-the-icons)) "")
-                               ((and percent (string-match "\\([0-9]+\\)" percent))
-                                (let* ((n (string-to-number (match-string 1 percent)))
-                                       (icon-face
-                                        (let ((face
-                                               (cond
-                                                ((and status (string-match-p "\\`discharging\\'" status) (< n 25)) '(:foreground "#aa0000"))
-                                                ((and status (string-match-p "\\`charging\\'" status)) '(:foreground "#007700"))
-                                                (t 'shaoline-battery-face))))
-                                        
-                                          (shaoline--log "[shaoline] n (battery %%): %S, icon-face: %S, status: %S"
-                                                         n face status)
-                                          face)))
-                                  (cond
-                                   ((>= n 90) (all-the-icons-faicon "battery-full" :face icon-face :v-adjust 0))
-                                   ((>= n 70) (all-the-icons-faicon "battery-three-quarters" :face icon-face :v-adjust 0))
-                                   ((>= n 40) (all-the-icons-faicon "battery-half" :face icon-face :v-adjust 0))
-                                   ((>= n 10) (all-the-icons-faicon "battery-quarter" :face icon-face :v-adjust 0))
-                                   (t (all-the-icons-faicon "battery-empty" :face icon-face :v-adjust 0)))))
-                               
-                               ((and status (string-match-p "full" status)) (all-the-icons-faicon "battery-full" :face 'shaoline-battery-face))
-                               ((and status (string-match-p "\\<ac\\>" status)) (all-the-icons-octicon "plug" :face 'shaoline-battery-face))
-                               ((and status (string-match-p "charging" status)) (all-the-icons-faicon "bolt" :face '(:foreground "#007700") :v-adjust 0))
-                               ((and status (string-match-p "discharging" status)) (all-the-icons-faicon "battery-empty" :face '(:foreground "#aa0000") :v-adjust 0))
-                               (t ""))))
+                        (icon
+                         (cond
+                          ((not (featurep 'all-the-icons)) "")
+                          ((and percent (string-match "\\([0-9]+\\)" percent))
+                           (let* ((n (string-to-number (match-string 1 percent)))
+                                  (icon-face
+                                   (cond
+                                    ((and status (string-match-p "\\`discharging\\'" status) (< n 25)) '(:foreground "#aa0000"))
+                                    ((and status (string-match-p "\\`charging\\'" status)) '(:foreground "#007700"))
+                                    (t 'shaoline-battery-face))))
+                             (cond
+                              ((>= n 90) (all-the-icons-faicon "battery-full" :face icon-face :v-adjust 0 :height 0.75))
+                              ((>= n 70) (all-the-icons-faicon "battery-three-quarters" :face icon-face :v-adjust 0 :height 0.75))
+                              ((>= n 40) (all-the-icons-faicon "battery-half" :face icon-face :v-adjust 0 :height 0.75))
+                              ((>= n 10) (all-the-icons-faicon "battery-quarter" :face icon-face :v-adjust 0 :height 0.75))
+                              (t          (all-the-icons-faicon "battery-empty" :face icon-face :v-adjust 0 :height 0.75)))))
+                          ((and status (string-match-p "full" status)) (all-the-icons-faicon "battery-full" :face 'shaoline-battery-face :v-adjust 0 :height 0.75))
+                          ((and status (string-match-p "\\<ac\\>" status)) (all-the-icons-octicon "plug" :face 'shaoline-battery-face))
+                          ((and status (string-match-p "charging" status)) (all-the-icons-faicon "bolt" :face '(:foreground "#007700") :v-adjust 0))
+                          ((and status (string-match-p "discharging" status)) (all-the-icons-faicon "battery-empty" :face '(:foreground "#aa0000") :v-adjust 0 :height 0.75))
+                          (t ""))))
                    (if percent
                        (concat
                         (if (and (stringp icon) (not (string-empty-p icon))) (concat icon " "))
@@ -123,8 +116,7 @@ will truncate it if necessary."
                                     'face 'shaoline-battery-face))
                      (propertize
                       (if (featurep 'all-the-icons)
-                          (concat (all-the-icons-faicon "battery-empty" :face 'shaoline-battery-face)
-                                  " No battery")
+                          (concat (all-the-icons-faicon "battery-empty" :face 'shaoline-battery-face :v-adjust 0 :height 0.75) " No battery")
                         "No battery")
                       'face '(:inherit shaoline-battery-face :slant italic)))))
                 ((and (stringp data) (not (string-empty-p data)))
