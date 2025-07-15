@@ -3,7 +3,7 @@
 ;; Copyright (C) 2025  Peter
 ;;
 ;; Author: Peter <11111000000@email.com>
-;; Version: 1.0
+;; Version: 2.0
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: mode-line, minimal, functional, echo-area
 ;; URL: https://github.com/11111000000/shaoline
