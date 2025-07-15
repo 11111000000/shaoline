@@ -289,7 +289,7 @@ True elegance: nothing more than necessary."
 Errors are returned as a diagnostic string, not signalled; stacktrace is logged if `shaoline-debug`."
   (condition-case err
       (let* ((arity (help-function-arglist fn t))
-             (res (if (and (consp arity) (not (null arity)))
+             (res (if arity
                       (funcall fn buffer)
                     (funcall fn))))
         (if (stringp res) res (or (and res (format "%s" res)) "")))
