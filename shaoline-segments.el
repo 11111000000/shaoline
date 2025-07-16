@@ -1,12 +1,19 @@
-;;; shaoline-segments.el --- Standard segments for shaoline -*- lexical-binding: t -*-
+;;; shaoline-segments.el --- Standard segments for Shaoline modeline -*- lexical-binding: t; -*-
+
+;; Copyright (C) 2025 Peter
+;; Author: Peter <11111000000@email.com>
+;; SPDX-License-Identifier: MIT
+;; Homepage: https://github.com/11111000000/shaoline
 
 (require 'shaoline-msg-engine)
 (eval-when-compile
-  (defvar shaoline-enable-dynamic-segments t "Docstring for eval-when-compile shadowing."))
+  (defvar shaoline-enable-dynamic-segments t "Shadow variable for compile-time checks."))
 
-;;; Buffer icon & name
+;; ----------------------------------------------------------------------------
+;; Buffer icon and name.
+
 (shaoline-define-segment shaoline-segment-icon-and-buffer (buffer)
-  "Цветная иконка буфера (по режиму, как во вкладках) + имя буфера."
+  "Colored buffer icon (by major mode, as in tabs) and buffer name."
   (let* ((icon
           (when (and shaoline-enable-dynamic-segments (featurep 'all-the-icons))
             (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
@@ -26,7 +33,9 @@
      text)
     text))
 
-;;; Project name
+;; ----------------------------------------------------------------------------
+;; Project name.
+
 (shaoline-define-simple-segment shaoline-segment-project-name
   "Project name, if available."
   (unless (featurep 'projectile) (require 'projectile nil t))
@@ -41,7 +50,9 @@
     (when (and project (not (string= "-" project)))
       (propertize project 'face 'shaoline-project-face))))
 
-;;; Git branch
+;; ----------------------------------------------------------------------------
+;; Git branch.
+
 (shaoline-define-simple-segment shaoline-segment-git-branch
   "Current Git branch."
   (when (and (featurep 'vc-git) (buffer-file-name))
@@ -54,24 +65,25 @@
          " "
          (propertize branch 'face 'shaoline-git-face))))))
 
-;;; Echo-area message
+;; ----------------------------------------------------------------------------
+;; Echo-area message.
+
 (shaoline-define-simple-segment shaoline-segment-echo-message
-  "Show the most recent user `message' for a fixed duration.
-The segment itself no longer worries about width – `shaoline-compose-modeline'
-will truncate it if necessary."
+  "Show the latest user `message` for a fixed timeout. Width managed by the modeline."
   (let ((show (and (shaoline-msg-active-p shaoline-message-timeout)
                    (shaoline-msg-current))))
     (if show
         (propertize show 'face 'shaoline-echo-face)
       "")))
 
-;;; Battery
+;; ----------------------------------------------------------------------------
+;; Battery.
+
 (shaoline-define-simple-segment
  shaoline-segment-battery
- "Show battery percentage and charging status (Dao minimalist, safe).
-Wanders the Way: returns 'N/A' if nothing is known, but never leaves Emacs disturbed."
+ "Show battery percentage and charging status. Returns 'N/A' if unavailable."
  (if (not shaoline-enable-dynamic-segments)
-     ""  ;; Пустая строка, если отключено — Wu Wei: ничего не делать
+     ""  ;; Returns empty if dynamic segments are disabled.
    (unless (featurep 'battery) (require 'battery nil t))
    (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
    (let ((safe-n-a
@@ -131,9 +143,11 @@ Wanders the Way: returns 'N/A' if nothing is known, but never leaves Emacs distu
            safe-n-a)
        (error safe-n-a)))))
 
-;;; Major-mode with icon
+;; ----------------------------------------------------------------------------
+;; Major mode.
+
 (shaoline-define-simple-segment shaoline-segment-major-mode
-  "Major mode segment with icon."
+  "Major mode segment, optionally with icon."
   (let ((icon
          (when (and shaoline-enable-dynamic-segments (featurep 'all-the-icons) major-mode)
            (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
@@ -144,7 +158,9 @@ Wanders the Way: returns 'N/A' if nothing is known, but never leaves Emacs distu
      (propertize (format-mode-line mode-name)
                  'face 'shaoline-mode-face))))
 
-;;; Time + Moon Phase
+;; ----------------------------------------------------------------------------
+;; Time and moon phase.
+
 (defun shaoline--moon-phase-idx (&optional date)
   "Return moon phase index 0..7 for DATE."
   (unless (featurep 'calendar) (require 'calendar nil t))
@@ -156,18 +172,20 @@ Wanders the Way: returns 'N/A' if nothing is known, but never leaves Emacs distu
     idx))
 
 (shaoline-define-simple-segment shaoline-segment-time
-  "Current time with moon phase."
+  "Show current time and moon phase."
   (if (not shaoline-enable-dynamic-segments)
-      ""  ;; Пустая строка, если отключено
+      ""  ;; Returns an empty string if dynamic segments are disabled.
     (let* ((time (propertize (format-time-string " %H:%M ") 'face 'shaoline-time-face))
            (phase-number (shaoline--moon-phase-idx))
            (phases ["🌑" "🌒" "🌓" "🌔" "🌕" "🌖" "🌗" "🌘"])
            (moon (propertize (aref phases phase-number) 'face 'shaoline-moon-face)))
       (concat time " " moon "  "))))
 
-;;; Segment: emptiness (visual spacer, Daoist non-doing)
+;; ----------------------------------------------------------------------------
+;; Visual spacer.
+
 (shaoline-define-simple-segment shaoline-segment-emptiness
-  "The emptiest possible segment – a blank."
+  "A blank segment."
   " ")
 
 (provide 'shaoline-segments)

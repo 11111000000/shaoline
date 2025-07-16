@@ -1,4 +1,9 @@
-;;; shaoline-infra.el --- Infrastructure: echo display, hooks, advice, UI for Shaoline -*- lexical-binding: t; -*-
+;;; shaoline-infra.el --- Infrastructure for Shaoline echo-area modeline -*- lexical-binding: t; -*-
+
+;; Copyright (C) 2025 Peter
+;; Author: Peter <11111000000@email.com>
+;; SPDX-License-Identifier: MIT
+;; Homepage: https://github.com/11111000000/shaoline
 
 ;; This file hosts *impure* infrastructure that complements the pure core.
 ;; It is loaded *from* shaoline.el, so we purposely do *not* `require' it
@@ -7,7 +12,7 @@
 (require 'cl-lib)                    ; for cl-member etc.
 
 ;; ----------------------------------------------------------------------------
-;; Customisation (side-effect related)
+;; Customization: here dwell options with effects.
 
 (defcustom shaoline-timer-interval 1
   "Interval (seconds) for Shaoline’s optional periodic refresh.
@@ -22,9 +27,7 @@ If non-positive, Shaoline repaints immediately after the `message'."
   :group 'shaoline)
 
 ;; ----------------------------------------------------------------------------
-;; Helpers for (auto)hiding the classic mode-line
-;;
-;; Sometimes, seeing less helps you perceive more.
+;; Helpers for hiding the classic mode-line.
 
 (defun shaoline--set-modeline-format-globally (value &optional backup-restore)
   "Set `mode-line-format' to VALUE for all buffers and windows.
@@ -79,11 +82,10 @@ If a buffer's mode-line-format was not changed by Shaoline, it is left untouched
   (force-mode-line-update t))
 
 ;; ----------------------------------------------------------------------------
-;; Display/update
+;; Display and update.
 
 (defun shaoline--display (str)
-  "Show STR in the echo area.  The string is tagged with the text-property
-'shaoline so later we can reliably distinguish our own output."
+  "Show STR in the echo area. Tag the string so only Shaoline output is affected."
   (let ((cur-msg (current-message)))
     (when (or (not (string-equal str shaoline--last-str))
               (null cur-msg))
@@ -95,9 +97,8 @@ If a buffer's mode-line-format was not changed by Shaoline, it is left untouched
         (message "%s" msg-with-prop)))))
 
 (defun shaoline--update (&rest _)
-  "Recompute the modeline for the `selected-window` and display.
-Skips update (and clears) during isearch or minibuffer input.
-The best display is sometimes none at all."
+  "Recompute and display modeline for the currently selected window.
+Skips update and clears during isearch or minibuffer input."
   (shaoline--log "shaoline--update")
   (if (or (active-minibuffer-window)
           (bound-and-true-p isearch-mode))
@@ -107,8 +108,7 @@ The best display is sometimes none at all."
 
 (defun shaoline--clear-display ()
   "Clear the echo area if the last output was from Shaoline.
-Sometimes, true clarity is emptiness.
-Patched: Never clear if echo area is already empty or suppression is in effect."
+Never clears if already empty or a suppression is in effect."
   (when (and (stringp shaoline--last-str)
              (string= (current-message) shaoline--last-str))
     ;; call only if really non-empty, or else never clear
@@ -118,25 +118,24 @@ Patched: Never clear if echo area is already empty or suppression is in effect."
   (setq shaoline--last-str ""))
 
 ;; ----------------------------------------------------------------------------
-;; Minor mode
+;; Shaoline minor mode engine.
 
 (defvar shaoline--debounce-timer nil
-  "Timer for debouncing Shaoline updates.")
+  "Debounce timer for Shaoline updates.")
 
 (defun shaoline--debounced-update (&rest _)
   "Debounce wrapper: schedule update after a short delay.
-If called rapidly, (e.g. during fast typing), postpone to just after current redisplay.
-Patched: 0.12s delay, to allow all message-suppressions to finish first."
+If called repeatedly, only update after 0.12s delay."
   (when (timerp shaoline--debounce-timer)
     (cancel-timer shaoline--debounce-timer))
   (setq shaoline--debounce-timer
         (run-with-timer 0.12 nil #'shaoline--update)))
 
 (defvar shaoline--timer nil
-  "Internal timer used by `shaoline-mode' for periodic updates (only when needed).")
+  "Timer for slow periodic updates, if any.")
 
 (defun shaoline--maybe-start-timer ()
-  "Лениво запускать таймер только если shaoline-enable-dynamic-segments и имеются динамические сегменты во :right или :center."
+  "Start timer only if dynamic segments are enabled and present in :right or :center."
   (when (and (null shaoline--timer)
              shaoline-mode
              shaoline-enable-dynamic-segments
@@ -150,32 +149,31 @@ Patched: 0.12s delay, to allow all message-suppressions to finish first."
                           #'shaoline--lazy-update))))
 
 (defun shaoline--maybe-cancel-timer ()
-  "Убить таймер, если он не нужен."
+  "Cancel timer if it is not needed."
   (when (timerp shaoline--timer)
     (cancel-timer shaoline--timer)
     (setq shaoline--timer nil)))
 
 (defun shaoline--lazy-update ()
-  "Ленивая обновляющая функция: если нет показа echo-message, нет нужных динамических сегментов или shaoline-enable-dynamic-segments — убираем себя."
+  "Disable timer if nothing dynamic is needed."
   (shaoline--log "shaoline--lazy-update")
   (let ((should-keep
          (and shaoline-enable-dynamic-segments
               (or
-               ;; Нужен ли динамический сегмент (time/battery)?
+               ;; Check if a dynamic segment (time/battery) is present.
                (cl-member 'shaoline-segment-time (cdr (assq :right shaoline-segments)))
                (cl-member 'shaoline-segment-time (cdr (assq :center shaoline-segments)))
                (cl-member 'shaoline-segment-battery (cdr (assq :right shaoline-segments)))
                (cl-member 'shaoline-segment-battery (cdr (assq :center shaoline-segments)))
-               ;; Пользовательское сообщение ещё "живое"
+               ;; User message is still active
                (shaoline-msg-active-p shaoline-message-timeout)))))
     (shaoline--update)
     (unless should-keep
       (shaoline--maybe-cancel-timer))))
 
 (defun shaoline--message-filter-return (result &rest _args)
-  "Intercept `message' for Shaoline: stores last user message & time, manages timer.
-
-Only reacts if message from user (not Shaoline's own)."
+  "Intercept `message' for Shaoline: stores last user message & timestamp, manages timer.
+Only reacts to user messages, not Shaoline's own."
   (when (and shaoline-mode
              (not (and (stringp result)
                        (get-text-property 0 'shaoline result))))
@@ -184,9 +182,9 @@ Only reacts if message from user (not Shaoline's own)."
      ((and (stringp result) (not (string-empty-p result)))
       (shaoline-msg-save result)
       (run-at-time 0 nil #'shaoline--update)
-      (shaoline--maybe-start-timer)) ; нужен таймер
+      (shaoline--maybe-start-timer)) ; timer is needed
 
-     ;; Пустое сообщение — сброс
+     ;; Empty message: clear
      ((or (null result) (string-empty-p result))
       (shaoline-msg-clear)
       (run-at-time 0 nil #'shaoline--update)
@@ -194,14 +192,14 @@ Only reacts if message from user (not Shaoline's own)."
   result)
 
 (defun shaoline--cancel-redisplay-timer ()
-  "Compatibility stub – the separate idle-redisplay timer is no longer used."
+  "Compatibility stub – idle-redisplay timer is no longer needed."
   nil)
 
 (defun shaoline--schedule-redisplay ()
-  "Compatibility stub – idle redisplay timer removed in the simplified design."
+  "Compatibility stub – idle redisplay timer is no longer used."
   nil)
 
-;;  Ensure the timer is cleaned up whenever the global minor-mode is toggled.
+;; Clean up timer when minor mode toggled.
 (add-hook 'shaoline-mode-hook #'shaoline--cancel-redisplay-timer)
 
 ;;;###autoload
@@ -216,19 +214,19 @@ Only reacts if message from user (not Shaoline's own)."
         ;; Backup and disable vertical resizing of the echo area
         (setq shaoline--resize-mini-windows-backup resize-mini-windows)
         (setq resize-mini-windows nil)
-        ;; Обновление: без дебаунса для post-command, для остальных – с коротким дебаунсером
+        ;; Update: no debounce for post-command, short debounce for others
         (dolist (hook shaoline-update-hooks)
           (add-hook hook (if (eq hook 'post-command-hook)
                              #'shaoline--update
                            #'shaoline--debounced-update)))
-        ;; НЕ advice-add, а фильтр через add-function (устанавливается в shaoline.el)
+        ;; Use add-function filter (not advice-add); set in shaoline.el
         ;; Hide shaoline when echo-area is used for input, then restore afterwards
         (add-hook 'minibuffer-setup-hook    #'shaoline--clear-display)
         (add-hook 'minibuffer-exit-hook     #'shaoline--update)
         (add-hook 'isearch-mode-hook        #'shaoline--clear-display)
         (add-hook 'isearch-mode-end-hook    #'shaoline--update)
         (shaoline--update)
-        (setq shaoline--timer nil) ;; Таймер ленивый, не запускается автоматически.
+        (setq shaoline--timer nil) ;; Timer is lazy, not started automatically.
         )
     ;; turn off
     (dolist (hook shaoline-update-hooks)

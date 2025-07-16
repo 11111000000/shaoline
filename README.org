@@ -101,7 +101,7 @@ Customize interactively with:
 M-x customize-group RET shaoline RET
 #+end_src
 
-Remember: the fewer settings you touch, the closer you are to Emptiness.
+Remember: the fewer settings you touch, the closer you are to Emptiness. The path of least action leads to greatest peace.
 
 ** Standard segments
 
@@ -114,7 +114,7 @@ Remember: the fewer settings you touch, the closer you are to Emptiness.
 | =shaoline-segment-time=            | 24-h clock + moon phase 🌓       | calendar.el (built-in)   |
 | =shaoline-segment-echo-message=    | Last user ~message~ (until timeout) | none                     |
 
-Disable what you dislike; enlightenment is light to carry.
+Disable what you dislike; enlightenment is light to carry—like a feather on the breeze.
 
 ** Writing your own segment (become the Master)
 
@@ -130,25 +130,25 @@ A segment is a function that returns a string; nothing more, nothing less.
       (alist-get :right shaoline-segments))
 #+end_src
 
-Pure functions only!  Side-effects are karmic debt.
+Pure functions only!  Side-effects are karmic debt—avoid them as one avoids muddy puddles.
 
 ** FAQ (Frequently Asked Koans)
 
 1. /Where did my old mode-line go?/  
-   It renounced worldly attachments.  Toggle =shaoline-autohide-modeline= to false.
+   It renounced worldly attachments.  Toggle =shaoline-autohide-modeline= to false. (Or contemplate impermanence.)
 
 2. /Why does Shaoline vanish when I run M-x?/  
-   The minibuffer is talking.  Shaoline politely waits.
+   The minibuffer is talking.  Shaoline politely waits—like a student before the master.
 
 3. /Can I use Doom icons?/  
-   Yes.  Install =all-the-icons=; Shaoline will detect them like a silent ninja.
+   Yes.  Install =all-the-icons=; Shaoline will detect them like a silent ninja in moonlight.
 
 4. /High CPU?/  
    Either you enabled dynamic segments on a potato, or another package is spamming ~message~.  
-   Use =(setq shaoline-debug t)= to watch the river flow.
+   Use =(setq shaoline-debug t)= to watch the river flow. (And giggle at the fish.)
 
 5. /Does Shaoline work on TTY?/  
-   Absolutely.  Moon glyphs degrade gracefully into ASCII; icons vanish like morning mist.
+   Absolutely.  Moon glyphs degrade gracefully into ASCII; icons vanish like morning mist. TTY is the ultimate minimalism.
 
 ** Troubleshooting
 
@@ -173,7 +173,8 @@ MIT.  Copy it, fork it, glue it to a kite and let it fly.
 
 ---  
 End of scroll.  Close this buffer, take a breath, return to coding.  
-Remember: the true treasure is the friends we made along the Way.
+Remember: the true treasure is the friends we made along the Way... and perhaps a well-placed koan.
 
 #+ATTR_ORG: :width 80%
 [[file:screenshot-shaoline.png]]
+

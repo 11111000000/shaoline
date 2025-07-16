@@ -1,16 +1,9 @@
 ;;; shaoline.el --- Functional minimalist echo-area modeline -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2025  Peter
-;;
+;; Copyright (C) 2025 Peter
 ;; Author: Peter <11111000000@email.com>
-;; Version: 2.0
-;; Package-Requires: ((emacs "27.1"))
-;; Keywords: mode-line, minimal, functional, echo-area
-;; URL: https://github.com/11111000000/shaoline
-;;
-;; This file is NOT part of GNU Emacs.
-;;
-;; License: MIT
+;; SPDX-License-Identifier: MIT
+;; Homepage: https://github.com/11111000000/shaoline
 
 ;;; Commentary:
 
@@ -51,9 +44,9 @@
 
 
 ;; ----------------------------------------------------------------------------
-;; Customization group and variables
+;; Customization Group and Variables
 ;;
-;; If you seek change, like the autumn leaf, customize here.
+;; All is possible. Customize, or leave as it is.
 
 (defgroup shaoline nil
   "Functional minimalist echo-area modeline."
@@ -80,7 +73,7 @@ This purifies Shaoline for minimal setups, aligning with Wu Wei."
   :group 'shaoline)
 
 (defvar shaoline--log-buffer "*shaoline-logs*"
-  "Buffer name used for debug log. A quiet scroll for Shaoline whispers.")
+  "Debug buffer for logs. Quiet scroll, if you wish to listen.")
 
 (defun shaoline--log (fmt &rest args)
   "Write formatted FMT/ARGS message to `shaoline--log-buffer' if `shaoline-debug' is non-nil.
@@ -146,6 +139,8 @@ You can exclude certain major-modes from hiding using `shaoline-exclude-modes`."
 
 ;; ----------------------------------------------------------------------------
 ;; Faces
+;;
+;; Outward form: all faces dwell here.
 
 (defface shaoline-base-face
   '((t :inherit default
@@ -168,8 +163,8 @@ You can exclude certain major-modes from hiding using `shaoline-exclude-modes`."
        :height 1.0
        :bold nil
        :family "Digital Display"
-       :foreground ,(or (face-foreground 'success nil t) "#00aa00")  ;; Цвет, вычисляемый на этапе загрузки
-       :background ,(or (face-background 'shadow nil t) "#002200")))  ;; Фон, вычисляемый на этапе загрузки
+       :foreground ,(or (face-foreground 'success nil t) "#00aa00")  ;; Foreground, computed at load time
+       :background ,(or (face-background 'shadow nil t) "#002200")))  ;; Background, computed at load time
   "Face for the time segment, adapting to the current theme at load time.
 For full dynamic adaptation, reload after theme changes."
   :group 'shaoline)
@@ -178,7 +173,7 @@ For full dynamic adaptation, reload after theme changes."
   `((t :inherit default
        :height 1.0
        :bold nil
-       :foreground ,(or (face-foreground 'warning nil t) "yellow")))  ;; Цвет, вычисляемый на этапе загрузки
+       :foreground ,(or (face-foreground 'warning nil t) "yellow")))  ;; Foreground, computed at load time
   "Face for the moon phase, adapting to the theme at load time.
 For full dynamic adaptation, reload after theme changes."
   :group 'shaoline)
@@ -214,7 +209,9 @@ For full dynamic adaptation, reload after theme changes."
   :group 'shaoline)
 
 ;; ----------------------------------------------------------------------------
-;; Internal state
+;; Internal State
+;;
+;; All inner workings, global state, and persistence dwell here.
 
 (defvar shaoline--segment-table (make-hash-table :test 'eq)
   "Hash-table storing registered segment functions.")
@@ -222,7 +219,7 @@ For full dynamic adaptation, reload after theme changes."
 (defvar shaoline--last-str ""
   "Last rendered string, used to avoid unnecessary redisplay. Repetition is not enlightenment.")
 
-;; Message state now handled by shaoline-msg-engine.el
+;; Message state handled separately.
 (require 'shaoline-msg-engine)
 
 (defvar shaoline--default-mode-line-format-backup nil
@@ -236,12 +233,12 @@ For full dynamic adaptation, reload after theme changes."
 Restored exactly as it was when the mode is toggled off.")
 
 ;; ----------------------------------------------------------------------------
-;; Infrastructure (UI, advice, minor mode, etc.) now in shaoline-infra.el.
+;; Infrastructure (UI, advice, minor mode) — now resides in shaoline-infra.el
 (require 'shaoline-infra)
 
-;; Функция для обновления faces при смене темы
+;; React to new color theme: recalculate faces.
 (defun shaoline-update-faces (&rest _)
-  "Update Shaoline faces to match the current theme."
+  "Update Shaoline faces to match current theme."
   (custom-set-faces
    `(shaoline-time-face
      ((t :inherit default
@@ -256,12 +253,14 @@ Restored exactly as it was when the mode is toggled off.")
          :bold nil
          :foreground ,(or (face-foreground 'warning nil t) "yellow"))))))
 
-;; Добавляем хук на смену темы
+;; Enable harmony after theme changes.
 (add-hook 'enable-theme-functions #'shaoline-update-faces)
 (add-hook 'disable-theme-functions #'shaoline-update-faces)
 
 ;; ----------------------------------------------------------------------------
-;; Segment definition macros
+;; Segment Definition Macros
+;;
+;; Every segment is just a function — like a wave: comes, goes.
 
 
 (defmacro shaoline-define-segment (name args &rest body)
@@ -282,7 +281,9 @@ True elegance: nothing more than necessary."
      ,@body))
 
 ;; ----------------------------------------------------------------------------
-;; Segment helper functions
+;; Segment Helper Functions
+;;
+;; Helpers: arranging segments, unseen.
 
 (defun shaoline--apply-segment (fn buffer)
   "Call segment FN with BUFFER (or with no args if not needed) and return its string.
@@ -309,7 +310,9 @@ Only non-empty results are included."
            collect str))
 
 ;; ----------------------------------------------------------------------------
-;; Core: calculating available center width (pure)
+;; Core: Center Width Calculation (Pure)
+;;
+;; As much as needed, nothing more.
 
 (defun shaoline-available-center-width (&optional buffer window width)
   "Return the maximum width available for the center segment (excluding right-padding).
@@ -344,10 +347,9 @@ Calculates based on the length of left and right segments, including any necessa
               shaoline-right-padding))))
 
 ;; ----------------------------------------------------------------------------
-;; Core: compose the modeline (pure version, NO side effects)
-;;-----------------------------------------------------------------------------
-;; This function is pure: it only computes a string with properties, no UI,
-;; no global state. It is safe for use in tests and non-UI code.
+;; Core: Compose Modeline (Pure, No Side Effects)
+;;
+;; Pure computation. No action, no world. Suitable everywhere.
 
 (defun shaoline-compose-modeline (&optional buffer window width)
   "Return the Shaoline string for the echo area.
@@ -394,10 +396,10 @@ the window width."
      (make-string shaoline-right-padding ?\s))))
 
 ;; ----------------------------------------------------------------------------
-;; Segments are now located in a separate file.
+;; Segments are elsewhere.
 (require 'shaoline-segments)
 
-;; --- Auto-load user-defined segments if available ---
+;; User-defined segments: stones in your garden
 (let ((user-file
        (or
         (expand-file-name "shaoline-user-segments.el" user-emacs-directory)
@@ -410,12 +412,7 @@ the window width."
 
 
 ;; ----------------------------------------------------------------------------
-;; Prevent flicker: suppress empty `message' calls
-;;
-;; Many commands end with `(message nil)` (or an empty string), which erases the
-;; echo area.  For an echo-area modeline that means a visible blink on every
-;; keystroke.  We wrap `message` and ignore such empty invocations while
-;; `shaoline-mode` is active, letting genuine messages through unchanged.
+;; Prevent flicker: Leave the void untouched.
 
 (defun shaoline--empty-message-p (fmt args)
   "Return non-nil when calling `message' with FMT/ARGS would show nothing."
@@ -436,7 +433,7 @@ If so, simply propagate the *current* echo area unchanged — never erase."
         (or curmsg ""))
     (apply orig-fmt args)))
 
-;; Use add-function :around (safer, less intrusive than advice)
+;; add-function :around — gentle touch, no trace
 (add-function :around (symbol-function 'message) #'shaoline--message-filter)
 
 (defun shaoline--maybe-remove-message-filter ()

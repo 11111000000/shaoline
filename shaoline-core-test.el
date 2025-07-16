@@ -1,15 +1,26 @@
-;;; shaoline-core-test.el --- Tests for Shaoline pure core functions -*- lexical-binding: t; -*-
+;;; shaoline-core-test.el --- Pure core tests for Shaoline -*- lexical-binding: t; -*-
+
+;; Copyright (C) 2025 Peter
+;; Author: Peter <11111000000@email.com>
+;; SPDX-License-Identifier: MIT
+;; Homepage: https://github.com/11111000000/shaoline
 
 (require 'ert)
-(require 'shaoline) ;; or relative require if used as submodule
+(require 'shaoline)
+
+;; ----------------------------------------------------------------------------
+;; Test: Modeline always returns a string
 
 (ert-deftest shaoline-compose-modeline-output-is-string ()
-  "shaoline-compose-modeline должен возвращать строку без вызова Emacs I/O."
+  "Shaoline modeline should always return a string, with no Emacs I/O."
   (let ((result (shaoline-compose-modeline)))
     (should (stringp result))))
 
+;; ----------------------------------------------------------------------------
+;; Test: Segment errors do not break modeline
+
 (ert-deftest shaoline-compose-modeline-segment-errors-never-break ()
-  "Ошибки сегмента не должны сбивать весь вывод."
+  "Segment errors do not break modeline output."
   (puthash 'crazy-segment
            (lambda (_buffer) (error "OOPS"))
            shaoline--segment-table)
@@ -17,8 +28,11 @@
          (s (shaoline-compose-modeline)))
     (should (string-match-p "\\[SEGMENT ERROR:" s))))
 
+;; ----------------------------------------------------------------------------
+;; Test: Minimal Emacs setup support
+
 (ert-deftest shaoline-minimal-config-no-dependencies ()
-  "Test that Shaoline works in minimal Emacs without optional dependencies."
+  "Shaoline works in minimal Emacs setups without optional dependencies."
   (let ((old-features features)
         (shaoline-segments '((:left shaoline-segment-icon-and-buffer)
                              (:right shaoline-segment-battery shaoline-segment-time)))
@@ -30,24 +44,32 @@
       (rename-buffer "test-buffer")
       (setq result (shaoline-compose-modeline (current-buffer))))
     (should (stringp result))
-    (should-not (string-match-p "[\uE000-\uF8FF]" result))  ;; No icons (Unicode private use area for all-the-icons)
-    (should (string-match-p "test-buffer" result))  ;; Fallback to buffer name
-    (should (string-match-p "N/A" result))  ;; Battery fallback
-    (should (string-match-p "%H:%M" result))  ;; Time present, moon may or may not be (assuming calendar loads)
+    ;; Should be no icons (Unicode private use)
+    (should-not (string-match-p "[\uE000-\uF8FF]" result))
+    ;; Fallback to buffer name
+    (should (string-match-p "test-buffer" result))
+    ;; Battery fallback
+    (should (string-match-p "N/A" result))
+    ;; Time segment present
+    (should (string-match-p "%H:%M" result))
     ;; Restore features
     (setq features old-features)))
 
+;; ----------------------------------------------------------------------------
+;; Test: Debounce prevents rapid update flicker
+
 (ert-deftest shaoline-debounce-no-flicker ()
-  "Test that debounce prevents multiple rapid updates."
+  "Debounce prevents multiple rapid shaoline updates."
   (let ((shaoline--debounce-timer nil)
         (update-count 0))
     (advice-add 'shaoline--update :before (lambda (&rest _) (cl-incf update-count)))
     (shaoline--debounced-update)
-    (shaoline--debounced-update)  ;; Should cancel the first
-    (sit-for 0.2)  ;; Wait for timer
-    (should (= update-count 1))  ;; Only one update
+    (shaoline--debounced-update)
+    (sit-for 0.2)
+    (should (= update-count 1))
     (advice-remove 'shaoline--update (lambda (&rest _) (cl-incf update-count)))))
 
-;;; Add more property-based or ERT tests here as needed
+;; ----------------------------------------------------------------------------
+;; Add more property-based or ERT tests below if needed.
 
 (provide 'shaoline-core-test)
