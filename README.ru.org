@@ -1,4 +1,4 @@
-#+TITLE: Shaoline – Панелька Пустоты
+#+TITLE: Shaoline – Строка Пустоты
 #+AUTHOR: Бродячий Байт (следуя за пастушком вола)  
 #+EMAIL: (пустота)  
 #+LANGUAGE: ru  
