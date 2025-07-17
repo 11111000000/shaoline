@@ -221,6 +221,7 @@ For full dynamic adaptation, reload after theme changes."
 
 ;; Message state handled separately.
 (require 'shaoline-msg-engine)
+(require 'shaoline-segments) ;; <-- теперь тут: все переменные уже определены.
 
 (defvar shaoline--default-mode-line-format-backup nil
   "Backup of `default-mode-line-format' when the modeline is hidden (restored when Shaoline is disabled).")
@@ -258,27 +259,9 @@ Restored exactly as it was when the mode is toggled off.")
 (add-hook 'disable-theme-functions #'shaoline-update-faces)
 
 ;; ----------------------------------------------------------------------------
-;; Segment Definition Macros
-;;
-;; Every segment is just a function — like a wave: comes, goes.
+;; Segment Definition Macros: в shaoline-macros.el
 
-
-(defmacro shaoline-define-segment (name args &rest body)
-  "Define segment NAME taking ARGS, register it, and return its symbol.
-Every segment is independent; every function a ripple in the pond."
-  (declare (indent defun))
-  (let ((func `(defun ,name ,args ,@body)))
-    `(progn
-       ,func
-       (puthash ',name #',name shaoline--segment-table)
-       ',name)))
-
-(defmacro shaoline-define-simple-segment (name docstring &rest body)
-  "Define a segment NAME with no arguments. BODY is run on each render.
-True elegance: nothing more than necessary."
-  `(shaoline-define-segment ,name ()
-     ,docstring
-     ,@body))
+(require 'shaoline-macros)
 
 ;; ----------------------------------------------------------------------------
 ;; Segment Helper Functions
@@ -400,7 +383,6 @@ the window width."
 
 ;; ----------------------------------------------------------------------------
 ;; Segments are elsewhere.
-(require 'shaoline-segments)
 
 ;; User-defined segments: stones in your garden
 (let ((user-file

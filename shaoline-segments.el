@@ -5,6 +5,7 @@
 ;; SPDX-License-Identifier: MIT
 ;; Homepage: https://github.com/11111000000/shaoline
 
+(require 'shaoline-macros)
 (require 'shaoline-msg-engine)
 (eval-when-compile
   (defvar shaoline-enable-dynamic-segments t "Shadow variable for compile-time checks."))
