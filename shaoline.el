@@ -332,6 +332,8 @@ Calculates based on the length of left and right segments, including any necessa
          (space-left  (if (and (not (string-empty-p left))
                                (not (string-empty-p right)))
                           1 0))
+         ;; Like whispers of wind: spaces appear only where presence demands them,
+         ;; ensuring harmony between segments without excess.
          ;; If the center segment is empty, no space is needed before/after.
          ;; If both sides exist, one space is left before the center.
          (space-center-left (if (and (not (string-empty-p left)))
@@ -341,7 +343,8 @@ Calculates based on the length of left and right segments, including any necessa
     (max 0 (- width
               left-w
               right-w
-              ;; NOTE: We only leave spaces where segments exist
+              ;; NOTE: We only leave spaces where segments exist —
+              ;; a gentle bow to existence, nothing more.
               (if (not (string-empty-p left)) 1 0)
               (if (not (string-empty-p right)) 1 0)
               shaoline-right-padding))))
@@ -373,8 +376,6 @@ the window width."
          (right   (mapconcat #'identity
                              (shaoline--collect-segments :right buffer) " "))
          (gap-left (if (string-empty-p left) "" " "))
-         ;; Более корректно: не вычитать лишний пробел или "align-to", чтобы
-         ;; центральный сегмент занимал максимум пространства.
          (avail (max 0 (- echo-width
                           (string-width left)
                           (if (string-empty-p left) 0 1)
@@ -387,7 +388,9 @@ the window width."
      left
      gap-left
      center
-     ;; Единственный «пробел» управляет выравниванием правого сегмента.
+     ;; The subtle art of alignment: a single propertized space
+     ;; pins the right segment to the edge, like a leaf held by the stream's flow —
+     ;; using Emacs' display property to bridge the void without effort.
      (propertize
       " "
       'display `(space :align-to (- right ,(+ (string-width right)
