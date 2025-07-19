@@ -191,6 +191,11 @@ Only reacts to user messages, not Shaoline's own."
       (shaoline--maybe-cancel-timer))))
   result)
 
+(defun shaoline--maybe-remove-message-filter-return ()
+  "Remove shaoline--message-filter-return from `message' if present."
+  (ignore-errors
+    (remove-function (symbol-function 'message) #'shaoline--message-filter-return)))
+
 (defun shaoline--cancel-redisplay-timer ()
   "Compatibility stub – idle-redisplay timer is no longer needed."
   nil)
@@ -219,7 +224,8 @@ Only reacts to user messages, not Shaoline's own."
           (add-hook hook (if (eq hook 'post-command-hook)
                              #'shaoline--update
                            #'shaoline--debounced-update)))
-        ;; Use add-function filter (not advice-add); set in shaoline.el
+        ;; Add filter-return to capture and store messages
+        (add-function :filter-return (symbol-function 'message) #'shaoline--message-filter-return)
         ;; Hide shaoline when echo-area is used for input, then restore afterwards
         (add-hook 'minibuffer-setup-hook    #'shaoline--clear-display)
         (add-hook 'minibuffer-exit-hook     #'shaoline--update)
@@ -236,6 +242,8 @@ Only reacts to user messages, not Shaoline's own."
     ;; Remove shaoline--message-filter via add-function (from shaoline.el)
     (when (fboundp 'shaoline--maybe-remove-message-filter)
       (shaoline--maybe-remove-message-filter))
+    ;; Remove the filter-return advice
+    (shaoline--maybe-remove-message-filter-return)
     (shaoline--clear-display)
     ;; Remove our input hooks
     (remove-hook 'minibuffer-setup-hook    #'shaoline--clear-display)
