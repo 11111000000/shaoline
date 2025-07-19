@@ -1,0 +1,18 @@
+#+TITLE: Shaoline – Change Log
+
+* 2.1.0 (First public release – The Modeline of Nothingness)
+
+- Initial release to MELPA/ELPA.
+- Pure functional core: all segments are pure functions; no side effects outside echo-area rendering.
+- Minimalist echo-area modeline: replaces the classic mode-line with a single echo line.
+- /Persistent center/: shows the last non-empty message until a new one arrives (see FAQ).
+- No polling timers unless you enable time or battery segments (truely minimal).
+- /Debounced updates/: rapid commands = a single smooth repaint (no flicker).
+- Optional global hiding of the classic mode-line (configurable).
+- No required dependencies – projectile, all-the-icons, etc. load lazily if present.
+- Unicode and TTY support (graceful icon and moon phase degradation).
+- Easy segment customization with macros (see README and examples/custom-segments.el).
+- Includes ERT test suite and GitHub Actions/CI workflow.
+- DZен commentary and humour.
+
+/Walk the Way. Drink tea. Material modelines are emptiness; emptiness is a perfect modeline./
