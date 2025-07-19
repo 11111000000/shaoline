@@ -88,6 +88,46 @@
       (should (string-match-p "New message" (shaoline-compose-modeline))))))
 
 ;; ----------------------------------------------------------------------------
+;; Test: Multi-line message truncation in center
+
+(ert-deftest shaoline-multi-line-truncation ()
+  "Center truncates multi-line messages gracefully."
+  (with-temp-buffer
+    (let ((shaoline-segments '((:center shaoline-segment-echo-message))))
+      (message "Line1\nLine2\nLine3")
+      (let ((rendered (shaoline-compose-modeline)))
+        (should (string-match-p "Line1.*\\[more\\]" rendered))
+        (should-not (string-match-p "Line2" rendered))))))  ;; Only first line + indicator
+
+;; ----------------------------------------------------------------------------
+;; Test: TTY fallback (no Unicode icons/moons)
+
+(ert-deftest shaoline-tty-fallback ()
+  "Segments degrade gracefully in TTY (no Unicode or icons)."
+  (with-temp-buffer
+    (let ((shaoline-segments '((:left shaoline-segment-icon-and-buffer)
+                               (:right shaoline-segment-time)))
+          ;; Simulate TTY by disabling all-the-icons and assuming no Unicode
+          (shaoline-enable-dynamic-segments nil))  ;; Temporarily disable to force fallback
+      (let ((rendered (shaoline-compose-modeline)))
+        (should-not (string-match-p "[\uE000-\uF8FF]" rendered))  ;; No icons
+        (should-not (string-match-p "🌑" rendered))  ;; No moon
+        (should (string-match-p (buffer-name) rendered))  ;; Buffer name fallback
+        (should (string-empty-p (or (cl-find-if (lambda (s) (string-match-p "%H:%M" s)) (split-string rendered " ")) ""))))))  ;; Time disabled
+
+;; ----------------------------------------------------------------------------
+;; Test: Debounce prevents excessive updates
+
+(ert-deftest shaoline-debounce-performance ()
+  "Debounce ensures no more than one update per rapid sequence."
+  (let ((update-count 0))
+    (advice-add 'shaoline--update :before (lambda (&rest _) (cl-incf update-count)))
+    (dotimes (_ 5) (shaoline--debounced-update))
+    (sit-for 0.2)  ;; Wait for debounce
+    (should (= update-count 1))  ;; Only one actual update
+    (advice-remove 'shaoline--update (lambda (&rest _) (cl-incf update-count)))))
+
+;; ----------------------------------------------------------------------------
 ;; Add more property-based or ERT tests below if needed.
 
 (provide 'shaoline-core-test)
