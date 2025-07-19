@@ -96,15 +96,27 @@ If a buffer's mode-line-format was not changed by Shaoline, it is left untouched
              (message-log-max nil))
         (message "%s" msg-with-prop)))))
 
+(defun shaoline--predictive-clear ()
+  "Predictive clear before commands that may activate minibuffer."
+  (when (and (commandp this-command)
+             (memq this-command '(execute-extended-command find-file)))
+    (shaoline--clear-display)))
+
+(add-hook 'pre-command-hook #'shaoline--predictive-clear)
+
 (defun shaoline--update (&rest _)
   "Recompute and display modeline for the currently selected window.
 Skips update and clears during isearch or minibuffer input."
   (shaoline--log "shaoline--update")
   (if (or (active-minibuffer-window)
+          (minibufferp)
           (bound-and-true-p isearch-mode))
       (shaoline--clear-display)
-    (shaoline--display
-     (shaoline-compose-modeline))))
+    (let ((cur-msg (current-message)))
+      (unless (and cur-msg
+                   (not (get-text-property 0 'shaoline cur-msg)))
+        (shaoline--display
+         (shaoline-compose-modeline))))))
 
 (defun shaoline--clear-display ()
   "Clear the echo area if the last output was from Shaoline.
@@ -250,6 +262,7 @@ Only reacts to user messages, not Shaoline's own."
     (remove-hook 'minibuffer-exit-hook     #'shaoline--update)
     (remove-hook 'isearch-mode-hook        #'shaoline--clear-display)
     (remove-hook 'isearch-mode-end-hook    #'shaoline--update)
+    (remove-hook 'pre-command-hook         #'shaoline--predictive-clear)  ;; Cleanup new hook
     (when shaoline-autohide-modeline
       (shaoline--unhide-modeline-globally))
     ;; Cancel the periodic timer
