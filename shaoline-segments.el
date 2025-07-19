@@ -1,5 +1,7 @@
 ;;; shaoline-segments.el --- Standard segments for Shaoline modeline -*- lexical-binding: t; -*-
 
+;; Version: 2.1.1
+
 ;; Copyright (C) 2025 Peter
 ;; Author: Peter <11111000000@email.com>
 ;; SPDX-License-Identifier: MIT

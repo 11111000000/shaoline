@@ -1,5 +1,20 @@
 #+TITLE: Shaoline – Change Log
 
+* 2.1.1 (Functional enlightenment & persistent center)
+  :PROPERTIES:
+  :CUSTOM_ID: v2.1.1
+  :END:
+
+- Release date: 2025-07-20
+- Persistent center: last non-empty message now truly persists until a new non-empty arrives (see FAQ).
+- Multi-line message truncation in center segment improved ([more] indicator).
+- Enhanced TTY-fallback (Unicode/icons).
+- Complete ERT/CI test suite, lint and performance coverage.
+- Documentation: persistent-center, configuration, MELPA/ELPA section clarified.
+- Internal cleanups: no superfluous timers/messages; error handling improved in segment core.
+- Version unification across all files.
+- Compatible with Emacs 27.1+.
+
 * 2.1.0 (First public release – The Modeline of Nothingness)
 
 - Initial release to MELPA/ELPA.
