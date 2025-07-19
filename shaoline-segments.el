@@ -70,11 +70,19 @@
 ;; Echo-area message.
 
 (shaoline-define-simple-segment shaoline-segment-echo-message
-  "Show the latest user `message` for a fixed timeout. Width managed by the modeline."
-  (let ((show (and (shaoline-msg-active-p shaoline-message-timeout)
-                   (shaoline-msg-current))))
-    (if show
-        (propertize show 'face 'shaoline-echo-face)
+  "Show the latest user `message` for a fixed timeout, handling multi-line.
+Truncates long or multi-line messages gracefully. Width managed by the modeline."
+  (let ((msg (and (shaoline-msg-active-p shaoline-message-timeout)
+                  (shaoline-msg-current))))
+    (if (and msg (not (string-empty-p msg)))
+        (let* ((lines (split-string msg "\n"))
+               (first (car lines))
+               (rest (cdr lines))
+               (truncated (if rest
+                              (concat (truncate-string-to-width first (- (shaoline-available-center-width) 4) nil nil "...")
+                                      " [more]")
+                            (truncate-string-to-width first (shaoline-available-center-width) nil nil "..."))))
+          (propertize truncated 'face 'shaoline-echo-face))
       "")))
 
 ;; ----------------------------------------------------------------------------
@@ -188,6 +196,10 @@
 (shaoline-define-simple-segment shaoline-segment-emptiness
   "A blank segment."
   " ")
+
+(shaoline-define-simple-segment shaoline-segment-position
+  "Show current line and column position."
+  (propertize (format "L%d:C%d" (line-number-at-pos) (current-column)) 'face 'shaoline-mode-face))
 
 (provide 'shaoline-segments)
 ;;; shaoline-segments.el ends here

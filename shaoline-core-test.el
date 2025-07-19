@@ -70,6 +70,24 @@
     (advice-remove 'shaoline--update (lambda (&rest _) (cl-incf update-count)))))
 
 ;; ----------------------------------------------------------------------------
+;; Test: Persistent message in center until new non-empty
+
+(ert-deftest shaoline-message-persistent-until-new-nonempty ()
+  "Center should keep last non-empty message, ignoring empty ones."
+  (with-temp-buffer
+    (let ((shaoline-segments '((:center shaoline-segment-echo-message))))
+      (shaoline-msg-clear)
+      (should (string-empty-p (shaoline-compose-modeline)))  ;; Initially empty
+      (message "Test message")
+      (should (string-match-p "Test message" (shaoline-compose-modeline)))
+      (message nil)  ;; Empty: should not clear
+      (should (string-match-p "Test message" (shaoline-compose-modeline)))
+      (message "")   ;; Empty string: ignore
+      (should (string-match-p "Test message" (shaoline-compose-modeline)))
+      (message "New message")  ;; Non-empty: update
+      (should (string-match-p "New message" (shaoline-compose-modeline))))))
+
+;; ----------------------------------------------------------------------------
 ;; Add more property-based or ERT tests below if needed.
 
 (provide 'shaoline-core-test)

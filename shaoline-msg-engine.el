@@ -32,14 +32,10 @@
 ;; ----------------------------------------------------------------------------
 ;; Query.
 
-(defun shaoline-msg-active-p (timeout)
-  "Return non-nil if the current user message is still within its timeout.
-If the message exceeds 40 characters, timeout is multiplied accordingly."
+(defun shaoline-msg-active-p (_timeout)
+  "Return non-nil if there is a current user message (persistent until new non-empty)."
   (and shaoline-msg--last-user-message
-       (let* ((base (max 0 timeout))
-              (mult (max 1.0 (/ (length shaoline-msg--last-user-message) 40.0))))
-         (< (float-time (time-since shaoline-msg--last-user-message-ts))
-            (* base mult)))))
+       (not (string-empty-p shaoline-msg--last-user-message))))
 
 (defun shaoline-msg-current ()
   "Return the current user message string, or nil."

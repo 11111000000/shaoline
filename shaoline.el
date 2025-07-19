@@ -90,7 +90,8 @@ Zen masters say: A log unread is a tree falling in a silent forest."
     (shaoline-segment-git-branch    . "Git branch")
     (shaoline-segment-battery       . "Battery state")
     (shaoline-segment-time          . "Time with moon-phase")
-    (shaoline-segment-echo-message  . "Recent noticed message"))
+    (shaoline-segment-echo-message  . "Recent noticed message")
+    (shaoline-segment-position      . "Line and column position"))
   "Plenum of segments that may be included in shaoline. For drag/drop in customize."
   :type '(alist :key-type symbol :value-type string)
   :group 'shaoline)

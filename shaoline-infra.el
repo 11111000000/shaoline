@@ -147,7 +147,8 @@ If called repeatedly, only update after 0.12s delay."
   "Timer for slow periodic updates, if any.")
 
 (defun shaoline--maybe-start-timer ()
-  "Start timer only if dynamic segments are enabled and present in :right or :center."
+  "Start timer only if dynamic segments are enabled and present in :right or :center.
+No longer starts for messages, as they are persistent."
   (when (and (null shaoline--timer)
              shaoline-mode
              shaoline-enable-dynamic-segments
@@ -167,7 +168,7 @@ If called repeatedly, only update after 0.12s delay."
     (setq shaoline--timer nil)))
 
 (defun shaoline--lazy-update ()
-  "Disable timer if nothing dynamic is needed."
+  "Disable timer if nothing dynamic is needed. No message check (persistent)."
   (shaoline--log "shaoline--lazy-update")
   (let ((should-keep
          (and shaoline-enable-dynamic-segments
@@ -176,31 +177,27 @@ If called repeatedly, only update after 0.12s delay."
                (cl-member 'shaoline-segment-time (cdr (assq :right shaoline-segments)))
                (cl-member 'shaoline-segment-time (cdr (assq :center shaoline-segments)))
                (cl-member 'shaoline-segment-battery (cdr (assq :right shaoline-segments)))
-               (cl-member 'shaoline-segment-battery (cdr (assq :center shaoline-segments)))
-               ;; User message is still active
-               (shaoline-msg-active-p shaoline-message-timeout)))))
+               (cl-member 'shaoline-segment-battery (cdr (assq :center shaoline-segments)))))))
     (shaoline--update)
     (unless should-keep
       (shaoline--maybe-cancel-timer))))
 
 (defun shaoline--message-filter-return (result &rest _args)
   "Intercept `message' for Shaoline: stores last user message & timestamp, manages timer.
-Only reacts to user messages, not Shaoline's own."
+Only reacts to user messages, not Shaoline's own. Ignores empty messages to keep persistent."
   (when (and shaoline-mode
              (not (and (stringp result)
                        (get-text-property 0 'shaoline result))))
     (cond
-     ;; New, non-empty message
+     ;; New, non-empty message: update and refresh
      ((and (stringp result) (not (string-empty-p result)))
       (shaoline-msg-save result)
       (run-at-time 0 nil #'shaoline--update)
-      (shaoline--maybe-start-timer)) ; timer is needed
+      (shaoline--maybe-start-timer)) ; timer may be needed for other dynamics
 
-     ;; Empty message: clear
+     ;; Empty message: ignore, do not clear (persistent until new non-empty)
      ((or (null result) (string-empty-p result))
-      (shaoline-msg-clear)
-      (run-at-time 0 nil #'shaoline--update)
-      (shaoline--maybe-cancel-timer))))
+      nil)))
   result)
 
 (defun shaoline--maybe-remove-message-filter-return ()
