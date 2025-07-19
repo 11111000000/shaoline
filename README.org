@@ -1,6 +1,6 @@
 #+TITLE: Shaoline – Modeline of Nothingness  
-#+AUTHOR: A Wandering Byte (following the Ox-herd)  
-#+EMAIL: (void)  
+#+AUTHOR: A Wandering Byte
+#+EMAIL: 11111000000@email.com 
 #+LANGUAGE: en  
 #+OPTIONS: num:nil ^:nil toc:2
 
@@ -46,7 +46,8 @@ Still here?  Read on.
 5. /Optional mode-line hiding/ – see the void where the old bar used to be.
 6. /Zero required dependencies/ – icons, battery, projectile, etc. load lazily and only if you want them.
 7. /Unit-test friendly/ – core composer is completely side-effect free.
-8. /Chan humour/
+8. /Persistent center/ – last non-empty message stays until a new one arrives.
+9. /Chan humour/
 
 #+begin_quote
 Student: «Master, how many dependencies does Shaoline have?»  
@@ -79,7 +80,8 @@ Yet the Way is personal; tweak as you please.
         (:right  shaoline-segment-project-name
                  shaoline-segment-git-branch
                  shaoline-segment-battery
-                 shaoline-segment-time)))
+                 shaoline-segment-time
+                 shaoline-segment-position)))
 #+end_src
 
 Variables worth chanting over:
@@ -88,7 +90,6 @@ Variables worth chanting over:
 |----------------------------------+------------------+---------------------------------------------------------|
 | =shaoline-enable-dynamic-segments= | t                | Turn off to drop /all/ timers & external ~require~s.      |
 | =shaoline-timer-interval=          | 1                | Seconds between lazy refreshes (only if timer exists).  |
-| =shaoline-message-timeout=         | 10               | How long user messages stay before Shaoline re-emerges. |
 | =shaoline-autohide-modeline=       | t                | Hide the old mode-line globally.                        |
 | =shaoline-exclude-modes=           | list             | Major modes that keep their belt.                       |
 | =shaoline-update-hooks=            | (post-command …) | Events that trigger recompute.                          |
@@ -112,9 +113,35 @@ Remember: the fewer settings you touch, the closer you are to Emptiness. The pat
 | =shaoline-segment-git-branch=      | Current Git branch                | vc-git (built-in)        |
 | =shaoline-segment-battery=         | Battery percentage / status       | battery.el (built-in)    |
 | =shaoline-segment-time=            | 24-h clock + moon phase 🌓       | calendar.el (built-in)   |
-| =shaoline-segment-echo-message=    | Last user ~message~ (until timeout) | none                     |
+| =shaoline-segment-echo-message=    | Last non-empty message (persistent) | none                     |
+| =shaoline-segment-position=        | Line and column position          | none                     |
 
 Disable what you dislike; enlightenment is light to carry—like a feather on the breeze.
+
+** Integrations and Customizations
+
+Shaoline integrates seamlessly with popular packages. Add segments lazily, preserving minimalism.
+
+- /Evil-mode/: Create a segment for evil state:
+  #+begin_src emacs-lisp
+  (shaoline-define-simple-segment shaoline-segment-evil-state
+    "Show current evil state."
+    (when (bound-and-true-p evil-mode)
+      (propertize evil-state 'face 'shaoline-mode-face)))
+  #+end_src
+  Add to =shaoline-segments= (e.g., :left).
+
+- /Flycheck/: For error counts:
+  #+begin_src emacs-lisp
+  (shaoline-define-simple-segment shaoline-segment-flycheck
+    "Show flycheck errors/warnings."
+    (when (bound-and-true-p flycheck-mode)
+      (let ((err (flycheck-count-errors flycheck-current-errors)))
+        (propertize (format "E:%d W:%d" (or (cdr (assq 'error err)) 0) (or (cdr (assq 'warning err)) 0))
+                    'face 'shaoline-modified-face))))
+  #+end_src
+
+For more examples, see =examples/custom-segments.el= in the package directory.
 
 ** Writing your own segment (become the Master)
 
@@ -148,7 +175,13 @@ Pure functions only!  Side-effects are karmic debt—avoid them as one avoids mu
    Use =(setq shaoline-debug t)= to watch the river flow. (And giggle at the fish.)
 
 5. /Does Shaoline work on TTY?/  
-   Absolutely.  Moon glyphs degrade gracefully into ASCII; icons vanish like morning mist. TTY is the ultimate minimalism.
+   Absolutely.  Moon glyphs degrade gracefully into ASCII; icons vanish like morning mist. TTY is the ultimate minimalism. See TTY screenshots in the repo.
+
+6. /Why does the center message persist forever?/  
+   It holds the last non-empty message until a new one arrives. To clear manually: =(message nil)= (but it ignores empty, so use a non-empty then clear). Edge case: very long messages truncate gracefully.
+
+7. /How to handle multi-line messages in center?/  
+   They truncate to first line + "[more]" indicator. The full message appears in echo area temporarily.
 
 ** Troubleshooting
 
@@ -157,6 +190,7 @@ Pure functions only!  Side-effects are karmic debt—avoid them as one avoids mu
 | Flicker            | Another package sends empty messages                     | Evaluate ~(shaoline-msg-engine)~; check logs                  |
 | No right-side text | Window too narrow                                        | Widen or set =shaoline-right-padding= -2 (negative emptiness) |
 | Battery says N/A   | No battery in machine, or ~battery-status-function~ is nil | Accept impermanence                                         |
+| Persistent msg stuck | No new non-empty message sent                            | Send a new =(message "Clear")= then =(message nil)=           |
 
 ** Contributing
 
@@ -177,4 +211,5 @@ Remember: the true treasure is the friends we made along the Way... and perhaps 
 
 #+ATTR_ORG: :width 80%
 [[file:screenshot-shaoline.png]]
-
+#+ATTR_ORG: :width 80%
+[[file:screenshot-persistent.png]] ;; Example for persistent center
