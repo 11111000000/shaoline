@@ -231,50 +231,58 @@ Truncates long or multi-line messages gracefully. Width managed by the modeline.
 
 ;; ----------------------------------------------------------------------------
 ;; Minor modes summary (compact).
+(defcustom shaoline-minor-modes-icon-map
+  '(("read-only-mode"            . "🔒")
+    ("overwrite-mode"            . "⛔")
+    ("auto-save-mode"            . "💾")
+    ("visual-line-mode"          . "↩")
+    ("ws-butler-mode"            . "🚫␣")
+    ("indent-tabs-mode"          . "⇆")
+    ("dtrt-indent-mode"          . "↕")
+    ("editorconfig-mode"         . "☰")
+    ("god-mode"                  . "🧘")
+    ("god-local-mode"            . "🧘")
+    ("corfu-mode"                . "⚇")
+    ("vertico-mode"              . "V")
+    ("projectile-mode"           . "🚀")
+    ("envrc-mode"                . "⛺")
+    ("flyspell-mode"             . "🔤")
+    ("spell-fu-mode"             . "📚")
+    ("lsp-mode"                  . "🦾")
+    ("eglot-managed-mode"        . "🦾")
+    ("flycheck-mode"             . "✅")
+    ("flymake-mode"              . "🧪")
+    ("gptel-mode"                . "🤖")
+    ("gptel-aibo-mode"           . "🐕‍🦺")
+    ("org-drill-mode"            . "🦉")
+    ("rainbow-mode"              . "🌈")
+    ("olivetti-mode"             . "✍")
+    ("org-fancy-priorities-mode" . "⚡")
+    ("org-auto-tangle-mode"      . "🧶"))
+  "Mapping minor mode variable names (as strings) to an icon/emoji for Shaoline.
+Customize this to control which minor modes are shown and what icons are used."
+  :type '(alist :key-type string :value-type string)
+  :group 'shaoline)
+
 (shaoline-define-simple-segment shaoline-segment-minor-modes
-  "Show ONLY critically important minor modes, as Unicode emoji/symbols (portable)."
-  (let* (
-         ;; Each entry: ("minor-mode-symbol" . "emoji/symbol")
-         (icon-map
-          `(
-            ;; Core text/safety
-            ("read-only-mode"            . "🔒")
-            ("overwrite-mode"            . "⛔")
-            ("auto-save-mode"            . "💾")
-            ;; Indentation, whitespace, etc.
-            ("visual-line-mode"          . "↩")
-            ("ws-butler-mode"            . "🚫␣")
-            ("indent-tabs-mode"          . "⇆")
-            ("dtrt-indent-mode"          . "↕")
-            ("editorconfig-mode"         . "☰")
-            ;; Completion/navigation
-            ("god-mode"                  . "🧘")
-            ("corfu-mode"                . "⚇")
-            ("vertico-mode"              . "V")
-            ("projectile-mode"           . "🚀")
-            ("envrc-mode"                . "⛺")
-            ;; Spell and language tools
-            ("flyspell-mode"             . "🔤")
-            ("spell-fu-mode"             . "📚")
-            ;; LSP and code-checking
-            ("lsp-mode"                  . "🦾")
-            ("eglot-managed-mode"        . "⧉")
-            ("flycheck-mode"             . "✅")
-            ("flymake-mode"              . "🧪")
-            ;; AI & productivity
-            ("gptel-mode"                . "🤖")
-            ("gptel-aibo-mode"           . "🐕‍🦺")
-            ("org-drill-mode"            . "🦉")
-            ;; Visual/coding helpers
-            ("rainbow-mode"              . "🌈")
-            ("highlight-parentheses-mode" . "🟦")
-            ;; Org and writing
-            ("olivetti-mode"             . "✍")
-            ("org-modern-mode"           . "🗐")
-            ("org-fancy-priorities-mode" . "⚡")
-            ("org-auto-tangle-mode"      . "🧶")
-            ))
+  "Show ONLY critically important minor modes, as Unicode emoji/symbols (portable), each with a unique color.
+Set and extend what to show via `shaoline-minor-modes-icon-map'."
+  (let* ((icon-map shaoline-minor-modes-icon-map)
          (seen (make-hash-table :test 'equal))
+         ;; Helper: deterministic color for a string (from hash)
+         (shaoline--minor-mode-face-for
+          (lambda (name)
+            (let* ((facesym (intern (concat "shaoline-minor-m-face-" name)))
+                   (color
+                    (let* ((hue (/ (mod (sxhash name) 360.0) 360.0))
+                           (sat 0.7)
+                           (lum 0.55))
+                      (apply #'color-rgb-to-hex (color-hsl-to-rgb hue sat lum))))
+                   (doc (format "Face for %s icon in Shaoline minor modes." name)))
+              (unless (facep facesym)
+                (eval `(defface ,facesym '((t :inherit shaoline-mode-face :foreground ,color :weight bold))
+                         ,doc :group 'shaoline)))
+              facesym)))
          (modes
           (delq nil
                 (mapcar
@@ -286,12 +294,10 @@ Truncates long or multi-line messages gracefully. Width managed by the modeline.
                                 (symbol-value sym)
                                 (not (gethash name seen)))
                        (puthash name t seen)
-                       icon)))
+                       (propertize icon 'face (funcall shaoline--minor-mode-face-for name)))))
                  minor-mode-list))))
     (when modes
-      (propertize (concat "[" (mapconcat #'identity modes "") "]")
-                  'face 'shaoline-mode-face))))
-
+      (concat "[" (mapconcat #'identity modes "") "]"))))
 
 
 ;; ----------------------------------------------------------------------------

@@ -111,9 +111,8 @@ Zen masters say: A log unread is a tree falling in a silent forest."
                        
      )
     (:center
-        shaoline-segment-echo-message
-     )
-    (:right 
+        shaoline-segment-echo-message)
+    (:right
      shaoline-segment-minor-modes
      shaoline-segment-project-name
      shaoline-segment-git-branch
