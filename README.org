@@ -76,13 +76,15 @@ Yet the Way is personal; tweak as you please.
 
 #+begin_src emacs-lisp
 (setq shaoline-segments
-      '((:left   shaoline-segment-icon-and-buffer)
+      '((:left shaoline-segment-position
+               shaoline-segment-icon-and-buffer
+               shaoline-segment-modified)
         (:center shaoline-segment-echo-message)
-        (:right  shaoline-segment-project-name
-                 shaoline-segment-git-branch
-                 shaoline-segment-battery
-                 shaoline-segment-time
-                 shaoline-segment-position)))
+        (:right shaoline-segment-minor-modes
+                shaoline-segment-project-name
+                shaoline-segment-git-branch
+                shaoline-segment-battery
+                shaoline-segment-time)))
 #+end_src
 
 Variables worth chanting over:
@@ -107,15 +109,17 @@ Remember: the fewer settings you touch, the closer you are to Emptiness. The pat
 
 ** Standard segments
 
-| Symbol                           | What it shows                     | Depends on               |
-|----------------------------------+-----------------------------------+--------------------------|
-| =shaoline-segment-icon-and-buffer= | Pretty icon + buffer name         | all-the-icons (optional) |
-| =shaoline-segment-project-name=    | Project (project.el / projectile) | projectile (optional)    |
-| =shaoline-segment-git-branch=      | Current Git branch                | vc-git (built-in)        |
-| =shaoline-segment-battery=         | Battery percentage / status       | battery.el (built-in)    |
-| =shaoline-segment-time=            | 24-h clock + moon phase 🌓       | calendar.el (built-in)   |
-| =shaoline-segment-echo-message=    | Last non-empty message (persistent) | none                     |
-| =shaoline-segment-position=        | Line and column position          | none                     |
+| Symbol                           | What it shows                         | Depends on               |
+|----------------------------------+---------------------------------------+--------------------------|
+| =shaoline-segment-position=        | Line and column position              | none                     |
+| =shaoline-segment-icon-and-buffer= | Pretty icon + buffer name             | all-the-icons (optional) |
+| =shaoline-segment-modified=        | * if buffer is modified               | none                     |
+| =shaoline-segment-echo-message=    | Last non-empty message (persistent!)  | none                     |
+| =shaoline-segment-minor-modes=     | Critical enabled minor modes (icons)  | none (customizable)      |
+| =shaoline-segment-project-name=    | Project (project.el / projectile)     | projectile (optional)    |
+| =shaoline-segment-git-branch=      | Current Git branch                    | vc-git (built-in)        |
+| =shaoline-segment-battery=         | Battery percentage / status           | battery.el (built-in)    |
+| =shaoline-segment-time=            | 24-h clock + moon phase 🌓           | calendar.el (built-in)   |
 
 Disable what you dislike; enlightenment is light to carry—like a feather on the breeze.
 
@@ -192,6 +196,7 @@ Pure functions only!  Side-effects are karmic debt—avoid them as one avoids mu
 | No right-side text | Window too narrow                                        | Widen or set =shaoline-right-padding= -2 (negative emptiness) |
 | Battery says N/A   | No battery in machine, or ~battery-status-function~ is nil | Accept impermanence                                         |
 | Persistent msg stuck | No new non-empty message sent                            | Send a new =(message "Clear")= then =(message nil)=           |
+| Center doesn't show last message  | (a) User message unadvised, or (b) not in :center | Check that =shaoline-segment-echo-message= is in :center in shaoline-segments, and update                         |
 
 ** Contributing
 
@@ -213,4 +218,4 @@ Remember: the true treasure is the friends we made along the Way... and perhaps 
 #+ATTR_ORG: :width 80%
 [[file:screenshot-shaoline.png]]
 #+ATTR_ORG: :width 80%
-[[file:screenshot-persistent.png]] ;; Example for persistent center
+[[file:screenshot-persistent.png]] ;; Example for persistent center segment (shaoline-segment-echo-message)

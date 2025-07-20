@@ -1,0 +1,19 @@
+#+TITLE: Shaoline — Quick Zen Guide
+
+* ☯️ Quick Setup For Maximum Zen
+
+** To always display the *last* non-empty message:
+
+- Ensure your configuration contains:
+
+#+begin_src emacs-lisp
+(setq shaoline-segments
+      '((:left shaoline-segment-position
+               shaoline-segment-icon-and-buffer
+               shaoline-segment-modified)
+        (:center shaoline-segment-echo-message)
+        (:right shaoline-segment-minor-modes
+                shaoline-segment-project-name
+                shaoline-segment-git-branch
+                shaoline-segment-battery
+                shaoline-segment-time)))
