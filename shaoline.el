@@ -62,7 +62,7 @@ Increase if your favorite icons are wider."
   :group 'shaoline)
 
 
-(defcustom shaoline-debug t
+(defcustom shaoline-debug nil
   "If non-nil, log shaoline activity into `shaoline--log-buffer'. Seek inner debugness."
   :type 'boolean
   :group 'shaoline)
@@ -88,20 +88,38 @@ Zen masters say: A log unread is a tree falling in a silent forest."
 
 (defcustom shaoline-available-segments
   '((shaoline-segment-icon-and-buffer . "Icon and buffer name")
-    (shaoline-segment-project-name . "Project name (if any)")
-    (shaoline-segment-git-branch    . "Git branch")
-    (shaoline-segment-battery       . "Battery state")
-    (shaoline-segment-time          . "Time with moon-phase")
-    (shaoline-segment-echo-message  . "Recent noticed message")
-    (shaoline-segment-position      . "Line and column position"))
+    (shaoline-segment-project-name    . "Project name (if any)")
+    (shaoline-segment-git-branch      . "Git branch")
+    (shaoline-segment-battery         . "Battery state")
+    (shaoline-segment-time            . "Time with moon-phase")
+    (shaoline-segment-echo-message    . "Recent noticed message")
+    (shaoline-segment-position        . "Line and column position")
+    (shaoline-segment-modified        . "Buffer modified status")
+    (shaoline-segment-major-mode      . "Major mode with optional icon")
+    (shaoline-segment-encoding        . "File encoding and EOL type")
+    (shaoline-segment-minor-modes     . "Compact enabled minor modes")
+    (shaoline-segment-flycheck        . "Flycheck/Flymake errors/warnings")
+    (shaoline-segment-vcs-state       . "Git/VCS state indicator"))
   "Plenum of segments that may be included in shaoline. For drag/drop in customize."
   :type '(alist :key-type symbol :value-type string)
   :group 'shaoline)
 
 (defcustom shaoline-segments
-  '((:left shaoline-segment-icon-and-buffer)
-    (:center shaoline-segment-echo-message)
-    (:right shaoline-segment-project-name shaoline-segment-git-branch shaoline-segment-battery shaoline-segment-time))
+  '((:left             shaoline-segment-position
+                       shaoline-segment-icon-and-buffer
+                       shaoline-segment-modified
+                       
+     )
+    (:center
+        shaoline-segment-echo-message
+     )
+    (:right 
+     shaoline-segment-minor-modes
+     shaoline-segment-project-name
+     shaoline-segment-git-branch
+     shaoline-segment-battery
+     shaoline-segment-time
+     ))
   "Alist describing segments for :left, :center and :right.
 Each entry is a list of segment function symbols for that side.
 May be configured in Custom (see shaoline-available-segments)."
@@ -113,7 +131,14 @@ May be configured in Custom (see shaoline-available-segments)."
                             (const shaoline-segment-git-branch)
                             (const shaoline-segment-battery)
                             (const shaoline-segment-time)
-                            (const shaoline-segment-echo-message))))
+                            (const shaoline-segment-echo-message)
+                            (const shaoline-segment-modified)
+                            (const shaoline-segment-major-mode)
+                            (const shaoline-segment-encoding)
+                            (const shaoline-segment-minor-modes)
+                            (const shaoline-segment-flycheck)
+                            (const shaoline-segment-vcs-state)
+                            (const shaoline-segment-position))))
   :group 'shaoline)
 
 (defcustom shaoline-update-hooks
@@ -135,8 +160,15 @@ You can exclude certain major-modes from hiding using `shaoline-exclude-modes`."
   :type '(repeat symbol)
   :group 'shaoline)
 
-(defcustom shaoline-right-padding 0
+(defcustom shaoline-right-padding 20
   "Extra spaces appended to the right edge of the shaoline. Sometimes, a little emptiness is all you need."
+  :type 'integer
+  :group 'shaoline)
+
+(defcustom shaoline-max-right-width 50
+  "Maximum printed width (in characters) for right segment. 
+Helps keep the right segment perfectly aligned even if the width of emoji/icons varies.
+Increase if your right segment can get wider."
   :type 'integer
   :group 'shaoline)
 
@@ -245,11 +277,10 @@ Restored exactly as it was when the mode is toggled off.")
   "Update Shaoline faces to match current theme."
   (custom-set-faces
    `(shaoline-time-face
-     ((t :inherit default
-         :height 1.0
+     ((t :height 1.0
          :bold nil
          :family "Digital Display"
-         :foreground ,(or (face-foreground 'success nil t) "#00aa00")
+         :foreground "#00aa00"
          :background ,(or (face-background 'shadow nil t) "#002200"))))
    `(shaoline-moon-face
      ((t :inherit default
@@ -273,26 +304,31 @@ Restored exactly as it was when the mode is toggled off.")
 
 (defun shaoline--apply-segment (fn buffer)
   "Call segment FN with BUFFER (or with no args if not needed) and return its string.
-Errors are returned as a diagnostic string, not signalled; stacktrace is logged if `shaoline-debug`."
-  (condition-case err
-      (let* ((arity (help-function-arglist fn t))
-             (res (if arity
-                      (funcall fn buffer)
-                    (funcall fn))))
-        (if (stringp res) res (or (and res (format "%s" res)) "")))
-    (error
-     (let ((msg (format "[SEGMENT ERROR: %s in %s]" err fn)))
-       (when shaoline-debug
-         (shaoline--log "%s" msg)
-         (shaoline--log "Traceback: %s" (with-output-to-string (backtrace))))
-       (propertize msg 'face 'error)))))
+Errors or missing segment yield an empty string (quiet fail), diagnostics go to log if `shaoline-debug`."
+  (if (fboundp fn)
+      (condition-case err
+          (let* ((arity (help-function-arglist fn t))
+                 (res (if arity
+                          (funcall fn buffer)
+                        (funcall fn))))
+            (if (stringp res) res ""))
+        (error
+         (let ((msg (format "[SEGMENT ERROR: %s in %s]" err fn)))
+           (when shaoline-debug
+             (shaoline--log "%s" msg)
+             (shaoline--log "Traceback: %s" (with-output-to-string (backtrace))))
+           "")))
+    (when shaoline-debug
+      (shaoline--log "[VOID SEGMENT: %s (not defined)]" fn))
+    ""))
 
 (defun shaoline--collect-segments (side buffer)
   "Render all segments for SIDE (:left, :center, :right) within BUFFER.
-Only non-empty results are included."
+Only non-empty and valid string results are included."
   (cl-loop for fn in (cdr (assq side shaoline-segments))
            for str = (shaoline--apply-segment fn buffer)
-           unless (or (null str) (string-empty-p str))
+           when (and (stringp str)
+                     (not (string-empty-p str)))
            collect str))
 
 ;; ----------------------------------------------------------------------------
@@ -306,11 +342,13 @@ Calculates based on the length of left and right segments, including any necessa
   (let* ((window (or (and (windowp window) window)
                      (selected-window)))
          (buffer (or buffer (window-buffer window)))
-         (width  (or width
-                     (let* ((mini (minibuffer-window))
-                            (mini-width (and (window-live-p mini)
-                                             (window-width mini))))
-                       (or mini-width (frame-width)))))
+         (raw-width
+          (let ((w (or width
+                       (let* ((mini (minibuffer-window))
+                              (mini-width (and (window-live-p mini)
+                                               (window-width mini))))
+                         (or mini-width (frame-width))))))
+            (or (and (numberp w) w) 80)))
          (left   (mapconcat #'identity (shaoline--collect-segments :left buffer) " "))
          (right  (mapconcat #'identity (shaoline--collect-segments :right buffer) " "))
          (left-w (string-width left))
@@ -318,19 +356,13 @@ Calculates based on the length of left and right segments, including any necessa
          (space-left  (if (and (not (string-empty-p left))
                                (not (string-empty-p right)))
                           1 0))
-         ;; Like whispers of wind: spaces appear only where presence demands them,
-         ;; ensuring harmony between segments without excess.
-         ;; If the center segment is empty, no space is needed before/after.
-         ;; If both sides exist, one space is left before the center.
          (space-center-left (if (and (not (string-empty-p left)))
                                 1 0))
          (space-center-right (if (not (string-empty-p right))
                                  1 0)))
-    (max 0 (- width
+    (max 0 (- raw-width
               left-w
               right-w
-              ;; NOTE: We only leave spaces where segments exist —
-              ;; a gentle bow to existence, nothing more.
               (if (not (string-empty-p left)) 1 0)
               (if (not (string-empty-p right)) 1 0)
               shaoline-right-padding))))
@@ -339,50 +371,46 @@ Calculates based on the length of left and right segments, including any necessa
 ;; Core: Compose Modeline (Pure, No Side Effects)
 ;;
 ;; Pure computation. No action, no world. Suitable everywhere.
-
 (defun shaoline-compose-modeline (&optional buffer window width)
   "Return the Shaoline string for the echo area.
-
-Pure function: collects, arranges, and truncates segments for rendering 
-in the echo area. This function is entirely side-effect free.
-The right segment is *pinned* to the right edge by means of the
-`space :align-to' display property, while the central segment is
-truncated when necessary so that the whole string never exceeds
-the window width."
-  (let* ((buffer  (or buffer (current-buffer)))
-         (window  (or window  (selected-window)))
-         (echo-width (or width
-                         (let* ((mini (minibuffer-window))
-                                (mini-w (and (window-live-p mini) (window-width mini))))
-                           (or mini-w (frame-width)))))
-         (left    (mapconcat #'identity
-                             (shaoline--collect-segments :left buffer) " "))
-         (center0 (mapconcat #'identity
-                             (shaoline--collect-segments :center buffer) " "))
-         (right   (mapconcat #'identity
-                             (shaoline--collect-segments :right buffer) " "))
+The right segment is *always* visually pressed to the right edge (with right-padding),
+no matter how many icons/emoji it contains.
+If its contents get shorter, the gap appears *to the left* of the rightmost character, not to the right edge."
+  (let* ((buffer (or buffer (current-buffer)))
+         (window (or window (selected-window)))
+         (echo-width
+          (let ((w (or width
+                       (let* ((mini (minibuffer-window))
+                              (mini-w (and (window-live-p mini)
+                                           (window-width mini))))
+                         (or mini-w (frame-width))))))
+            (or w 80)))
+         (left   (mapconcat #'identity (shaoline--collect-segments :left buffer) " "))
+         (center0 (mapconcat #'identity (shaoline--collect-segments :center buffer) " "))
+         (right  (mapconcat #'identity (shaoline--collect-segments :right buffer) " "))
          (gap-left (if (string-empty-p left) "" " "))
-         (avail (max 0 (- echo-width
+         (right-width (string-width right))
+         ;; Куда прижимаем правый сегмент:
+         (right-edge (- echo-width shaoline-right-padding))
+         ;; Левая граница right: столько, чтобы правый край был чётко на границе.
+         (align-to (- right-edge right-width))
+         ;; сколько осталось для центра?
+         (avail (max 0 (- align-to
                           (string-width left)
-                          (if (string-empty-p left) 0 1)
-                          (string-width right)
-                          shaoline-right-padding)))
-         (center (if (> (string-width center0) avail)
+                          (length gap-left))))
+         (center (if (and (stringp center0) (> (string-width center0) avail))
                      (truncate-string-to-width center0 avail 0 ?\s "...")
                    center0)))
     (concat
      left
      gap-left
      center
-     ;; The subtle art of alignment: a single propertized space
-     ;; pins the right segment to the edge, like a leaf held by the stream's flow —
-     ;; using Emacs' display property to bridge the void without effort.
-     (propertize
-      " "
-      'display `(space :align-to (- right ,(+ (string-width right)
-                                              shaoline-right-padding))))
+     ;; Подальше вперёд к границе ровно на align-to
+     (propertize " " 'display `(space :align-to ,align-to))
      right
      (make-string shaoline-right-padding ?\s))))
+
+
 
 ;; ----------------------------------------------------------------------------
 ;; Segments are elsewhere.
@@ -400,34 +428,55 @@ the window width."
 
 
 ;; ----------------------------------------------------------------------------
-;; Prevent flicker: Leave the void untouched.
+;; Prevent flicker and ensure last user message is always captured for echo segment.
 
 (defun shaoline--empty-message-p (fmt args)
-  "Return non-nil when calling `message' with FMT/ARGS would show nothing."
+  "Return non-nil when calling =message' with FMT/ARGS would show nothing."
   (or (null fmt)
       (and (stringp fmt)
-           (string-empty-p (apply #'format fmt args))))
-      ;; Some packages may call message with "" directly.
-      (and (listp fmt) (equal fmt '(""))))
+           (string-empty-p (apply #'format fmt args)))
+      (and (listp fmt) (equal fmt '("")))))
 
-(defun shaoline--message-filter (orig-fmt &rest args)
-  "Filter for `message` to suppress empty messages when Shaoline is active.
-If so, simply propagate the *current* echo area unchanged — never erase."
-  (if (and (bound-and-true-p shaoline-mode)
-           (shaoline--empty-message-p orig-fmt args))
-      ;; DO NOT ERASE echo area: return current-message (i.e. leave Shaoline untouched)
-      (let ((curmsg (current-message)))
-        ;; Emacs expects a return value, so we return the current string which preserves the display.
-        (or curmsg ""))
-    (apply orig-fmt args)))
+(defun shaoline--message-filter-capture (orig-fmt &rest args)
+  "Around advice for =message=: capture last non-empty message persistently.
+Never allow empty message to erase echo area when shaoline-mode is active."
+  (let* ((str (apply orig-fmt args))
+         (curmsg shaoline-msg--last-user-message))
+    (when shaoline-debug
+      (shaoline--log "[SHAOLINE] message called: fmt='%s' args='%s' str='%s'" orig-fmt args str))
+    (cond
+     ;; Case 1: Non-empty, user message.
+     ((and (bound-and-true-p shaoline-mode)
+           (stringp str) (not (string-empty-p str))
+           (not (get-text-property 0 'shaoline str)))
+      (setq shaoline-msg--last-user-message str)
+      (setq shaoline-msg--last-user-message-ts (float-time))
+      (when shaoline-debug (shaoline--log "[SHAOLINE] Saved user message '%s'" str))
+      (run-at-time 0 nil #'shaoline--update)
+      str)
+     ;; Case 2: Empty message, keep current shaoline (never clear!)
+     ((and (bound-and-true-p shaoline-mode)
+           (or (not str) (string-empty-p str)))
+      (when shaoline-debug (shaoline--log "[SHAOLINE] Suppressing echo area clear, restoring message '%s'" curmsg))
+      (or (current-message) curmsg ""))
+     ;; Case 3: Not in shaoline-mode, normal echo.
+     (t str))))
 
-;; add-function :around — gentle touch, no trace
-(add-function :around (symbol-function 'message) #'shaoline--message-filter)
+(defun shaoline--advise-message ()
+  "Activate advice that captures messages for persistent echo segment."
+  (add-function :around (symbol-function 'message) #'shaoline--message-filter-capture))
 
-(defun shaoline--maybe-remove-message-filter ()
-  "Remove shaoline--message-filter from `message' if present."
+(defun shaoline--remove-message-advice ()
+  "Remove shaoline persistent capture advice from =message'."
   (ignore-errors
-    (remove-function (symbol-function 'message) #'shaoline--message-filter)))
+    (remove-function (symbol-function 'message) #'shaoline--message-filter-capture)))
+
+;; Activate advice when shaoline-mode toggles.
+(add-hook 'shaoline-mode-hook
+          (lambda ()
+            (if shaoline-mode
+                (shaoline--advise-message)
+              (shaoline--remove-message-advice))))
 
 (provide 'shaoline)
 ;;; shaoline.el ends here

@@ -72,18 +72,19 @@
 ;; Echo-area message.
 
 (shaoline-define-simple-segment shaoline-segment-echo-message
-  "Show the latest user `message` for a fixed timeout, handling multi-line.
+  "Show the latest user `message` persistently (until a new non-empty), handling multi-line.
 Truncates long or multi-line messages gracefully. Width managed by the modeline."
-  (let ((msg (and (shaoline-msg-active-p shaoline-message-timeout)
-                  (shaoline-msg-current))))
+  (let ((msg (shaoline-msg-current)))
     (if (and msg (not (string-empty-p msg)))
         (let* ((lines (split-string msg "\n"))
                (first (car lines))
                (rest (cdr lines))
+               (raw-width (shaoline-available-center-width))
+               (safe-width (or (and (numberp raw-width) raw-width) 80))
                (truncated (if rest
-                              (concat (truncate-string-to-width first (- (shaoline-available-center-width) 4) nil nil "...")
+                              (concat (truncate-string-to-width first (max 1 (- safe-width 4)) nil nil "...")
                                       " [more]")
-                            (truncate-string-to-width first (shaoline-available-center-width) nil nil "..."))))
+                            (truncate-string-to-width first (max 1 safe-width) nil nil "..."))))
           (propertize truncated 'face 'shaoline-echo-face))
       "")))
 
@@ -193,6 +194,15 @@ Truncates long or multi-line messages gracefully. Width managed by the modeline.
       (concat time " " moon "  "))))
 
 ;; ----------------------------------------------------------------------------
+;; Modified status.
+
+(shaoline-define-simple-segment shaoline-segment-modified
+  "Show '*' if buffer is modified."
+  (when (and (buffer-modified-p)
+             (buffer-file-name))
+    (propertize "*" 'face 'shaoline-modified-face)))
+
+;; ----------------------------------------------------------------------------
 ;; Visual spacer.
 
 (shaoline-define-simple-segment shaoline-segment-emptiness
@@ -202,6 +212,124 @@ Truncates long or multi-line messages gracefully. Width managed by the modeline.
 (shaoline-define-simple-segment shaoline-segment-position
   "Show current line and column position."
   (propertize (format "L%d:C%d" (line-number-at-pos) (current-column)) 'face 'shaoline-mode-face))
+
+;; ----------------------------------------------------------------------------
+;; Encoding and EOL.
+
+(shaoline-define-simple-segment shaoline-segment-encoding
+  "Show file encoding and EOL type."
+  (let* ((coding (symbol-name (or buffer-file-coding-system 'undecided)))
+         (coding (if (string-match-p "utf-8" coding) "UTF8" coding))
+         (eol 
+          (pcase (coding-system-eol-type (or buffer-file-coding-system 'undecided))
+            (0 "LF")
+            (1 "CRLF")
+            (2 "CR")
+            (_ ""))))
+    (when buffer-file-name
+      (propertize (format "%s %s" coding eol) 'face 'shaoline-mode-face))))
+
+;; ----------------------------------------------------------------------------
+;; Minor modes summary (compact).
+(shaoline-define-simple-segment shaoline-segment-minor-modes
+  "Show ONLY critically important minor modes, as Unicode emoji/symbols (portable)."
+  (let* (
+         ;; Each entry: ("minor-mode-symbol" . "emoji/symbol")
+         (icon-map
+          `(
+            ;; Core text/safety
+            ("read-only-mode"            . "🔒")
+            ("overwrite-mode"            . "⛔")
+            ("auto-save-mode"            . "💾")
+            ;; Indentation, whitespace, etc.
+            ("visual-line-mode"          . "↩")
+            ("ws-butler-mode"            . "🚫␣")
+            ("indent-tabs-mode"          . "⇆")
+            ("dtrt-indent-mode"          . "↕")
+            ("editorconfig-mode"         . "☰")
+            ;; Completion/navigation
+            ("god-mode"                  . "🧘")
+            ("corfu-mode"                . "⚇")
+            ("vertico-mode"              . "V")
+            ("projectile-mode"           . "🚀")
+            ("envrc-mode"                . "⛺")
+            ;; Spell and language tools
+            ("flyspell-mode"             . "🔤")
+            ("spell-fu-mode"             . "📚")
+            ;; LSP and code-checking
+            ("lsp-mode"                  . "🦾")
+            ("eglot-managed-mode"        . "⧉")
+            ("flycheck-mode"             . "✅")
+            ("flymake-mode"              . "🧪")
+            ;; AI & productivity
+            ("gptel-mode"                . "🤖")
+            ("gptel-aibo-mode"           . "🐕‍🦺")
+            ("org-drill-mode"            . "🦉")
+            ;; Visual/coding helpers
+            ("rainbow-mode"              . "🌈")
+            ("highlight-parentheses-mode" . "🟦")
+            ;; Org and writing
+            ("olivetti-mode"             . "✍")
+            ("org-modern-mode"           . "🗐")
+            ("org-fancy-priorities-mode" . "⚡")
+            ("org-auto-tangle-mode"      . "🧶")
+            ))
+         (seen (make-hash-table :test 'equal))
+         (modes
+          (delq nil
+                (mapcar
+                 (lambda (sym)
+                   (let* ((name (symbol-name sym))
+                          (icon (cdr (assoc name icon-map))))
+                     (when (and icon
+                                (boundp sym)
+                                (symbol-value sym)
+                                (not (gethash name seen)))
+                       (puthash name t seen)
+                       icon)))
+                 minor-mode-list))))
+    (when modes
+      (propertize (concat "[" (mapconcat #'identity modes "") "]")
+                  'face 'shaoline-mode-face))))
+
+
+
+;; ----------------------------------------------------------------------------
+;; Flycheck/Flymake status (errors/warnings).
+
+(shaoline-define-simple-segment shaoline-segment-flycheck
+  "Show Flycheck/Flymake error and warning counts if available."
+  (cond
+   ((and (bound-and-true-p flycheck-mode)
+         (fboundp 'flycheck-count-errors)
+         flycheck-current-errors)
+    (let* ((counts (flycheck-count-errors flycheck-current-errors))
+           (err (or (cdr (assq 'error counts)) 0))
+           (warn (or (cdr (assq 'warning counts)) 0)))
+      (propertize (format "E:%d W:%d" err warn) 'face 'shaoline-modified-face)))
+   ((and (bound-and-true-p flymake-mode)
+         (fboundp 'flymake-diagnostics))
+    (let* ((all (flymake-diagnostics))
+           (err (cl-count-if (lambda (d) (eq (flymake-diagnostic-type d) :error)) all))
+           (warn (cl-count-if (lambda (d) (eq (flymake-diagnostic-type d) :warning)) all)))
+      (propertize (format "E:%d W:%d" err warn) 'face 'shaoline-modified-face)))
+   (t "")))
+
+;; ----------------------------------------------------------------------------
+;; VCS state extension (Git dirty/clean/basic symbol).
+
+(shaoline-define-simple-segment shaoline-segment-vcs-state
+  "Show Git status short indicator (+ for unstaged, ! for unstaged+staged, nothing for clean)."
+  (when (and (featurep 'vc-git) (buffer-file-name))
+    (let* ((state (vc-state (buffer-file-name))))
+      (pcase state
+        (`edited   (propertize "+" 'face 'shaoline-git-face))
+        (`added    (propertize "+" 'face 'shaoline-git-face))
+        (`removed  (propertize "!" 'face 'shaoline-git-face))
+        (`conflict (propertize "✗" 'face 'error))
+        (`missing  (propertize "?" 'face 'warning))
+        (`up-to-date "")
+        (_ "")))))
 
 (provide 'shaoline-segments)
 ;;; shaoline-segments.el ends here
