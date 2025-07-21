@@ -236,6 +236,11 @@ Truncates long or multi-line messages gracefully. Width managed by the modeline.
 
 ;; ----------------------------------------------------------------------------
 ;; Minor modes summary (compact).
+(defface shaoline-minor-modes-face
+  '((t :inherit (shaoline-base-face) :height 0.7 :foreground "gray60"))
+  "Face for the minor modes segment in Shaoline (smaller)."
+  :group 'shaoline)
+
 (defcustom shaoline-minor-modes-icon-map
   '(("read-only-mode"            . "🔒")
     ("overwrite-mode"            . "⛔")
@@ -285,7 +290,7 @@ Set and extend what to show via `shaoline-minor-modes-icon-map'."
                       (apply #'color-rgb-to-hex (color-hsl-to-rgb hue sat lum))))
                    (doc (format "Face for %s icon in Shaoline minor modes." name)))
               (unless (facep facesym)
-                (eval `(defface ,facesym '((t :inherit shaoline-mode-face :foreground ,color :weight bold))
+                (eval `(defface ,facesym '((t :inherit shaoline-minor-modes-face :foreground ,color :weight bold))
                          ,doc :group 'shaoline)))
               facesym)))
          (modes
@@ -302,7 +307,9 @@ Set and extend what to show via `shaoline-minor-modes-icon-map'."
                        (propertize icon 'face (funcall shaoline--minor-mode-face-for name)))))
                  minor-mode-list))))
     (when modes
-      (concat "[" (mapconcat #'identity modes "") "]"))))
+      (propertize
+       (concat "[" (mapconcat #'identity modes "") "]")
+       'face 'shaoline-minor-modes-face))))
 
 
 ;; ----------------------------------------------------------------------------

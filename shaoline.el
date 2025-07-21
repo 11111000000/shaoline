@@ -108,11 +108,13 @@ Zen masters say: A log unread is a tree falling in a silent forest."
 (defcustom shaoline-segments
   '((:left shaoline-segment-position
            shaoline-segment-icon-and-buffer
-           shaoline-segment-modified)
+           shaoline-segment-modified
+           shaoline-segment-minor-modes
+           )
     
     (:center shaoline-segment-echo-message)
     
-    (:right shaoline-segment-minor-modes
+    (:right 
             shaoline-segment-project-name
             shaoline-segment-git-branch
             shaoline-segment-battery
@@ -160,7 +162,7 @@ You can exclude certain major-modes from hiding using `shaoline-exclude-modes`."
   :type '(repeat symbol)
   :group 'shaoline)
 
-(defcustom shaoline-right-padding 20
+(defcustom shaoline-right-padding 16
   "Extra spaces appended to the right edge of the shaoline. Sometimes, a little emptiness is all you need."
   :type 'integer
   :group 'shaoline)
