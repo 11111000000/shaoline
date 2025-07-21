@@ -216,7 +216,7 @@ Truncates long or multi-line messages gracefully. Width managed by the modeline.
 
 (shaoline-define-simple-segment shaoline-segment-position
   "Show current line and column position."
-  (propertize (format "L%d:C%d" (line-number-at-pos) (current-column)) 'face 'shaoline-mode-face))
+  (propertize (format "%d:%d" (line-number-at-pos) (current-column)) 'face 'shaoline-mode-face))
 
 ;; ----------------------------------------------------------------------------
 ;; Encoding and EOL.
@@ -225,7 +225,7 @@ Truncates long or multi-line messages gracefully. Width managed by the modeline.
   "Show file encoding and EOL type."
   (let* ((coding (symbol-name (or buffer-file-coding-system 'undecided)))
          (coding (if (string-match-p "utf-8" coding) "UTF8" coding))
-         (eol 
+         (eol
           (pcase (coding-system-eol-type (or buffer-file-coding-system 'undecided))
             (0 "LF")
             (1 "CRLF")
@@ -348,6 +348,16 @@ Set and extend what to show via `shaoline-minor-modes-icon-map'."
         (`missing  (propertize "?" 'face 'warning))
         (`up-to-date "")
         (_ "")))))
+
+;; Input method (layout/language indicator)
+(shaoline-define-simple-segment shaoline-segment-input-method
+  "Show current input method title (layout) if any, else 'EN'."
+  (let ((indicator
+         (cond
+          (current-input-method
+           (or current-input-method-title current-input-method))
+          (t "EN"))))
+    (propertize indicator 'face 'shaoline-mode-face)))
 
 (provide 'shaoline-segments)
 ;;; shaoline-segments.el ends here

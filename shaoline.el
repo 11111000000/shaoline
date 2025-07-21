@@ -118,8 +118,10 @@ Zen masters say: A log unread is a tree falling in a silent forest."
             shaoline-segment-project-name
             shaoline-segment-git-branch
             shaoline-segment-battery
+            shaoline-segment-input-method
             shaoline-segment-digital-clock
-            shaoline-segment-moon-phase))
+            shaoline-segment-moon-phase
+            ))
   
   "Alist describing segments for :left, :center and :right.
 Each entry is a list of segment function symbols for that side.
@@ -162,7 +164,7 @@ You can exclude certain major-modes from hiding using `shaoline-exclude-modes`."
   :type '(repeat symbol)
   :group 'shaoline)
 
-(defcustom shaoline-right-padding 16
+(defcustom shaoline-right-padding 20
   "Extra spaces appended to the right edge of the shaoline. Sometimes, a little emptiness is all you need."
   :type 'integer
   :group 'shaoline)
