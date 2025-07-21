@@ -10,12 +10,15 @@
 —  (Lao-Tsé, ~~approx. 400 B.C.~~ Emacs 27+)
 #+end_quote
 
-There was a time when every buffer carried a heavy belt of glyphs, numbers and blinking widgets.  
-One day a little Lisp file shaved its head, sat quietly in the echo area and simply /was/.  
+There was a time when every buffer carried a heavy belt of glyphs, numbers and
+blinking widgets.  
+One day a little Lisp file shaved its head, sat quietly in the echo area and
+simply /was/.  
 That file is /Shaoline/.
 
-Shaoline replaces the traditional mode-line with a minimalist, fully functional string that
-appears in the echo area – and disappears the moment Emacs has something else to say.  
+Shaoline replaces the traditional mode-line with a minimalist, fully functional
+string that appears in the echo area – and disappears the moment Emacs has
+something else to say.  
 It does /just enough/ and then /stops/.  
 To walk /its/ Way you do nothing, and yet /everything gets done/.
 
@@ -24,9 +27,7 @@ To walk /its/ Way you do nothing, and yet /everything gets done/.
 — ~Tao Te Ching~ §48 (Developer edition)
 #+end_quote
 
----
-
-** Quick sip of tea (TL;DR)
+* Quick sip of tea (TL;DR)
 
 #+begin_src emacs-lisp
 (use-package shaoline
@@ -35,17 +36,20 @@ To walk /its/ Way you do nothing, and yet /everything gets done/.
   (shaoline-mode 1)) ;; breathe in, breathe out
 #+end_src
 
-Already enlightened?  Skip the rest, go pet a cat.  
-Still here?  Read on.
+Already enlightened? Skip the rest, go pet a cat.  
+Still here? Read on.
 
-** Features (the things Shaoline promptly forgets)
+* Features (the things Shaoline promptly forgets)
 
 1. /Echo-area only/ – no child frames, no window hacking, no monkey business.
 2. /Functional core/ – every segment is a pure function: input → string, nothing more.
-3. /No timers by default/ – the line refreshes only on real events; optional timer starts /only if/ you enable time or battery.
-4. /Debounced updates/ – rapid commands cause a single, smooth repaint (flicker begone).
+3. /No timers by default/ – the line refreshes only on real events; optional
+   timer starts /only if/ you enable time or battery.
+4. /Debounced updates/ – rapid commands cause a single, smooth repaint (flicker
+   begone).
 5. /Optional mode-line hiding/ – see the void where the old bar used to be.
-6. /Zero required dependencies/ – icons, battery, projectile, etc. load lazily and only if you want them.
+6. /Zero required dependencies/ – icons, battery, projectile, etc. load lazily
+   and only if you want them.
 7. /Unit-test friendly/ – core composer is completely side-effect free.
 8. /Persistent center/ – last non-empty message stays until a new one arrives.
 9. /Chan humour/
@@ -56,166 +60,288 @@ Master: «Mu.»
 — classic koan, condensed
 #+end_quote
 
-** Installation
+* Installation
 
-*** GNU ELPA / MELPA
+** GNU ELPA / MELPA
 
 #+begin_src emacs-lisp
 M-x package-install RET shaoline RET
 #+end_src
 
-*** Straight / Quelpa / Git
+** Straight / Quelpa / Git
 
 Clone and add to =load-path= or use your favourite package manager.  
 Requires Emacs 27.1+, a cup of tea optional.
 
-** Philosophy ⇒ Configuration
+* Philosophy ⇒ Configuration
 
 Shaoline’s default setup is sane for /most/ mortals.  
 Yet the Way is personal; tweak as you please.
 
 #+begin_src emacs-lisp
 (setq shaoline-segments
-      '((:left shaoline-segment-position
-               shaoline-segment-icon-and-buffer
-               shaoline-segment-modified)
+      '((:left   shaoline-segment-position
+                 shaoline-segment-icon-and-buffer
+                 shaoline-segment-modified)
         (:center shaoline-segment-echo-message)
-        (:right shaoline-segment-minor-modes
-                shaoline-segment-project-name
-                shaoline-segment-git-branch
-                shaoline-segment-battery
-                shaoline-segment-time)))
+        (:right  shaoline-segment-minor-modes
+                 shaoline-segment-project-name
+                 shaoline-segment-git-branch
+                 shaoline-segment-battery
+                 shaoline-segment-time)))
 #+end_src
 
 Variables worth chanting over:
 
-| Variable                         | Default          | Meaning                                                 |
-|----------------------------------+------------------+---------------------------------------------------------|
-| =shaoline-enable-dynamic-segments= | t                | Turn off to drop /all/ timers & external ~require~s.      |
-| =shaoline-timer-interval=          | 1                | Seconds between lazy refreshes (only if timer exists).  |
-| =shaoline-autohide-modeline=       | t                | Hide the old mode-line globally.                        |
-| =shaoline-exclude-modes=           | list             | Major modes that keep their belt.                       |
-| =shaoline-update-hooks=            | (post-command …) | Events that trigger recompute.                          |
-| =shaoline-right-padding=           | 0                | Extra spaces after the right segment.                   |
-| =shaoline-debug=                   | nil              | Log to /shaoline-logs/ buffer.                            |
+| Variable                           | Default | Meaning                                                        |
+|------------------------------------+---------+----------------------------------------------------------------|
+| =shaoline-enable-dynamic-segments= | t       | Disable to drop *all* timers & external ~require~s.            |
+| =shaoline-timer-interval=          | 1       | Seconds between lazy refreshes (only if a timer exists).       |
+| =shaoline-autohide-modeline=       | t       | Hide the old mode-line globally.                               |
+| =shaoline-exclude-modes=           | list    | Major modes that keep their belt.                              |
+| =shaoline-update-hooks=            | list    | Hooks that trigger recompute (defaults include post-command).   |
+| =shaoline-right-padding=           | 0       | Extra spaces after the right segment.                          |
+| =shaoline-debug=                   | nil     | Log to */shaoline-logs/* buffer.                               |
 
-Customize interactively with:
+Interactively customise with:
 
 #+begin_src emacs-lisp
 M-x customize-group RET shaoline RET
 #+end_src
 
-Remember: the fewer settings you touch, the closer you are to Emptiness. The path of least action leads to greatest peace.
+Remember: the fewer settings you touch, the closer you are to Emptiness.
 
-** Standard segments
+* Standard segments
 
-| Symbol                           | What it shows                         | Depends on               |
-|----------------------------------+---------------------------------------+--------------------------|
-| =shaoline-segment-position=        | Line and column position              | none                     |
-| =shaoline-segment-icon-and-buffer= | Pretty icon + buffer name             | all-the-icons (optional) |
-| =shaoline-segment-modified=        | * if buffer is modified               | none                     |
-| =shaoline-segment-echo-message=    | Last non-empty message (persistent!)  | none                     |
-| =shaoline-segment-minor-modes=     | Critical enabled minor modes (icons)  | none (customizable)      |
-| =shaoline-segment-project-name=    | Project (project.el / projectile)     | projectile (optional)    |
-| =shaoline-segment-git-branch=      | Current Git branch                    | vc-git (built-in)        |
-| =shaoline-segment-battery=         | Battery percentage / status           | battery.el (built-in)    |
-| =shaoline-segment-time=            | 24-h clock + moon phase 🌓           | calendar.el (built-in)   |
+| Symbol                             | What it shows                         | Depends on               |
+|------------------------------------+---------------------------------------+--------------------------|
+| shaoline-segment-position          | Line & column position                | –                        |
+| shaoline-segment-icon-and-buffer   | Icon + buffer name                    | all-the-icons (optional) |
+| shaoline-segment-modified          | “*” if buffer is modified             | –                        |
+| shaoline-segment-echo-message      | Last non-empty message (persistent)   | –                        |
+| shaoline-segment-minor-modes       | Important minor modes (icons)         | –                        |
+| shaoline-segment-project-name      | Project (project.el / projectile)     | projectile (optional)    |
+| shaoline-segment-git-branch        | Current Git branch                    | vc-git (built-in)        |
+| shaoline-segment-battery           | Battery percentage / status           | battery.el (built-in)    |
+| shaoline-segment-time              | 24-h clock + moon phase 🌓            | calendar.el (built-in)   |
 
-Disable what you dislike; enlightenment is light to carry—like a feather on the breeze.
+Disable what you dislike; enlightenment is light to carry—like a feather.
 
-** Integrations and Customizations
+* Integrations & customisations
 
-Shaoline integrates seamlessly with popular packages. Add segments lazily, preserving minimalism.
+Shaoline integrates seamlessly with popular packages.  Add segments lazily,
+preserving minimalism.
 
-- /Evil-mode/: Create a segment for evil state:
+- /Evil-mode/ – current state:
+
   #+begin_src emacs-lisp
   (shaoline-define-simple-segment shaoline-segment-evil-state
     "Show current evil state."
     (when (bound-and-true-p evil-mode)
       (propertize evil-state 'face 'shaoline-mode-face)))
   #+end_src
-  Add to =shaoline-segments= (e.g., :left).
 
-- /Flycheck/: For error counts:
+  Then add it e.g. to =:left=.
+
+- /Flycheck/ – error counts:
+
   #+begin_src emacs-lisp
   (shaoline-define-simple-segment shaoline-segment-flycheck
     "Show flycheck errors/warnings."
     (when (bound-and-true-p flycheck-mode)
       (let ((err (flycheck-count-errors flycheck-current-errors)))
-        (propertize (format "E:%d W:%d" (or (cdr (assq 'error err)) 0) (or (cdr (assq 'warning err)) 0))
-                    'face 'shaoline-modified-face))))
+        (propertize
+         (format "E:%d W:%d"
+                 (or (cdr (assq 'error   err)) 0)
+                 (or (cdr (assq 'warning err)) 0))
+         'face 'shaoline-modified-face))))
   #+end_src
 
-For more examples, see =examples/custom-segments.el= in the package directory.
+More examples live in =examples/custom-segments.el=.
 
-** Writing your own segment (become the Master)
+* Writing your own segment (become the Master)
 
-A segment is a function that returns a string; nothing more, nothing less.
+A segment is a function that returns /only/ a string.
 
 #+begin_src emacs-lisp
 (shaoline-define-segment shaoline-segment-buffer-size (buffer)
   "Return buffer size in KiB."
   (format "%.1f KiB" (/ (buffer-size buffer) 1024.0)))
 
-;; Attach it somewhere:
-(push 'shaoline-segment-buffer-size
+(push 'shaoline-segment-buffer-size (alist-get :right shaoline-segments))
+#+end_src
+
+Side-effects are karmic debt—avoid them.
+
+* FAQ (Frequently Asked Koans)
+
+1. *Where did my old mode-line go?*  
+   It renounced worldly attachments. Set =shaoline-autohide-modeline= to nil
+   if you miss it.
+
+2. *Why does Shaoline vanish when I run M-x?*  
+   The minibuffer is talking. Shaoline waits politely.
+
+3. *Can I use Doom icons?*  
+   Yes. Install =all-the-icons=; Shaoline detects them like a ninja.
+
+4. *High CPU?*  
+   Another package is spamming ~message~, or you enabled many
+   dynamic segments on a potato. Enable =shaoline-debug= to watch the river.
+
+5. *Does Shaoline work on TTY?*  
+   Absolutely. Icons vanish, moon glyphs degrade into ASCII; serenity remains.
+
+6. *Center message persists forever!*  
+   It holds until a new non-empty arrives. To clear manually: =(message nil)=.
+
+7. *Multi-line messages?*  
+   First line + “[more]” indicator; full text flashes in echo area briefly.
+
+* Troubleshooting
+
+| Symptom                | Likely cause                              | Quick test / remedy                                          |
+|------------------------+-------------------------------------------+--------------------------------------------------------------|
+| Flicker                | Another package sends empty ~message~     | =(setq shaoline-debug t)=; check *shaoline-logs*             |
+| No right-side text     | Window too narrow                         | Widen or set =shaoline-right-padding= -2                     |
+| Battery says N/A       | Battery absent or function nil           | Accept impermanence (or hide segment)                        |
+| Stuck persistent text  | No new non-empty message                  | =(message "clear")= then =(message nil)=                     |
+| Center stays empty     | Segment not in :center or advice missing  | Ensure =shaoline-segment-echo-message= is in :center         |
+
+* *New leaves on the bamboo* — extended wisdom  
+  (Everything below is **new** in v2.1.1.)
+
+** Complete segment index (a pocket scroll)
+
+| Symbol                              | Pure? | Needs timer | Needs extra package      |
+|-------------------------------------+-------+-------------+--------------------------|
+| shaoline-segment-icon-and-buffer    | ✔︎     | –           | all-the-icons (optional) |
+| shaoline-segment-modified           | ✔︎     | –           | –                        |
+| shaoline-segment-position           | ✔︎     | –           | –                        |
+| shaoline-segment-minor-modes        | ✔︎     | –           | –                        |
+| shaoline-segment-major-mode         | ✔︎     | –           | –                        |
+| shaoline-segment-project-name       | ✔︎     | –           | projectile (optional)    |
+| shaoline-segment-git-branch         | ✔︎     | –           | vc-git (built-in)        |
+| shaoline-segment-vcs-state          | ✔︎     | –           | vc-git (built-in)        |
+| shaoline-segment-echo-message       | ✔︎     | –           | –                        |
+| shaoline-segment-input-method       | ✔︎     | –           | –                        |
+| shaoline-segment-battery            | ✔︎     | ✔︎           | battery.el               |
+| shaoline-segment-digital-clock      | ✔︎     | ✔︎           | calendar.el              |
+| shaoline-segment-moon-phase         | ✔︎     | ✔︎           | calendar.el              |
+| shaoline-segment-flycheck           | ✔︎     | –           | flycheck / flymake       |
+| shaoline-segment-buffer-size (demo) | ✔︎     | –           | –                        |
+
+Legend: “✔︎ timer” = starts a lazy timer *only* when present.
+
+** Disabling *all* dynamic parts — totally silent Shaoline
+
+#+begin_src emacs-lisp
+(setq shaoline-enable-dynamic-segments nil) ;; zero timers, zero requires
+#+end_src
+
+Ideal for:
+
+• low-powered machines / remote TTY sessions  
+• deterministic benchmarks  
+• people who believe “time is an illusion” 😉
+
+** Input-method indicator (layouts, IME, etc.)
+
+#+begin_src emacs-lisp
+(push 'shaoline-segment-input-method
       (alist-get :right shaoline-segments))
 #+end_src
 
-Pure functions only!  Side-effects are karmic debt—avoid them as one avoids muddy puddles.
+Shows “EN” when no input method is active, otherwise its title (“РУС”,
+“日”, …).
 
-** FAQ (Frequently Asked Koans)
+** Cookbook – ready-made snippets
 
-1. /Where did my old mode-line go?/  
-   It renounced worldly attachments.  Toggle =shaoline-autohide-modeline= to false. (Or contemplate impermanence.)
+1. *Org-clock timer in the centre*
 
-2. /Why does Shaoline vanish when I run M-x?/  
-   The minibuffer is talking.  Shaoline politely waits—like a student before the master.
+   #+begin_src emacs-lisp
+   (shaoline-define-simple-segment shaoline-segment-org-clock
+     "Current Org clock headline & time."
+     (when (and (fboundp 'org-clocking-p) (org-clocking-p))
+       (concat "🕑 " (org-clock-get-clock-string))))
+   (push 'shaoline-segment-org-clock (alist-get :center shaoline-segments))
+   #+end_src
 
-3. /Can I use Doom icons?/  
-   Yes.  Install =all-the-icons=; Shaoline will detect them like a silent ninja in moonlight.
+2. *Tree-sitter language icon (Emacs 29+)*
 
-4. /High CPU?/  
-   Either you enabled dynamic segments on a potato, or another package is spamming ~message~.  
-   Use =(setq shaoline-debug t)= to watch the river flow. (And giggle at the fish.)
+   #+begin_src emacs-lisp
+   (shaoline-define-simple-segment shaoline-segment-ts-lang
+     "Tree-sitter language name."
+     (when (boundp 'treesit-language-at)
+       (format "%s" (treesit-language-at (point)))))
+   (push 'shaoline-segment-ts-lang (alist-get :left shaoline-segments))
+   #+end_src
 
-5. /Does Shaoline work on TTY?/  
-   Absolutely.  Moon glyphs degrade gracefully into ASCII; icons vanish like morning mist. TTY is the ultimate minimalism. See TTY screenshots in the repo.
+3. *Remote host name over TRAMP*
 
-6. /Why does the center message persist forever?/  
-   It holds the last non-empty message until a new one arrives. To clear manually: =(message nil)= (but it ignores empty, so use a non-empty then clear). Edge case: very long messages truncate gracefully.
+   #+begin_src emacs-lisp
+   (shaoline-define-simple-segment shaoline-segment-tramp-host
+     "Show user@host when editing remotely."
+     (when (file-remote-p default-directory)
+       (tramp-file-name-host (tramp-dissect-file-name default-directory))))
+   (push 'shaoline-segment-tramp-host (alist-get :right shaoline-segments))
+   #+end_src
 
-7. /How to handle multi-line messages in center?/  
-   They truncate to first line + "[more]" indicator. The full message appears in echo area temporarily.
+Feel free to PR your snippets into *examples/*.
 
-** Troubleshooting
+** Zen of performance (micro-benchmarks from CI)
 
-| Symptom            | Likely cause                                             | Quick test                                                  |
-|--------------------+----------------------------------------------------------+-------------------------------------------------------------|
-| Flicker            | Another package sends empty messages                     | Evaluate ~(shaoline-msg-engine)~; check logs                  |
-| No right-side text | Window too narrow                                        | Widen or set =shaoline-right-padding= -2 (negative emptiness) |
-| Battery says N/A   | No battery in machine, or ~battery-status-function~ is nil | Accept impermanence                                         |
-| Persistent msg stuck | No new non-empty message sent                            | Send a new =(message "Clear")= then =(message nil)=           |
-| Center doesn't show last message  | (a) User message unadvised, or (b) not in :center | Check that =shaoline-segment-echo-message= is in :center in shaoline-segments, and update                         |
+• pure core compose < 0.15 ms (native-comp byte-code)  
+• 6 standard segments < 0.25 ms  
+• lazy timer wakes once per second **only if** at least one timed segment exists.  
+Silence noisy packages with =(setq message-log-max nil)=.
 
-** Contributing
+** Migrating from ≤ 2.0
 
-Pull requests, issues, poems, haiku – all welcome at [[https://github.com/11111000000/shaoline][GitHub]].
+| What changed                 | New incantation                                                     |
+|------------------------------+---------------------------------------------------------------------|
+| Time + Moon were one segment | use =shaoline-segment-digital-clock= plus =shaoline-segment-moon-phase= |
+| Minor-mode icons absent      | add =shaoline-segment-minor-modes=                                    |
+| Message persistence bug      | fixed; no action                                                    |
+| =shaoline-msg-filter=          | replaced by around-advice; safe to remove                           |
+
+** Compatibility matrix (tested in CI)
+
+| Emacs | GUI | TTY | Native-comp | Windows | macOS | GNU/Linux |
+|-------+-----+-----+-------------+---------+-------+-----------|
+|  27.1 | ✔︎   | ✔︎   | –           | ✔︎       | ✔︎     | ✔︎         |
+|  28.x | ✔︎   | ✔︎   | –           | ✔︎       | ✔︎     | ✔︎         |
+|  29.x | ✔︎   | ✔︎   | ✔︎           | ✔︎       | ✔︎     | ✔︎         |
+
+** Further reading
+
+- Quick Zen guide: =README-QUICKZEN.org=  
+- Russian scrolls: =README.ru.org= & =README-FAQ.org=  
+- CHANGELOG for the full tale of versions.
+
+#+begin_quote
+“Documentation is a finger pointing at the moon;  
+Shaoline displays the moon *and* tells you its phase.”  
+#+end_quote
+
+* Contributing
+
+Pull requests, issues, poems, haiku – all welcome at
+[[https://github.com/11111000000/shaoline][GitHub]].
 
 #+begin_quote
 «If you meet the maintainer on the road, invite him for noodles.»  
 — Zen proverb (draft)
 #+end_quote
 
-** License
+* License
 
-MIT.  Copy it, fork it, glue it to a kite and let it fly.
+MIT. Copy it, fork it, glue it to a kite and let it fly.
 
 ---  
-End of scroll.  Close this buffer, take a breath, return to coding.  
-Remember: the true treasure is the friends we made along the Way... and perhaps a well-placed koan.
+End of scroll. Close this buffer, take a breath, return to coding.  
+Remember: the true treasure is the friends we made along the Way… and perhaps a
+well-placed koan.
 
 #+ATTR_ORG: :width 80%
 [[file:screenshot-shaoline.png]]
-#+ATTR_ORG: :width 80%
-[[file:screenshot-persistent.png]] ;; Example for persistent center segment (shaoline-segment-echo-message)

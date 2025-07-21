@@ -4,16 +4,38 @@
 
 ** To always display the *last* non-empty message:
 
-- Ensure your configuration contains:
+- Ensure your configuration contains the latest defaults (harmonized with Dao):
 
 #+begin_src emacs-lisp
 (setq shaoline-segments
       '((:left shaoline-segment-position
                shaoline-segment-icon-and-buffer
-               shaoline-segment-modified)
+               shaoline-segment-modified
+               shaoline-segment-minor-modes)
         (:center shaoline-segment-echo-message)
-        (:right shaoline-segment-minor-modes
-                shaoline-segment-project-name
+        (:right shaoline-segment-project-name
                 shaoline-segment-git-branch
                 shaoline-segment-battery
-                shaoline-segment-time)))
+                shaoline-segment-input-method
+                shaoline-segment-digital-clock
+                shaoline-segment-moon-phase)))
+
+;; Enable the mode — breathe in, breathe out
+(shaoline-mode 1)
+#+end_src
+
+** Minimal start (TL;DR, as a wandering byte would say):
+
+#+begin_src emacs-lisp
+(use-package shaoline
+  :ensure t
+  :config
+  (shaoline-mode 1))
+#+end_src
+
+- This awakens Shaoline in its purest form: no timers unless needed, persistent echo in center.
+- Customize via `M-x customize-group RET shaoline RET` — but remember, true zen is in doing nothing.
+
+** A Koan for the Road:
+Student: "Master, why separate clock and moon?"
+Master: "Time flows; the moon waxes and wanes. Yet both are illusions. Use them or not — the Dao remains."
