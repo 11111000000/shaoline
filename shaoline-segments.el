@@ -183,15 +183,20 @@ Truncates long or multi-line messages gracefully. Width managed by the modeline.
          (idx      (mod (floor (* age (/ 8.0 synodic))) 8)))
     idx))
 
-(shaoline-define-simple-segment shaoline-segment-time
-  "Show current time and moon phase."
+(shaoline-define-simple-segment shaoline-segment-digital-clock
+  "Show current digital clock, e.g. ' 21:43 '."
   (if (not shaoline-enable-dynamic-segments)
-      ""  ;; Returns an empty string if dynamic segments are disabled.
-    (let* ((time (propertize (format-time-string " %H:%M ") 'face 'shaoline-time-face))
-           (phase-number (shaoline--moon-phase-idx))
+      ""
+    (propertize (format-time-string " %H:%M ") 'face 'shaoline-time-face)))
+
+(shaoline-define-simple-segment shaoline-segment-moon-phase
+  "Show moon phase icon."
+  (if (not shaoline-enable-dynamic-segments)
+      ""
+    (let* ((phase-number (shaoline--moon-phase-idx))
            (phases ["🌑" "🌒" "🌓" "🌔" "🌕" "🌖" "🌗" "🌘"])
            (moon (propertize (aref phases phase-number) 'face 'shaoline-moon-face)))
-      (concat time " " moon "  "))))
+      moon)))
 
 ;; ----------------------------------------------------------------------------
 ;; Modified status.

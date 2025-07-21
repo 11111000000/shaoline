@@ -91,7 +91,8 @@ Zen masters say: A log unread is a tree falling in a silent forest."
     (shaoline-segment-project-name    . "Project name (if any)")
     (shaoline-segment-git-branch      . "Git branch")
     (shaoline-segment-battery         . "Battery state")
-    (shaoline-segment-time            . "Time with moon-phase")
+    (shaoline-segment-digital-clock   . "Digital clock (only time, e.g. 21:43)")
+    (shaoline-segment-moon-phase      . "Moon phase icon")
     (shaoline-segment-echo-message    . "Recent noticed message")
     (shaoline-segment-position        . "Line and column position")
     (shaoline-segment-modified        . "Buffer modified status")
@@ -105,20 +106,19 @@ Zen masters say: A log unread is a tree falling in a silent forest."
   :group 'shaoline)
 
 (defcustom shaoline-segments
-  '((:left             shaoline-segment-position
-                       shaoline-segment-icon-and-buffer
-                       shaoline-segment-modified
-                       
-     )
-    (:center
-        shaoline-segment-echo-message)
-    (:right
-     shaoline-segment-minor-modes
-     shaoline-segment-project-name
-     shaoline-segment-git-branch
-     shaoline-segment-battery
-     shaoline-segment-time
-     ))
+  '((:left shaoline-segment-position
+           shaoline-segment-icon-and-buffer
+           shaoline-segment-modified)
+    
+    (:center shaoline-segment-echo-message)
+    
+    (:right shaoline-segment-minor-modes
+            shaoline-segment-project-name
+            shaoline-segment-git-branch
+            shaoline-segment-battery
+            shaoline-segment-digital-clock
+            shaoline-segment-moon-phase))
+  
   "Alist describing segments for :left, :center and :right.
 Each entry is a list of segment function symbols for that side.
 May be configured in Custom (see shaoline-available-segments)."
@@ -129,7 +129,8 @@ May be configured in Custom (see shaoline-available-segments)."
                             (const shaoline-segment-project-name)
                             (const shaoline-segment-git-branch)
                             (const shaoline-segment-battery)
-                            (const shaoline-segment-time)
+                            (const shaoline-segment-digital-clock)
+                            (const shaoline-segment-moon-phase)
                             (const shaoline-segment-echo-message)
                             (const shaoline-segment-modified)
                             (const shaoline-segment-major-mode)
@@ -161,13 +162,6 @@ You can exclude certain major-modes from hiding using `shaoline-exclude-modes`."
 
 (defcustom shaoline-right-padding 20
   "Extra spaces appended to the right edge of the shaoline. Sometimes, a little emptiness is all you need."
-  :type 'integer
-  :group 'shaoline)
-
-(defcustom shaoline-max-right-width 50
-  "Maximum printed width (in characters) for right segment. 
-Helps keep the right segment perfectly aligned even if the width of emoji/icons varies.
-Increase if your right segment can get wider."
   :type 'integer
   :group 'shaoline)
 
@@ -409,8 +403,6 @@ If its contents get shorter, the gap appears *to the left* of the rightmost char
      right
      (make-string shaoline-right-padding ?\s))))
 
-
-
 ;; ----------------------------------------------------------------------------
 ;; Segments are elsewhere.
 
@@ -424,7 +416,6 @@ If its contents get shorter, the gap appears *to the left* of the rightmost char
     (condition-case err
         (load user-file nil t)
       (error (shaoline--log "Could not load user segments: %s" err)))))
-
 
 ;; ----------------------------------------------------------------------------
 ;; Prevent flicker and ensure last user message is always captured for echo segment.
