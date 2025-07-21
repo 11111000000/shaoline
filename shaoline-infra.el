@@ -11,6 +11,13 @@
 ;; It is loaded *from* shaoline.el, so we purposely do *not* `require' it
 ;; back to avoid a circular dependency.
 
+;; Infra requires core (shaoline.el) for variables/faces.
+(require 'shaoline)
+
+(eval-when-compile
+  (defvar shaoline-autohide-modeline)
+  (defvar shaoline-exclude-modes))
+
 (require 'cl-lib)                    ; for cl-member etc.
 
 ;; ----------------------------------------------------------------------------
@@ -132,6 +139,57 @@ Never clears if already empty or a suppression is in effect."
   (setq shaoline--last-str ""))
 
 ;; ----------------------------------------------------------------------------
+;; Message advice (moved from shaoline.el for modularity).
+
+(defun shaoline--empty-message-p (fmt args)
+  "Return non-nil when calling =message' with FMT/ARGS would show nothing."
+  (or (null fmt)
+      (and (stringp fmt)
+           (string-empty-p (apply #'format fmt args)))
+      (and (listp fmt) (equal fmt '("")))))
+
+(defun shaoline--message-filter-capture (orig-fmt &rest args)
+  "Around advice for =message=: capture last non-empty message persistently.
+Never allow empty message to erase echo area when shaoline-mode is active."
+  (let* ((str (apply orig-fmt args))
+         (curmsg shaoline-msg--last-user-message))
+    (when shaoline-debug
+      (shaoline--log "[SHAOLINE] message called: fmt='%s' args='%s' str='%s'" orig-fmt args str))
+    (cond
+     ;; Case 1: Non-empty, user message.
+     ((and (bound-and-true-p shaoline-mode)
+           (stringp str) (not (string-empty-p str))
+           (not (get-text-property 0 'shaoline str)))
+      (setq shaoline-msg--last-user-message str)
+      (setq shaoline-msg--last-user-message-ts (float-time))
+      (when shaoline-debug (shaoline--log "[SHAOLINE] Saved user message '%s'" str))
+      (run-at-time 0 nil #'shaoline--update)
+      str)
+     ;; Case 2: Empty message, keep current shaoline (never clear!)
+     ((and (bound-and-true-p shaoline-mode)
+           (or (not str) (string-empty-p str)))
+      (when shaoline-debug (shaoline--log "[SHAOLINE] Suppressing echo area clear, restoring message '%s'" curmsg))
+      (or (current-message) curmsg ""))
+     ;; Case 3: Not in shaoline-mode, normal echo.
+     (t str))))
+
+(defun shaoline--advise-message ()
+  "Activate advice that captures messages for persistent echo segment."
+  (add-function :around (symbol-function 'message) #'shaoline--message-filter-capture))
+
+(defun shaoline--remove-message-advice ()
+  "Remove shaoline persistent capture advice from =message'."
+  (ignore-errors
+    (remove-function (symbol-function 'message) #'shaoline--message-filter-capture)))
+
+;; Activate advice when shaoline-mode toggles.
+(add-hook 'shaoline-mode-hook
+          (lambda ()
+            (if shaoline-mode
+                (shaoline--advise-message)
+              (shaoline--remove-message-advice))))
+
+;; ----------------------------------------------------------------------------
 ;; Shaoline minor mode engine.
 
 (defvar shaoline--debounce-timer nil
@@ -184,39 +242,8 @@ No longer starts for messages, as they are persistent."
     (unless should-keep
       (shaoline--maybe-cancel-timer))))
 
-(defun shaoline--message-filter-return (result &rest _args)
-  "Intercept `message' for Shaoline: stores last user message & timestamp, manages timer.
-Only reacts to user messages, not Shaoline's own. Ignores empty messages to keep persistent."
-  (when (and shaoline-mode
-             (not (and (stringp result)
-                       (get-text-property 0 'shaoline result))))
-    (cond
-     ;; New, non-empty message: update and refresh
-     ((and (stringp result) (not (string-empty-p result)))
-      (shaoline-msg-save result)
-      (run-at-time 0 nil #'shaoline--update)
-      (shaoline--maybe-start-timer)) ; timer may be needed for other dynamics
-
-     ;; Empty message: ignore, do not clear (persistent until new non-empty)
-     ((or (null result) (string-empty-p result))
-      nil)))
-  result)
-
-(defun shaoline--maybe-remove-message-filter-return ()
-  "Remove shaoline--message-filter-return from `message' if present."
-  (ignore-errors
-    (remove-function (symbol-function 'message) #'shaoline--message-filter-return)))
-
-(defun shaoline--cancel-redisplay-timer ()
-  "Compatibility stub – idle-redisplay timer is no longer needed."
-  nil)
-
-(defun shaoline--schedule-redisplay ()
-  "Compatibility stub – idle redisplay timer is no longer used."
-  nil)
-
-;; Clean up timer when minor mode toggled.
-(add-hook 'shaoline-mode-hook #'shaoline--cancel-redisplay-timer)
+;; Удаляем устаревшие функции: они заменены на shaoline--message-filter-capture в earlier части infra.
+;; Таймеры теперь lazy, без этих stubs.
 
 ;;;###autoload
 (define-minor-mode shaoline-mode
@@ -225,6 +252,7 @@ Only reacts to user messages, not Shaoline's own. Ignores empty messages to keep
   :lighter ""
   (if shaoline-mode
       (progn
+        (require 'shaoline)
         (when shaoline-autohide-modeline
           (shaoline--autohide-modeline-globally))
         ;; Backup and disable vertical resizing of the echo area
@@ -235,8 +263,7 @@ Only reacts to user messages, not Shaoline's own. Ignores empty messages to keep
           (add-hook hook (if (eq hook 'post-command-hook)
                              #'shaoline--update
                            #'shaoline--debounced-update)))
-        ;; Add filter-return to capture and store messages
-        (add-function :filter-return (symbol-function 'message) #'shaoline--message-filter-return)
+        ;; filter-return больше не используется (заменено на around advice выше).
         ;; Hide shaoline when echo-area is used for input, then restore afterwards
         (add-hook 'minibuffer-setup-hook    #'shaoline--clear-display)
         (add-hook 'minibuffer-exit-hook     #'shaoline--update)
@@ -253,8 +280,7 @@ Only reacts to user messages, not Shaoline's own. Ignores empty messages to keep
     ;; Remove shaoline--message-filter via add-function (from shaoline.el)
     (when (fboundp 'shaoline--maybe-remove-message-filter)
       (shaoline--maybe-remove-message-filter))
-    ;; Remove the filter-return advice
-    (shaoline--maybe-remove-message-filter-return)
+    ;; filter-return не используется.
     (shaoline--clear-display)
     ;; Remove our input hooks
     (remove-hook 'minibuffer-setup-hook    #'shaoline--clear-display)

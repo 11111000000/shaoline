@@ -7,6 +7,7 @@
 ;; SPDX-License-Identifier: MIT
 ;; Homepage: https://github.com/11111000000/shaoline
 
+;; Segments require macros and msg-engine (core vars from shaoline.el are assumed loaded).
 (require 'shaoline-macros)
 (require 'shaoline-msg-engine)
 (eval-when-compile
@@ -40,53 +41,53 @@
 ;; Project name.
 
 (shaoline-define-simple-segment shaoline-segment-project-name
-  "Project name, if available."
-  (unless (featurep 'projectile) (require 'projectile nil t))
-  (let* ((project
-          (cond
-           ((and (featurep 'projectile) (projectile-project-name))
-            (projectile-project-name))
-           ((fboundp 'project-current)
-            (when-let ((pr (project-current)))
-              (file-name-nondirectory (directory-file-name (car (project-roots pr))))))
-           (t nil))))
-    (when (and project (not (string= "-" project)))
-      (propertize project 'face 'shaoline-project-face))))
+                                "Project name, if available."
+                                (unless (featurep 'projectile) (require 'projectile nil t))
+                                (let* ((project
+                                        (cond
+                                         ((and (featurep 'projectile) (projectile-project-name))
+                                          (projectile-project-name))
+                                         ((fboundp 'project-current)
+                                          (when-let ((pr (project-current)))
+                                            (file-name-nondirectory (directory-file-name (car (project-roots pr))))))
+                                         (t nil))))
+                                  (when (and project (not (string= "-" project)))
+                                    (propertize project 'face 'shaoline-project-face))))
 
 ;; ----------------------------------------------------------------------------
 ;; Git branch.
 
 (shaoline-define-simple-segment shaoline-segment-git-branch
-  "Current Git branch."
-  (when (and (featurep 'vc-git) (buffer-file-name))
-    (let ((branch (vc-git--symbolic-ref (buffer-file-name))))
-      (when branch
-        (concat
-         (when (and shaoline-enable-dynamic-segments (featurep 'all-the-icons))
-           (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
-           (all-the-icons-octicon "git-branch" :v-adjust 0 :height 1.0 :face 'shaoline-git-face))
-         " "
-         (propertize branch 'face 'shaoline-git-face))))))
+                                "Current Git branch."
+                                (when (and (featurep 'vc-git) (buffer-file-name))
+                                  (let ((branch (vc-git--symbolic-ref (buffer-file-name))))
+                                    (when branch
+                                      (concat
+                                       (when (and shaoline-enable-dynamic-segments (featurep 'all-the-icons))
+                                         (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
+                                         (all-the-icons-octicon "git-branch" :v-adjust 0 :height 1.0 :face 'shaoline-git-face))
+                                       " "
+                                       (propertize branch 'face 'shaoline-git-face))))))
 
 ;; ----------------------------------------------------------------------------
 ;; Echo-area message.
 
 (shaoline-define-simple-segment shaoline-segment-echo-message
-  "Show the latest user `message` persistently (until a new non-empty), handling multi-line.
+                                "Show the latest user `message` persistently (until a new non-empty), handling multi-line.
 Truncates long or multi-line messages gracefully. Width managed by the modeline."
-  (let ((msg (shaoline-msg-current)))
-    (if (and msg (not (string-empty-p msg)))
-        (let* ((lines (split-string msg "\n"))
-               (first (car lines))
-               (rest (cdr lines))
-               (raw-width (shaoline-available-center-width))
-               (safe-width (or (and (numberp raw-width) raw-width) 80))
-               (truncated (if rest
-                              (concat (truncate-string-to-width first (max 1 (- safe-width 4)) nil nil "...")
-                                      " [more]")
-                            (truncate-string-to-width first (max 1 safe-width) nil nil "..."))))
-          (propertize truncated 'face 'shaoline-echo-face))
-      "")))
+                                (let ((msg (shaoline-msg-current)))
+                                  (if (and msg (not (string-empty-p msg)))
+                                      (let* ((lines (split-string msg "\n"))
+                                             (first (car lines))
+                                             (rest (cdr lines))
+                                             (raw-width (shaoline-available-center-width))
+                                             (safe-width (or (and (numberp raw-width) raw-width) 80))
+                                             (truncated (if rest
+                                                            (concat (truncate-string-to-width first (max 1 (- safe-width 4)) nil nil "...")
+                                                                    " [more]")
+                                                          (truncate-string-to-width first (max 1 safe-width) nil nil "..."))))
+                                        (propertize truncated 'face 'shaoline-echo-face))
+                                    "")))
 
 ;; ----------------------------------------------------------------------------
 ;; Battery.
@@ -159,16 +160,16 @@ Truncates long or multi-line messages gracefully. Width managed by the modeline.
 ;; Major mode.
 
 (shaoline-define-simple-segment shaoline-segment-major-mode
-  "Major mode segment, optionally with icon."
-  (let ((icon
-         (when (and shaoline-enable-dynamic-segments (featurep 'all-the-icons) major-mode)
-           (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
-           (all-the-icons-icon-for-mode major-mode :height 0.9))))
-    (concat
-     (when (and icon (stringp icon))
-       (concat icon " "))
-     (propertize (format-mode-line mode-name)
-                 'face 'shaoline-mode-face))))
+                                "Major mode segment, optionally with icon."
+                                (let ((icon
+                                       (when (and shaoline-enable-dynamic-segments (featurep 'all-the-icons) major-mode)
+                                         (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
+                                         (all-the-icons-icon-for-mode major-mode :height 0.9))))
+                                  (concat
+                                   (when (and icon (stringp icon))
+                                     (concat icon " "))
+                                   (propertize (format-mode-line mode-name)
+                                               'face 'shaoline-mode-face))))
 
 ;; ----------------------------------------------------------------------------
 ;; Time and moon phase.
@@ -184,55 +185,55 @@ Truncates long or multi-line messages gracefully. Width managed by the modeline.
     idx))
 
 (shaoline-define-simple-segment shaoline-segment-digital-clock
-  "Show current digital clock, e.g. ' 21:43 '."
-  (if (not shaoline-enable-dynamic-segments)
-      ""
-    (propertize (format-time-string " %H:%M ") 'face 'shaoline-time-face)))
+                                "Show current digital clock, e.g. ' 21:43 '."
+                                (if (not shaoline-enable-dynamic-segments)
+                                    ""
+                                  (propertize (format-time-string " %H:%M ") 'face 'shaoline-time-face)))
 
 (shaoline-define-simple-segment shaoline-segment-moon-phase
-  "Show moon phase icon."
-  (if (not shaoline-enable-dynamic-segments)
-      ""
-    (let* ((phase-number (shaoline--moon-phase-idx))
-           (phases ["🌑" "🌒" "🌓" "🌔" "🌕" "🌖" "🌗" "🌘"])
-           (moon (propertize (aref phases phase-number) 'face 'shaoline-moon-face)))
-      moon)))
+                                "Show moon phase icon."
+                                (if (not shaoline-enable-dynamic-segments)
+                                    ""
+                                  (let* ((phase-number (shaoline--moon-phase-idx))
+                                         (phases ["🌑" "🌒" "🌓" "🌔" "🌕" "🌖" "🌗" "🌘"])
+                                         (moon (propertize (aref phases phase-number) 'face 'shaoline-moon-face)))
+                                    moon)))
 
 ;; ----------------------------------------------------------------------------
 ;; Modified status.
 
 (shaoline-define-simple-segment shaoline-segment-modified
-  "Show '*' if buffer is modified."
-  (when (and (buffer-modified-p)
-             (buffer-file-name))
-    (propertize "*" 'face 'shaoline-modified-face)))
+                                "Show '*' if buffer is modified."
+                                (when (and (buffer-modified-p)
+                                           (buffer-file-name))
+                                  (propertize "*" 'face 'shaoline-modified-face)))
 
 ;; ----------------------------------------------------------------------------
 ;; Visual spacer.
 
 (shaoline-define-simple-segment shaoline-segment-emptiness
-  "A blank segment."
-  " ")
+                                "A blank segment."
+                                " ")
 
 (shaoline-define-simple-segment shaoline-segment-position
-  "Show current line and column position."
-  (propertize (format "%d:%d" (line-number-at-pos) (current-column)) 'face 'shaoline-mode-face))
+                                "Show current line and column position."
+                                (propertize (format "%d:%d" (line-number-at-pos) (current-column)) 'face 'shaoline-mode-face))
 
 ;; ----------------------------------------------------------------------------
 ;; Encoding and EOL.
 
 (shaoline-define-simple-segment shaoline-segment-encoding
-  "Show file encoding and EOL type."
-  (let* ((coding (symbol-name (or buffer-file-coding-system 'undecided)))
-         (coding (if (string-match-p "utf-8" coding) "UTF8" coding))
-         (eol
-          (pcase (coding-system-eol-type (or buffer-file-coding-system 'undecided))
-            (0 "LF")
-            (1 "CRLF")
-            (2 "CR")
-            (_ ""))))
-    (when buffer-file-name
-      (propertize (format "%s %s" coding eol) 'face 'shaoline-mode-face))))
+                                "Show file encoding and EOL type."
+                                (let* ((coding (symbol-name (or buffer-file-coding-system 'undecided)))
+                                       (coding (if (string-match-p "utf-8" coding) "UTF8" coding))
+                                       (eol
+                                        (pcase (coding-system-eol-type (or buffer-file-coding-system 'undecided))
+                                          (0 "LF")
+                                          (1 "CRLF")
+                                          (2 "CR")
+                                          (_ ""))))
+                                  (when buffer-file-name
+                                    (propertize (format "%s %s" coding eol) 'face 'shaoline-mode-face))))
 
 ;; ----------------------------------------------------------------------------
 ;; Minor modes summary (compact).
@@ -275,89 +276,89 @@ Customize this to control which minor modes are shown and what icons are used."
   :group 'shaoline)
 
 (shaoline-define-simple-segment shaoline-segment-minor-modes
-  "Show ONLY critically important minor modes, as Unicode emoji/symbols (portable), each with a unique color.
+                                "Show ONLY critically important minor modes, as Unicode emoji/symbols (portable), each with a unique color.
 Set and extend what to show via `shaoline-minor-modes-icon-map'."
-  (let* ((icon-map shaoline-minor-modes-icon-map)
-         (seen (make-hash-table :test 'equal))
-         ;; Helper: deterministic color for a string (from hash)
-         (shaoline--minor-mode-face-for
-          (lambda (name)
-            (let* ((facesym (intern (concat "shaoline-minor-m-face-" name)))
-                   (color
-                    (let* ((hue (/ (mod (sxhash name) 360.0) 360.0))
-                           (sat 0.7)
-                           (lum 0.55))
-                      (apply #'color-rgb-to-hex (color-hsl-to-rgb hue sat lum))))
-                   (doc (format "Face for %s icon in Shaoline minor modes." name)))
-              (unless (facep facesym)
-                (eval `(defface ,facesym '((t :inherit shaoline-minor-modes-face :foreground ,color :weight bold))
-                         ,doc :group 'shaoline)))
-              facesym)))
-         (modes
-          (delq nil
-                (mapcar
-                 (lambda (sym)
-                   (let* ((name (symbol-name sym))
-                          (icon (cdr (assoc name icon-map))))
-                     (when (and icon
-                                (boundp sym)
-                                (symbol-value sym)
-                                (not (gethash name seen)))
-                       (puthash name t seen)
-                       (propertize icon 'face (funcall shaoline--minor-mode-face-for name)))))
-                 minor-mode-list))))
-    (when modes
-      (propertize
-       (concat "[" (mapconcat #'identity modes "") "]")
-       'face 'shaoline-minor-modes-face))))
+                                (let* ((icon-map shaoline-minor-modes-icon-map)
+                                       (seen (make-hash-table :test 'equal))
+                                       ;; Helper: deterministic color for a string (from hash)
+                                       (shaoline--minor-mode-face-for
+                                        (lambda (name)
+                                          (let* ((facesym (intern (concat "shaoline-minor-m-face-" name)))
+                                                 (color
+                                                  (let* ((hue (/ (mod (sxhash name) 360.0) 360.0))
+                                                         (sat 0.7)
+                                                         (lum 0.55))
+                                                    (apply #'color-rgb-to-hex (color-hsl-to-rgb hue sat lum))))
+                                                 (doc (format "Face for %s icon in Shaoline minor modes." name)))
+                                            (unless (facep facesym)
+                                              (eval `(defface ,facesym '((t :inherit shaoline-minor-modes-face :foreground ,color :weight bold))
+                                                       ,doc :group 'shaoline)))
+                                            facesym)))
+                                       (modes
+                                        (delq nil
+                                              (mapcar
+                                               (lambda (sym)
+                                                 (let* ((name (symbol-name sym))
+                                                        (icon (cdr (assoc name icon-map))))
+                                                   (when (and icon
+                                                              (boundp sym)
+                                                              (symbol-value sym)
+                                                              (not (gethash name seen)))
+                                                     (puthash name t seen)
+                                                     (propertize icon 'face (funcall shaoline--minor-mode-face-for name)))))
+                                               minor-mode-list))))
+                                  (when modes
+                                    (propertize
+                                     (concat "[" (mapconcat #'identity modes "") "]")
+                                     'face 'shaoline-minor-modes-face))))
 
 
 ;; ----------------------------------------------------------------------------
 ;; Flycheck/Flymake status (errors/warnings).
 
 (shaoline-define-simple-segment shaoline-segment-flycheck
-  "Show Flycheck/Flymake error and warning counts if available."
-  (cond
-   ((and (bound-and-true-p flycheck-mode)
-         (fboundp 'flycheck-count-errors)
-         flycheck-current-errors)
-    (let* ((counts (flycheck-count-errors flycheck-current-errors))
-           (err (or (cdr (assq 'error counts)) 0))
-           (warn (or (cdr (assq 'warning counts)) 0)))
-      (propertize (format "E:%d W:%d" err warn) 'face 'shaoline-modified-face)))
-   ((and (bound-and-true-p flymake-mode)
-         (fboundp 'flymake-diagnostics))
-    (let* ((all (flymake-diagnostics))
-           (err (cl-count-if (lambda (d) (eq (flymake-diagnostic-type d) :error)) all))
-           (warn (cl-count-if (lambda (d) (eq (flymake-diagnostic-type d) :warning)) all)))
-      (propertize (format "E:%d W:%d" err warn) 'face 'shaoline-modified-face)))
-   (t "")))
+                                "Show Flycheck/Flymake error and warning counts if available."
+                                (cond
+                                 ((and (bound-and-true-p flycheck-mode)
+                                       (fboundp 'flycheck-count-errors)
+                                       flycheck-current-errors)
+                                  (let* ((counts (flycheck-count-errors flycheck-current-errors))
+                                         (err (or (cdr (assq 'error counts)) 0))
+                                         (warn (or (cdr (assq 'warning counts)) 0)))
+                                    (propertize (format "E:%d W:%d" err warn) 'face 'shaoline-modified-face)))
+                                 ((and (bound-and-true-p flymake-mode)
+                                       (fboundp 'flymake-diagnostics))
+                                  (let* ((all (flymake-diagnostics))
+                                         (err (cl-count-if (lambda (d) (eq (flymake-diagnostic-type d) :error)) all))
+                                         (warn (cl-count-if (lambda (d) (eq (flymake-diagnostic-type d) :warning)) all)))
+                                    (propertize (format "E:%d W:%d" err warn) 'face 'shaoline-modified-face)))
+                                 (t "")))
 
 ;; ----------------------------------------------------------------------------
 ;; VCS state extension (Git dirty/clean/basic symbol).
 
 (shaoline-define-simple-segment shaoline-segment-vcs-state
-  "Show Git status short indicator (+ for unstaged, ! for unstaged+staged, nothing for clean)."
-  (when (and (featurep 'vc-git) (buffer-file-name))
-    (let* ((state (vc-state (buffer-file-name))))
-      (pcase state
-        (`edited   (propertize "+" 'face 'shaoline-git-face))
-        (`added    (propertize "+" 'face 'shaoline-git-face))
-        (`removed  (propertize "!" 'face 'shaoline-git-face))
-        (`conflict (propertize "✗" 'face 'error))
-        (`missing  (propertize "?" 'face 'warning))
-        (`up-to-date "")
-        (_ "")))))
+                                "Show Git status short indicator (+ for unstaged, ! for unstaged+staged, nothing for clean)."
+                                (when (and (featurep 'vc-git) (buffer-file-name))
+                                  (let* ((state (vc-state (buffer-file-name))))
+                                    (pcase state
+                                      (`edited   (propertize "+" 'face 'shaoline-git-face))
+                                      (`added    (propertize "+" 'face 'shaoline-git-face))
+                                      (`removed  (propertize "!" 'face 'shaoline-git-face))
+                                      (`conflict (propertize "✗" 'face 'error))
+                                      (`missing  (propertize "?" 'face 'warning))
+                                      (`up-to-date "")
+                                      (_ "")))))
 
 ;; Input method (layout/language indicator)
 (shaoline-define-simple-segment shaoline-segment-input-method
-  "Show current input method title (layout) if any, else 'EN'."
-  (let ((indicator
-         (cond
-          (current-input-method
-           (or current-input-method-title current-input-method))
-          (t "EN"))))
-    (propertize indicator 'face 'shaoline-mode-face)))
+                                "Show current input method title (layout) if any, else 'EN'."
+                                (let ((indicator
+                                       (cond
+                                        (current-input-method
+                                         (or current-input-method-title current-input-method))
+                                        (t "EN"))))
+                                  (propertize indicator 'face 'shaoline-mode-face)))
 
 (provide 'shaoline-segments)
 ;;; shaoline-segments.el ends here

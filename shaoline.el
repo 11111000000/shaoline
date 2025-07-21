@@ -41,6 +41,10 @@
 
 (require 'cl-lib)
 (eval-when-compile (require 'rx))
+;; Core requires: macros and msg-engine first for definitions.
+(require 'shaoline-macros)
+(require 'shaoline-msg-engine)
+
 ;; project-specific libraries are only needed by segments (see shaoline-segments.el);
 ;; keeping the core truly “pure”.
 
@@ -111,18 +115,18 @@ Zen masters say: A log unread is a tree falling in a silent forest."
            shaoline-segment-modified
            shaoline-segment-minor-modes
            )
-    
+
     (:center shaoline-segment-echo-message)
-    
-    (:right 
-            shaoline-segment-project-name
-            shaoline-segment-git-branch
-            shaoline-segment-battery
-            shaoline-segment-input-method
-            shaoline-segment-digital-clock
-            shaoline-segment-moon-phase
-            ))
-  
+
+    (:right
+     shaoline-segment-project-name
+     shaoline-segment-git-branch
+     shaoline-segment-battery
+     shaoline-segment-input-method
+     shaoline-segment-digital-clock
+     shaoline-segment-moon-phase
+     ))
+
   "Alist describing segments for :left, :center and :right.
 Each entry is a list of segment function symbols for that side.
 May be configured in Custom (see shaoline-available-segments)."
@@ -164,7 +168,7 @@ You can exclude certain major-modes from hiding using `shaoline-exclude-modes`."
   :type '(repeat symbol)
   :group 'shaoline)
 
-(defcustom shaoline-right-padding 20
+(defcustom shaoline-right-padding 0
   "Extra spaces appended to the right edge of the shaoline. Sometimes, a little emptiness is all you need."
   :type 'integer
   :group 'shaoline)
@@ -251,9 +255,10 @@ For full dynamic adaptation, reload after theme changes."
 (defvar shaoline--last-str ""
   "Last rendered string, used to avoid unnecessary redisplay. Repetition is not enlightenment.")
 
-;; Message state handled separately.
-(require 'shaoline-msg-engine)
-(require 'shaoline-segments) ;; <-- теперь тут: все переменные уже определены.
+;; Message state handled separately (already required above).
+
+;; Load segments after variables are defined.
+(require 'shaoline-segments)
 
 (defvar shaoline--default-mode-line-format-backup nil
   "Backup of `default-mode-line-format' when the modeline is hidden (restored when Shaoline is disabled).")
@@ -266,8 +271,8 @@ For full dynamic adaptation, reload after theme changes."
 Restored exactly as it was when the mode is toggled off.")
 
 ;; ----------------------------------------------------------------------------
-;; Infrastructure (UI, advice, minor mode) — now resides in shaoline-infra.el
-(require 'shaoline-infra)
+;; Infrastructure (UI, advice, minor mode) — lazy-loaded via minor mode.
+;; Users require 'shaoline, then toggle shaoline-mode to load infra.
 
 ;; React to new color theme: recalculate faces.
 (defun shaoline-update-faces (&rest _)
@@ -422,55 +427,8 @@ If its contents get shorter, the gap appears *to the left* of the rightmost char
       (error (shaoline--log "Could not load user segments: %s" err)))))
 
 ;; ----------------------------------------------------------------------------
-;; Prevent flicker and ensure last user message is always captured for echo segment.
-
-(defun shaoline--empty-message-p (fmt args)
-  "Return non-nil when calling =message' with FMT/ARGS would show nothing."
-  (or (null fmt)
-      (and (stringp fmt)
-           (string-empty-p (apply #'format fmt args)))
-      (and (listp fmt) (equal fmt '("")))))
-
-(defun shaoline--message-filter-capture (orig-fmt &rest args)
-  "Around advice for =message=: capture last non-empty message persistently.
-Never allow empty message to erase echo area when shaoline-mode is active."
-  (let* ((str (apply orig-fmt args))
-         (curmsg shaoline-msg--last-user-message))
-    (when shaoline-debug
-      (shaoline--log "[SHAOLINE] message called: fmt='%s' args='%s' str='%s'" orig-fmt args str))
-    (cond
-     ;; Case 1: Non-empty, user message.
-     ((and (bound-and-true-p shaoline-mode)
-           (stringp str) (not (string-empty-p str))
-           (not (get-text-property 0 'shaoline str)))
-      (setq shaoline-msg--last-user-message str)
-      (setq shaoline-msg--last-user-message-ts (float-time))
-      (when shaoline-debug (shaoline--log "[SHAOLINE] Saved user message '%s'" str))
-      (run-at-time 0 nil #'shaoline--update)
-      str)
-     ;; Case 2: Empty message, keep current shaoline (never clear!)
-     ((and (bound-and-true-p shaoline-mode)
-           (or (not str) (string-empty-p str)))
-      (when shaoline-debug (shaoline--log "[SHAOLINE] Suppressing echo area clear, restoring message '%s'" curmsg))
-      (or (current-message) curmsg ""))
-     ;; Case 3: Not in shaoline-mode, normal echo.
-     (t str))))
-
-(defun shaoline--advise-message ()
-  "Activate advice that captures messages for persistent echo segment."
-  (add-function :around (symbol-function 'message) #'shaoline--message-filter-capture))
-
-(defun shaoline--remove-message-advice ()
-  "Remove shaoline persistent capture advice from =message'."
-  (ignore-errors
-    (remove-function (symbol-function 'message) #'shaoline--message-filter-capture)))
-
-;; Activate advice when shaoline-mode toggles.
-(add-hook 'shaoline-mode-hook
-          (lambda ()
-            (if shaoline-mode
-                (shaoline--advise-message)
-              (shaoline--remove-message-advice))))
+;; Load infrastructure lazily when mode is enabled (avoids circular deps).
+;; This is a stub; actual minor mode is in shaoline-infra.el and autoloaded.
 
 (provide 'shaoline)
 ;;; shaoline.el ends here
