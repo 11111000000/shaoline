@@ -1,6 +1,6 @@
 ;;; shaoline-core-test.el --- Pure core tests for Shaoline -*- lexical-binding: t; -*-
 
-;; Version: 2.2.0
+;; Version: 2.2.2
 
 ;; Copyright (C) 2025 Peter
 ;; Author: Peter <11111000000@email.com>

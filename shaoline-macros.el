@@ -1,6 +1,6 @@
 ;;; shaoline-macros.el --- Macros for Shaoline segments  -*- lexical-binding: t; -*-
 
-;; Version: 2.2.0
+;; Version: 2.2.2
 
 ;; Copyright (C) 2025 Peter
 ;; Author: Peter <11111000000@email.com>
@@ -28,5 +28,33 @@ True elegance: nothing more than necessary."
      ,docstring
      ,@body))
 
-(provide 'shaoline-macros)
+;; ---------------------------------------------------------------------------
+;; Cached segment helper
+;;
+;; Simple TTL-based caching to avoid heavy I/O on every post-command.
+;;
+;;   (shaoline-define-cached-segment name ttl "Docstring" BODY…)
+;;
+;; BODY is evaluated only when the cached value is older than TTL seconds;
+;; otherwise the cached value is returned immediately.
+;; ---------------------------------------------------------------------------
+(defmacro shaoline-define-cached-segment (name ttl docstring &rest body)
+  "Define NAME as a cached segment.
+TTL is time-to-live in seconds.  DOCSTRING documents the segment.
+BODY computes and returns the segment string."
+  (declare (indent defun) (doc-string 3))
+  (let ((cache (intern (format \"shaoline--%s-cache\" name)))
+        (ts    (intern (format \"shaoline--%s-ts\"    name))))
+    `(progn
+       (defvar ,cache nil)
+       (defvar ,ts 0)
+       (shaoline-define-simple-segment ,name ,docstring
+                                       (let ((now (float-time)))
+                                         (if (and ,cache
+                                                  (< (- now ,ts) ,ttl))
+                                             ,cache
+                                           (setq ,cache (progn ,@body)
+                                                 ,ts now))))))
+
+  (provide 'shaoline-macros)
 ;;; shaoline-macros.el ends here

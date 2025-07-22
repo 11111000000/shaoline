@@ -1,5 +1,7 @@
 ;;; shaoline-events.el --- Advice and hook orchestration for Shaoline -*- lexical-binding: t; -*-
 
+;; Version: 2.2.2
+;;
 ;; In the spirit of Dao, this file gathers all worldly effects —
 ;; hooks, advices, timers — guiding them away from the pure core.
 ;;

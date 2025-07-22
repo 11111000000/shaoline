@@ -1,6 +1,6 @@
 ;;; shaoline-segments.el --- Shaoline's Segment Garden: practical, functional, literate -*- lexical-binding: t; -*-
 
-;; Version: 2.2.0
+;; Version: 2.2.2
 
 ;; Copyright (C) 2025 Peter
 ;; Author: Peter <11111000000@email.com>
@@ -483,6 +483,57 @@ Set and extend what to show via `shaoline-minor-modes-icon-map'."
                                          (or current-input-method-title current-input-method))
                                         (t "EN"))))
                                   (propertize indicator 'face 'shaoline-mode-face)))
+
+;; ---------------------------------------------------------------------------
+;; Cached wrappers for heavy / I/O-intensive segments
+;; ---------------------------------------------------------------------------
+
+;; The original, uncached implementations are still valuable; keep them
+;; under private aliases so other code (or tests) can call them directly.
+(unless (fboundp 'shaoline--segment-project-name-raw)
+  (defalias 'shaoline--segment-project-name-raw #'shaoline-segment-project-name))
+
+(unless (fboundp 'shaoline--segment-battery-raw)
+  (defalias 'shaoline--segment-battery-raw #'shaoline-segment-battery))
+
+;; ------------------------------------------------------------------
+;; Project name – can touch disk / projectile; cache for 2 s
+;; ------------------------------------------------------------------
+(shaoline-define-cached-segment shaoline-segment-project-name 2
+                                "Project name, if available (cached 2 s)."
+                                (shaoline--segment-project-name-raw))
+
+;; ------------------------------------------------------------------
+;; Battery – DBus / upower may be costly; cache for 5 s
+;; ------------------------------------------------------------------
+(shaoline-define-cached-segment shaoline-segment-battery 5
+                                "Show battery percentage and charging status (cached 5 s)."
+                                (shaoline--segment-battery-raw))
+
+(provide 'shaoline-segments)
+;;; shaoline-segments.el ends here
+
+;; [duplicate tail removed – see single canonical definition above]
+(let* ((project
+        (cond
+         ((and (featurep 'projectile) (projectile-project-name))
+          (projectile-project-name))
+         ((fboundp 'project-current)
+          (when-let ((pr (project-current))
+                     (root (car (project-roots pr))))
+            (file-name-nondirectory (directory-file-name root))))
+         (t nil))))
+  (when (and project (not (string= "-" project)))
+    (propertize project 'face 'shaoline-project-face)))
+
+;; Preserve original (uncached) battery implementation
+(unless (fboundp 'shaoline--segment-battery-raw)
+  (defalias 'shaoline--segment-battery-raw #'shaoline-segment-battery))
+
+;; Battery – DBus / upower can be expensive; cache for 5 s
+(shaoline-define-cached-segment shaoline-segment-battery 5
+                                "Show battery percentage and charging status (cached 5 s)."
+                                (shaoline--segment-battery-raw))
 
 (provide 'shaoline-segments)
 ;;; shaoline-segments.el ends here

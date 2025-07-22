@@ -1,4 +1,32 @@
 TITLE: Shaoline – Change Log
+* 2.2.2 (Cache of Still Waters)
+  :PROPERTIES:
+  :CUSTOM_ID: v2.2.2
+  :END:
+
+- Release date: 2025-07-24
+- Heavy segments (project-name, battery) are now TTL-cached by default via the new macro `shaoline-define-cached-segment`.
+- Macro added to `shaoline-macros.el`; developers can wrap any I/O-bound segment with one line of code.
+- Typical keystroke CPU usage drops by an order of magnitude.
+- No configuration breakage; behaviour identical, only faster.
+- Version bump: 2.2.2.
+
+* 2.2.1 (Hooks Untangled & Stillness Always-visible)
+  :PROPERTIES:
+  :CUSTOM_ID: v2.2.1
+  :END:
+
+- Release date: 2025-07-23
+- Major code refactor: all side effects (advice, hooks, timers) are now managed in new `shaoline-events.el`.
+- Core and infrastructure remain pure and testable—no more accidental circular dependencies.
+- New customizable option: `shaoline-always-visible`. When enabled (default), Shaoline remains visible in echo area even when user `message`s are issued—messages persist in the center until actively dismissed.
+- Segment arrangement updated: right side now starts with position, then project, VCS, battery, input-method, time, and moon (see README).
+- Documentation overhaul: README and Russian README reflect architecture split, new user workflow, `always-visible` option.
+- Internal API changes: infra delegates all hooks/advice/timers to `shaoline-events`.
+- All user-visible behaviour remains stable; configuration is backwards compatible.
+- This sets the ground for further event-driven/extensible mechanisms.
+- Version bump: 2.2.1.
+
 
 * 2.1.1 (Functional enlightenment & persistent center)
   :PROPERTIES:
