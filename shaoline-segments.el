@@ -192,30 +192,74 @@ Truncates long or multi-line messages gracefully. Width managed by the modeline.
 ;; ----------------------------------------------------------------------------
 ;; Time and moon phase.
 
-(defun shaoline--moon-phase-idx (&optional date)
-  "Return moon phase index 0..7 for DATE."
-  (unless (featurep 'calendar) (require 'calendar nil t))
-  (let* ((d        (or date (calendar-current-date)))
-         (abs-day  (float (calendar-absolute-from-gregorian d)))
-         (synodic  29.530588853)
-         (age      (- abs-day (* (floor (/ abs-day synodic)) synodic)))
-         (idx      (mod (floor (* age (/ 8.0 synodic))) 8)))
-    idx))
+;; --------------------------------------------------------------------------
+;; Accurate moon-phase helper (uses calendar.el + lunar.el).
+;; Caches result for the current calendar date, so heavy astronomy
+;; runs at most once per day.
+
+(require 'calendar nil t)
+(require 'lunar   nil t)                   ; lazy ‒ only when segment used
+
+(defconst shaoline--synodic-month 29.530588853
+  "Mean length of a synodic month, in (solar-earth) days.")
+
+(defvar shaoline--moon-cache '(nil . 0)
+  "Cons cell (\"YYYY-MM-DD\" . IDX) – cached moon phase for today.")
+
+(defun shaoline--abs-now ()
+  "Return the current absolute day number as a *float* (Emacs astronomical)."
+  (let* ((tm   (decode-time (current-time)))
+         (sec  (nth 0 tm))
+         (min  (nth 1 tm))
+         (hour (nth 2 tm)))
+    (+ (calendar-absolute-from-gregorian (calendar-current-date))
+       (/ (+ sec (* 60 min) (* 3600 hour)) 86400.0))))
+;; ------------------------------------------------------------------
+;; Moon-phase helpers (top-level after the definition above)
+
+(defun shaoline--moon-phase-idx (&optional _ignored)
+  "Return accurate moon-phase index 0‥7 for *today*.
+Falls back to 0 on any error; result is cached for the day."
+  (let ((today (format-time-string "%F")))
+    (if (equal today (car shaoline--moon-cache))
+        (cdr shaoline--moon-cache)
+      (let ((idx
+             (ignore-errors
+               (let* ((abs-now  (shaoline--abs-now))
+                      (next-new (lunar-new-moon-on-or-after abs-now))
+                      (prev-new (- next-new shaoline--synodic-month))
+                      (age      (- abs-now prev-new)))
+                 (mod (floor (* age (/ 8.0 shaoline--synodic-month))) 8)))))
+        (setq shaoline--moon-cache (cons today (or idx 0)))
+        (cdr shaoline--moon-cache)))))
+
+
 
 (shaoline-define-simple-segment shaoline-segment-digital-clock
                                 "Show current digital clock, e.g. ' 21:43 '."
                                 (if (not shaoline-enable-dynamic-segments)
                                     ""
                                   (propertize (format-time-string " %H:%M ") 'face 'shaoline-time-face)))
+;; ------------------------------------------------------------------
+;; Compatibility alias (deprecated, kept for tests & configs that
+;; still reference `shaoline-segment-time').
+(shaoline-define-simple-segment shaoline-segment-time
+                                "Deprecated alias – use `shaoline-segment-digital-clock'."
+                                (shaoline-segment-digital-clock))
 
 (shaoline-define-simple-segment shaoline-segment-moon-phase
-                                "Show moon phase icon."
+                                "Show current moon phase as an icon.
+In GUI frames use the Unicode glyphs 🌑…🌘.
+In TTY (or when glyphs are unavailable) fall back to simple ASCII:
+N c Q g F G q C  (new, crescent, 1-st quarter, gibbous, full …)."
                                 (if (not shaoline-enable-dynamic-segments)
                                     ""
-                                  (let* ((phase-number (shaoline--moon-phase-idx))
-                                         (phases ["🌑" "🌒" "🌓" "🌔" "🌕" "🌖" "🌗" "🌘"])
-                                         (moon (propertize (aref phases phase-number) 'face 'shaoline-moon-face)))
-                                    moon)))
+                                  (let* ((idx (shaoline--moon-phase-idx))
+                                         (icons (if (display-graphic-p)
+                                                    ["🌑" "🌒" "🌓" "🌔" "🌕" "🌖" "🌗" "🌘"] ; GUI / Unicode
+                                                  ["N"  "c"  "Q"  "g"  "F"  "G"  "q"  "C"])) ; TTY / ASCII
+                                         (moon (aref icons idx)))
+                                    (propertize moon 'face 'shaoline-moon-face))))
 
 ;; ----------------------------------------------------------------------------
 ;; Modified status.

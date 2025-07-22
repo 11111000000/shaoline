@@ -408,10 +408,19 @@ If its contents get shorter, the gap appears *to the left* of the rightmost char
      left
      gap-left
      center
-     ;; Подальше вперёд к границе ровно на align-to
-     (propertize " " 'display `(space :align-to ,align-to))
+     ;; Вставляем один пробел, который «прыгнёт» так,
+     ;; чтобы следующий символ начинался в колонке
+     ;; (- right shaoline-right-padding right-width).
+     ;; Относительное выравнивание надёжно: если наши подсчёты
+     ;; вдруг неточны (иконки шире, тема поменялась и т.д.),
+     ;; Emacs *не* станет переносить строку — просто сместит
+     ;; сегмент чуть левее, но всегда в пределах одной строки.
+     (propertize " " 'display
+                 `(space :align-to (- right ,(+ shaoline-right-padding
+                                                right-width))))
      right
      (make-string shaoline-right-padding ?\s))))
+
 
 ;; ----------------------------------------------------------------------------
 ;; Segments are elsewhere.

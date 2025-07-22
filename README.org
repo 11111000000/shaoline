@@ -10,6 +10,9 @@
 —  (Lao-Tsé, ~~approx. 400 B.C.~~ Emacs 27+)
 #+end_quote
 
+#+ATTR_ORG: :width 80%
+[[file:screenshot-shaoline.png]]
+
 There was a time when every buffer carried a heavy belt of glyphs, numbers and
 blinking widgets.  
 One day a little Lisp file shaved its head, sat quietly in the echo area and
@@ -93,15 +96,15 @@ Yet the Way is personal; tweak as you please.
 
 Variables worth chanting over:
 
-| Variable                           | Default | Meaning                                                        |
-|------------------------------------+---------+----------------------------------------------------------------|
-| =shaoline-enable-dynamic-segments= | t       | Disable to drop *all* timers & external ~require~s.            |
-| =shaoline-timer-interval=          | 1       | Seconds between lazy refreshes (only if a timer exists).       |
-| =shaoline-autohide-modeline=       | t       | Hide the old mode-line globally.                               |
-| =shaoline-exclude-modes=           | list    | Major modes that keep their belt.                              |
-| =shaoline-update-hooks=            | list    | Hooks that trigger recompute (defaults include post-command).   |
-| =shaoline-right-padding=           | 0       | Extra spaces after the right segment.                          |
-| =shaoline-debug=                   | nil     | Log to */shaoline-logs/* buffer.                               |
+| Variable                         | Default | Meaning                                                       |
+|----------------------------------+---------+---------------------------------------------------------------|
+| =shaoline-enable-dynamic-segments= | t       | Disable to drop *all* timers & external ~require~s.             |
+| =shaoline-timer-interval=          | 1       | Seconds between lazy refreshes (only if a timer exists).      |
+| =shaoline-autohide-modeline=       | t       | Hide the old mode-line globally.                              |
+| =shaoline-exclude-modes=           | list    | Major modes that keep their belt.                             |
+| =shaoline-update-hooks=            | list    | Hooks that trigger recompute (defaults include post-command). |
+| =shaoline-right-padding=           | 0       | Extra spaces after the right segment.                         |
+| =shaoline-debug=                   | nil     | Log to */shaoline-logs/* buffer.                                |
 
 Interactively customise with:
 
@@ -123,7 +126,7 @@ Remember: the fewer settings you touch, the closer you are to Emptiness.
 | shaoline-segment-project-name      | Project (project.el / projectile)     | projectile (optional)    |
 | shaoline-segment-git-branch        | Current Git branch                    | vc-git (built-in)        |
 | shaoline-segment-battery           | Battery percentage / status           | battery.el (built-in)    |
-| shaoline-segment-time              | 24-h clock + moon phase 🌓            | calendar.el (built-in)   |
+| shaoline-segment-time              | 24-h clock + moon phase 🌓/ASCII            | calendar.el (built-in)   |
 
 Disable what you dislike; enlightenment is light to carry—like a feather.
 
@@ -200,13 +203,13 @@ Side-effects are karmic debt—avoid them.
 
 * Troubleshooting
 
-| Symptom                | Likely cause                              | Quick test / remedy                                          |
-|------------------------+-------------------------------------------+--------------------------------------------------------------|
-| Flicker                | Another package sends empty ~message~     | =(setq shaoline-debug t)=; check *shaoline-logs*             |
-| No right-side text     | Window too narrow                         | Widen or set =shaoline-right-padding= -2                     |
-| Battery says N/A       | Battery absent or function nil           | Accept impermanence (or hide segment)                        |
-| Stuck persistent text  | No new non-empty message                  | =(message "clear")= then =(message nil)=                     |
-| Center stays empty     | Segment not in :center or advice missing  | Ensure =shaoline-segment-echo-message= is in :center         |
+| Symptom               | Likely cause                             | Quick test / remedy                                |
+|-----------------------+------------------------------------------+----------------------------------------------------|
+| Flicker               | Another package sends empty ~message~      | =(setq shaoline-debug t)=; check *shaoline-logs*       |
+| No right-side text    | Window too narrow                        | Widen or set =shaoline-right-padding= -2             |
+| Battery says N/A      | Battery absent or function nil           | Accept impermanence (or hide segment)              |
+| Stuck persistent text | No new non-empty message                 | =(message "clear")= then =(message nil)=               |
+| Center stays empty    | Segment not in :center or advice missing | Ensure =shaoline-segment-echo-message= is in :center |
 
 * *New leaves on the bamboo* — extended wisdom  
   (Everything below is **new** in v2.1.1.)
@@ -233,17 +236,6 @@ Side-effects are karmic debt—avoid them.
 
 Legend: “✔︎ timer” = starts a lazy timer *only* when present.
 
-** Disabling *all* dynamic parts — totally silent Shaoline
-
-#+begin_src emacs-lisp
-(setq shaoline-enable-dynamic-segments nil) ;; zero timers, zero requires
-#+end_src
-
-Ideal for:
-
-• low-powered machines / remote TTY sessions  
-• deterministic benchmarks  
-• people who believe “time is an illusion” 😉
 
 ** Input-method indicator (layouts, IME, etc.)
 
@@ -288,6 +280,19 @@ Shows “EN” when no input method is active, otherwise its title (“РУС”
    #+end_src
 
 Feel free to PR your snippets into *examples/*.
+
+** Disabling *all* dynamic parts — totally silent Shaoline
+
+#+begin_src emacs-lisp
+(setq shaoline-enable-dynamic-segments nil) ;; zero timers, zero requires
+#+end_src
+
+Ideal for:
+
+• low-powered machines / remote TTY sessions  
+• deterministic benchmarks  
+• people who believe “time is an illusion” 😉
+
 
 ** Zen of performance (micro-benchmarks from CI)
 
@@ -342,6 +347,3 @@ MIT. Copy it, fork it, glue it to a kite and let it fly.
 End of scroll. Close this buffer, take a breath, return to coding.  
 Remember: the true treasure is the friends we made along the Way… and perhaps a
 well-placed koan.
-
-#+ATTR_ORG: :width 80%
-[[file:screenshot-shaoline.png]]

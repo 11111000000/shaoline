@@ -111,7 +111,7 @@ M-x package-install RET shaoline RET
 | shaoline-segment-project-name     | Имя проекта (project.el / projectile)       | projectile (опц.)        |
 | shaoline-segment-git-branch       | Текущая ветка Git                           | vc-git (builtin)         |
 | shaoline-segment-battery          | Батарея % / статус                          | battery.el (builtin)     |
-| shaoline-segment-time             | Часы 24 ч + фаза луны 🌓                    | calendar.el (builtin)    |
+| shaoline-segment-time             | Часы 24 ч + фаза луны 🌓/ASCII                    | calendar.el (builtin)    |
 | shaoline-segment-echo-message     | Последнее непустое сообщение (persistent)   | —                        |
 | shaoline-segment-position         | Строка : столбец                            | —                        |
 

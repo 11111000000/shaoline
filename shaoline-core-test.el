@@ -53,7 +53,7 @@
     ;; Battery fallback
     (should (string-match-p "N/A" result))
     ;; Time segment present
-    (should (string-match-p "%H:%M" result))
+    (should (string-match-p "[0-9]\\{2\\}:[0-9]\\{2\\}" result))
     ;; Restore features
     (setq features old-features)))
 
@@ -117,19 +117,38 @@
         (should (string-match-p (buffer-name) rendered))  ;; Buffer name fallback
         (should (string-empty-p (or (cl-find-if (lambda (s) (string-match-p "%H:%M" s)) (split-string rendered " ")) ""))))))  ;; Time disabled
 
-;; ----------------------------------------------------------------------------
-;; Test: Debounce prevents excessive updates
+  ;; ----------------------------------------------------------------------------
+  ;; Test: Debounce prevents excessive updates
 
-(ert-deftest shaoline-debounce-performance ()
-  "Debounce ensures no more than one update per rapid sequence."
-  (let ((update-count 0))
-    (advice-add 'shaoline--update :before (lambda (&rest _) (cl-incf update-count)))
-    (dotimes (_ 5) (shaoline--debounced-update))
-    (sit-for 0.2)  ;; Wait for debounce
-    (should (= update-count 1))  ;; Only one actual update
-    (advice-remove 'shaoline--update (lambda (&rest _) (cl-incf update-count)))))
+  (ert-deftest shaoline-debounce-performance ()
+    "Debounce ensures no more than one update per rapid sequence."
+    (let ((update-count 0))
+      (advice-add 'shaoline--update :before (lambda (&rest _) (cl-incf update-count)))
+      (dotimes (_ 5) (shaoline--debounced-update))
+      (sit-for 0.2)  ;; Wait for debounce
+      (should (= update-count 1))  ;; Only one actual update
+      (advice-remove 'shaoline--update (lambda (&rest _) (cl-incf update-count)))))
 
-;; ----------------------------------------------------------------------------
-;; Add more property-based or ERT tests below if needed.
+  ;; ----------------------------------------------------------------------------
+  ;; Add more property-based or ERT tests below if needed.
 
-(provide 'shaoline-core-test)
+  ;; ----------------------------------------------------------------------------
+  ;; Moon-phase helpers
+
+  (ert-deftest shaoline-moon-phase-idx-range ()
+    "shaoline--moon-phase-idx returns an integer between 0 and 7 inclusive."
+    (let ((idx (shaoline--moon-phase-idx)))
+      (should (integerp idx))
+      (should (<= 0 idx))
+      (should (<= idx 7))))
+
+  (ert-deftest shaoline-moon-phase-segment-string ()
+    "shaoline-segment-moon-phase yields a single-character string (icon or ASCII)."
+    (let ((out (shaoline-segment-moon-phase)))
+      (should (stringp out))
+      ;; Длина может быть 1 (ASCII) или 2 (UTF-8 суррогаты в Emacs за один
+      ;; символ width=1). Проверяем display-width, а не raw length.
+      (should (= (string-width out) 1))))
+
+
+  (provide 'shaoline-core-test)
