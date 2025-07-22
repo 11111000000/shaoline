@@ -392,42 +392,59 @@ Customize this to control which minor modes are shown and what icons are used."
   :type '(alist :key-type string :value-type string)
   :group 'shaoline)
 
+(defvar shaoline--minor-mode-face-cache (make-hash-table :test 'equal)
+  "Cache for shaoline per-minor-mode faces.")
+
+(defun shaoline--minor-mode-get-face (name)
+  "Return interned face symbol for NAME, creating if absent. Color is deterministic by name."
+  (or (gethash name shaoline--minor-mode-face-cache)
+      (let* ((facesym (intern (concat "shaoline-minor-m-face-" name)))
+             (color (let* ((hue (/ (mod (sxhash name) 360.0) 360.0))
+                           (sat 0.7)
+                           (lum 0.55))
+                      (apply #'color-rgb-to-hex (color-hsl-to-rgb hue sat lum))))
+             (doc (format "Face for %s icon in Shaoline minor modes." name)))
+        (unless (facep facesym)
+          (eval `(defface ,facesym '((t :inherit shaoline-minor-modes-face :foreground ,color :weight bold)) ,doc :group 'shaoline)))
+        (puthash name facesym shaoline--minor-mode-face-cache)
+        facesym)))
+
+(defvar shaoline--minor-modes-cache-str ""
+  "Cached string for minor-modes segment.")
+(defvar shaoline--minor-modes-cache-ts 0
+  "Last cache time (float-time) for shaoline--minor-modes-cache-str.")
+(defcustom shaoline-minor-modes-cache-ttl 0.5
+  "How many seconds to cache shaoline-segment-minor-modes result."
+  :type 'number
+  :group 'shaoline)
+
 (shaoline-define-simple-segment shaoline-segment-minor-modes
-                                "Show ONLY critically important minor modes, as Unicode emoji/symbols (portable),
-each with a unique color. Set and extend what to show via `shaoline-minor-modes-icon-map'."
-                                (let* ((icon-map shaoline-minor-modes-icon-map)
-                                       (seen (make-hash-table :test 'equal))
-                                       ;; Helper: deterministic color for a string (from hash)
-                                       (shaoline--minor-mode-face-for
-                                        (lambda (name)
-                                          (let* ((facesym (intern (concat "shaoline-minor-m-face-" name)))
-                                                 (color
-                                                  (let* ((hue (/ (mod (sxhash name) 360.0) 360.0))
-                                                         (sat 0.7)
-                                                         (lum 0.55))
-                                                    (apply #'color-rgb-to-hex (color-hsl-to-rgb hue sat lum))))
-                                                 (doc (format "Face for %s icon in Shaoline minor modes." name)))
-                                            (unless (facep facesym)
-                                              (eval `(defface ,facesym '((t :inherit shaoline-minor-modes-face :foreground ,color :weight bold))
-                                                       ,doc :group 'shaoline)))
-                                            facesym)))
-                                       (modes
-                                        (delq nil
-                                              (mapcar
-                                               (lambda (sym)
-                                                 (let* ((name (symbol-name sym))
-                                                        (icon (cdr (assoc name icon-map))))
-                                                   (when (and icon
-                                                              (boundp sym)
-                                                              (symbol-value sym)
-                                                              (not (gethash name seen)))
-                                                     (puthash name t seen)
-                                                     (propertize icon 'face (funcall shaoline--minor-mode-face-for name)))))
-                                               minor-mode-list))))
-                                  (when modes
-                                    (propertize
-                                     (concat "(" (mapconcat #'identity modes "") ")")
-                                     'face 'shaoline-minor-modes-face))))
+                                "Show ONLY critically important minor modes, icons as Unicode emoji/symbols (with deterministic color, c 0.5s)."
+                                (let ((now (float-time)))
+                                  (if (and shaoline--minor-modes-cache-str
+                                           (< (- now shaoline--minor-modes-cache-ts) shaoline-minor-modes-cache-ttl))
+                                      shaoline--minor-modes-cache-str
+                                    (let* ((icon-map shaoline-minor-modes-icon-map)
+                                           (seen (make-hash-table :test 'equal))
+                                           (modes
+                                            (delq nil
+                                                  (mapcar
+                                                   (lambda (sym)
+                                                     (let* ((name (symbol-name sym))
+                                                            (icon (cdr (assoc name icon-map))))
+                                                       (when (and icon
+                                                                  (boundp sym)
+                                                                  (symbol-value sym)
+                                                                  (not (gethash name seen)))
+                                                         (puthash name t seen)
+                                                         (propertize icon 'face (shaoline--minor-mode-get-face name)))))
+                                                   minor-mode-list))))
+                                      (let ((str (when modes
+                                                   (propertize (concat "(" (mapconcat #'identity modes "") ")")
+                                                               'face 'shaoline-minor-modes-face))))
+                                        (setq shaoline--minor-modes-cache-str str
+                                              shaoline--minor-modes-cache-ts now)
+                                        str)))))
 
 
 ;; ----------------------------------------------------------------------------
@@ -502,10 +519,22 @@ each with a unique color. Set and extend what to show via `shaoline-minor-modes-
   :type 'number
   :group 'shaoline-caching)
 
-;; The original, uncached implementations are still valuable; keep them
-;; under private aliases so other code (or tests) can call them directly.
-(unless (fboundp 'shaoline--segment-project-name-raw)
-  (defalias 'shaoline--segment-project-name-raw #'shaoline-segment-project-name))
+;; The original, uncached implementations are still valuable for other code (or tests).
+;; Define shaoline--segment-project-name-raw as the true project-name getter (uncached).
+(defun shaoline--segment-project-name-raw ()
+  "Return the current project name using project.el or Projectile if available. Returns nil if not found."
+  (cond
+   ((fboundp 'project-current)
+    (let ((proj (project-current)))
+      (when proj
+        (if (fboundp 'project-name)
+            (project-name proj)
+          ;; Fallback (Emacs ≤ 28 doesn't have project-name)
+          (file-name-nondirectory
+           (directory-file-name (car (project-roots proj))))))))
+   ((and (featurep 'projectile) (fboundp 'projectile-project-name))
+    (projectile-project-name))
+   (t nil)))
 
 (unless (fboundp 'shaoline--segment-battery-raw)
   (defalias 'shaoline--segment-battery-raw #'shaoline-segment-battery))
@@ -514,7 +543,9 @@ each with a unique color. Set and extend what to show via `shaoline-minor-modes-
 ;;;###autoload
 (shaoline-define-cached-segment shaoline-segment-project-name shaoline-project-name-ttl
   "Project name, if available. Cached for `shaoline-project-name-ttl' seconds (see \\[customize-group] RET shaoline-caching)."
-  (shaoline--segment-project-name-raw))
+  (let ((name (shaoline--segment-project-name-raw)))
+    (when name
+      (propertize name 'face 'shaoline-project-face))))
 
 ;; ------------------------------------------------------------------
 ;;;###autoload
