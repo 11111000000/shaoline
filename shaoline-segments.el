@@ -37,6 +37,24 @@
      text)
     text))
 
+;; -------------------------------------------------------------------------
+;; Buffer name only (without icon).
+
+(shaoline-define-segment shaoline-segment-buffer-name (buffer)
+  "Only the buffer name, coloured as `shaoline-buffer-face'."
+  (propertize (buffer-name buffer) 'face 'shaoline-buffer-face))
+
+;; -------------------------------------------------------------------------
+;; Major-mode icon only (without text).
+
+(shaoline-define-simple-segment shaoline-segment-major-mode-icon
+                                "Only the all-the-icons glyph that corresponds to `major-mode'."
+                                (when (and shaoline-enable-dynamic-segments
+                                           (featurep 'all-the-icons)
+                                           major-mode)
+                                  (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
+                                  (all-the-icons-icon-for-mode major-mode :height 0.9)))
+
 ;; ----------------------------------------------------------------------------
 ;; Project name.
 
@@ -266,7 +284,6 @@ Truncates long or multi-line messages gracefully. Width managed by the modeline.
     ("gptel-mode"                . "🤖")
     ("gptel-aibo-mode"           . "🐕‍🦺")
     ("org-drill-mode"            . "🦉")
-    ("rainbow-mode"              . "🌈")
     ("olivetti-mode"             . "✍")
     ("org-fancy-priorities-mode" . "⚡")
     ("org-auto-tangle-mode"      . "🧶"))
@@ -309,7 +326,7 @@ Set and extend what to show via `shaoline-minor-modes-icon-map'."
                                                minor-mode-list))))
                                   (when modes
                                     (propertize
-                                     (concat "[" (mapconcat #'identity modes "") "]")
+                                     (concat "" (mapconcat #'identity modes "") "")
                                      'face 'shaoline-minor-modes-face))))
 
 

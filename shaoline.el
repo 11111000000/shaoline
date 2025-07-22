@@ -92,6 +92,8 @@ Zen masters say: A log unread is a tree falling in a silent forest."
 
 (defcustom shaoline-available-segments
   '((shaoline-segment-icon-and-buffer . "Icon and buffer name")
+    (shaoline-segment-buffer-name     . "Buffer name only")
+    (shaoline-segment-major-mode-icon . "Major-mode icon only")
     (shaoline-segment-project-name    . "Project name (if any)")
     (shaoline-segment-git-branch      . "Git branch")
     (shaoline-segment-battery         . "Battery state")
@@ -111,10 +113,10 @@ Zen masters say: A log unread is a tree falling in a silent forest."
 
 (defcustom shaoline-segments
   '((:left shaoline-segment-position
-           shaoline-segment-icon-and-buffer
-           shaoline-segment-modified
+           shaoline-segment-major-mode-icon
            shaoline-segment-minor-modes
-           )
+           shaoline-segment-buffer-name
+           shaoline-segment-modified)
 
     (:center shaoline-segment-echo-message)
 
@@ -124,8 +126,7 @@ Zen masters say: A log unread is a tree falling in a silent forest."
      shaoline-segment-battery
      shaoline-segment-input-method
      shaoline-segment-digital-clock
-     shaoline-segment-moon-phase
-     ))
+     shaoline-segment-moon-phase))
 
   "Alist describing segments for :left, :center and :right.
 Each entry is a list of segment function symbols for that side.
