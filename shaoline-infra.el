@@ -13,6 +13,7 @@
 
 ;; Infra requires core (shaoline.el) for variables/faces.
 (require 'shaoline)
+(require 'shaoline-events)
 
 (eval-when-compile
   (defvar shaoline-autohide-modeline)
@@ -111,8 +112,6 @@ If a buffer's mode-line-format was not changed by Shaoline, it is left untouched
              (memq this-command '(execute-extended-command find-file)))
     (shaoline--clear-display)))
 
-(add-hook 'pre-command-hook #'shaoline--predictive-clear)
-
 (defun shaoline--update (&rest _)
   "Recompute and display modeline for the currently selected window.
 Skips update and clears during isearch or minibuffer input."
@@ -122,7 +121,8 @@ Skips update and clears during isearch or minibuffer input."
           (bound-and-true-p isearch-mode))
       (shaoline--clear-display)
     (let ((cur-msg (current-message)))
-      (unless (and cur-msg
+      (unless (and (not shaoline-always-visible)
+                   cur-msg
                    (not (get-text-property 0 'shaoline cur-msg)))
         (shaoline--display
          (shaoline-compose-modeline))))))
@@ -139,108 +139,20 @@ Never clears if already empty or a suppression is in effect."
   (setq shaoline--last-str ""))
 
 ;; ----------------------------------------------------------------------------
-;; Message advice (moved from shaoline.el for modularity).
+;; Message advice and echo-area message capture infrastructure is now in shaoline-events.el.
+;; The advice(s) and related helpers have been moved for better separation of impure effects.
 
-(defun shaoline--empty-message-p (fmt args)
-  "Return non-nil when calling =message' with FMT/ARGS would show nothing."
-  (or (null fmt)
-      (and (stringp fmt)
-           (string-empty-p (apply #'format fmt args)))
-      (and (listp fmt) (equal fmt '("")))))
-
-(defun shaoline--message-filter-capture (orig-fmt &rest args)
-  "Around advice for =message=: capture last non-empty message persistently.
-Never allow empty message to erase echo area when shaoline-mode is active."
-  (let* ((str (apply orig-fmt args))
-         (curmsg shaoline-msg--last-user-message))
-    (when shaoline-debug
-      (shaoline--log "[SHAOLINE] message called: fmt='%s' args='%s' str='%s'" orig-fmt args str))
-    (cond
-     ;; Case 1: Non-empty, user message.
-     ((and (bound-and-true-p shaoline-mode)
-           (stringp str) (not (string-empty-p str))
-           (not (get-text-property 0 'shaoline str)))
-      (setq shaoline-msg--last-user-message str)
-      (setq shaoline-msg--last-user-message-ts (float-time))
-      (when shaoline-debug (shaoline--log "[SHAOLINE] Saved user message '%s'" str))
-      (run-at-time 0 nil #'shaoline--update)
-      str)
-     ;; Case 2: Empty message, keep current shaoline (never clear!)
-     ((and (bound-and-true-p shaoline-mode)
-           (or (not str) (string-empty-p str)))
-      (when shaoline-debug (shaoline--log "[SHAOLINE] Suppressing echo area clear, restoring message '%s'" curmsg))
-      (or (current-message) curmsg ""))
-     ;; Case 3: Not in shaoline-mode, normal echo.
-     (t str))))
-
-(defun shaoline--advise-message ()
-  "Activate advice that captures messages for persistent echo segment."
-  (add-function :around (symbol-function 'message) #'shaoline--message-filter-capture))
-
-(defun shaoline--remove-message-advice ()
-  "Remove shaoline persistent capture advice from =message'."
-  (ignore-errors
-    (remove-function (symbol-function 'message) #'shaoline--message-filter-capture)))
-
-;; Activate advice when shaoline-mode toggles.
+;; Activate advice and hooks/timers when shaoline-mode toggles.
 (add-hook 'shaoline-mode-hook
           (lambda ()
             (if shaoline-mode
-                (shaoline--advise-message)
-              (shaoline--remove-message-advice))))
+                (shaoline-events-enable)
+              (shaoline-events-disable))))
 
 ;; ----------------------------------------------------------------------------
 ;; Shaoline minor mode engine.
 
-(defvar shaoline--debounce-timer nil
-  "Debounce timer for Shaoline updates.")
-
-(defun shaoline--debounced-update (&rest _)
-  "Debounce wrapper: schedule update after a short delay.
-If called repeatedly, only update after 0.12s delay."
-  (when (timerp shaoline--debounce-timer)
-    (cancel-timer shaoline--debounce-timer))
-  (setq shaoline--debounce-timer
-        (run-with-timer 0.12 nil #'shaoline--update)))
-
-(defvar shaoline--timer nil
-  "Timer for slow periodic updates, if any.")
-
-(defun shaoline--maybe-start-timer ()
-  "Start timer only if dynamic segments are enabled and present in :right or :center.
-No longer starts for messages, as they are persistent."
-  (when (and (null shaoline--timer)
-             shaoline-mode
-             shaoline-enable-dynamic-segments
-             (or (cl-member 'shaoline-segment-time (cdr (assq :right shaoline-segments)))
-                 (cl-member 'shaoline-segment-time (cdr (assq :center shaoline-segments)))
-                 (cl-member 'shaoline-segment-battery (cdr (assq :right shaoline-segments)))
-                 (cl-member 'shaoline-segment-battery (cdr (assq :center shaoline-segments)))))
-    (setq shaoline--timer
-          (run-with-timer shaoline-timer-interval
-                          shaoline-timer-interval
-                          #'shaoline--lazy-update))))
-
-(defun shaoline--maybe-cancel-timer ()
-  "Cancel timer if it is not needed."
-  (when (timerp shaoline--timer)
-    (cancel-timer shaoline--timer)
-    (setq shaoline--timer nil)))
-
-(defun shaoline--lazy-update ()
-  "Disable timer if nothing dynamic is needed. No message check (persistent)."
-  (shaoline--log "shaoline--lazy-update")
-  (let ((should-keep
-         (and shaoline-enable-dynamic-segments
-              (or
-               ;; Check if a dynamic segment (time/battery) is present.
-               (cl-member 'shaoline-segment-time (cdr (assq :right shaoline-segments)))
-               (cl-member 'shaoline-segment-time (cdr (assq :center shaoline-segments)))
-               (cl-member 'shaoline-segment-battery (cdr (assq :right shaoline-segments)))
-               (cl-member 'shaoline-segment-battery (cdr (assq :center shaoline-segments)))))))
-    (shaoline--update)
-    (unless should-keep
-      (shaoline--maybe-cancel-timer))))
+;; Debounce timer, periodic timer, and associated logic now reside in shaoline-events.el
 
 ;; Удаляем устаревшие функции: они заменены на shaoline--message-filter-capture в earlier части infra.
 ;; Таймеры теперь lazy, без этих stubs.
@@ -258,46 +170,14 @@ No longer starts for messages, as they are persistent."
         ;; Backup and disable vertical resizing of the echo area
         (setq shaoline--resize-mini-windows-backup resize-mini-windows)
         (setq resize-mini-windows nil)
-        ;; Update: no debounce for post-command, short debounce for others
-        (dolist (hook shaoline-update-hooks)
-          (add-hook hook (if (eq hook 'post-command-hook)
-                             #'shaoline--update
-                           #'shaoline--debounced-update)))
-        ;; filter-return больше не используется (заменено на around advice выше).
-        ;; Hide shaoline when echo-area is used for input, then restore afterwards
-        (add-hook 'minibuffer-setup-hook    #'shaoline--clear-display)
-        (add-hook 'minibuffer-exit-hook     #'shaoline--update)
-        (add-hook 'isearch-mode-hook        #'shaoline--clear-display)
-        (add-hook 'isearch-mode-end-hook    #'shaoline--update)
+        ;; All hooks and timers are orchestrated in shaoline-events.el
         (shaoline--update)
-        (setq shaoline--timer nil) ;; Timer is lazy, not started automatically.
         )
     ;; turn off
-    (dolist (hook shaoline-update-hooks)
-      (remove-hook hook (if (eq hook 'post-command-hook)
-                            #'shaoline--update
-                          #'shaoline--debounced-update)))
-    ;; Remove shaoline--message-filter via add-function (from shaoline.el)
-    (when (fboundp 'shaoline--maybe-remove-message-filter)
-      (shaoline--maybe-remove-message-filter))
-    ;; filter-return не используется.
+    ;; All hooks/timers are torn down in shaoline-events.el
     (shaoline--clear-display)
-    ;; Remove our input hooks
-    (remove-hook 'minibuffer-setup-hook    #'shaoline--clear-display)
-    (remove-hook 'minibuffer-exit-hook     #'shaoline--update)
-    (remove-hook 'isearch-mode-hook        #'shaoline--clear-display)
-    (remove-hook 'isearch-mode-end-hook    #'shaoline--update)
-    (remove-hook 'pre-command-hook         #'shaoline--predictive-clear)  ;; Cleanup new hook
     (when shaoline-autohide-modeline
       (shaoline--unhide-modeline-globally))
-    ;; Cancel the periodic timer
-    (when (timerp shaoline--timer)
-      (cancel-timer shaoline--timer)
-      (setq shaoline--timer nil))
-    ;; Cancel debounce timer
-    (when (timerp shaoline--debounce-timer)
-      (cancel-timer shaoline--debounce-timer)
-      (setq shaoline--debounce-timer nil))
     ;; Restore minibuffer resize behavior
     (when shaoline--resize-mini-windows-backup
       (setq resize-mini-windows shaoline--resize-mini-windows-backup)

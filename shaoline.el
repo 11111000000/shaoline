@@ -48,7 +48,6 @@
 ;; project-specific libraries are only needed by segments (see shaoline-segments.el);
 ;; keeping the core truly “pure”.
 
-
 ;; ----------------------------------------------------------------------------
 ;; Customization Group and Variables
 ;;
@@ -65,7 +64,6 @@ Increase if your favorite icons are wider."
   :type 'integer
   :group 'shaoline)
 
-
 (defcustom shaoline-debug nil
   "If non-nil, log shaoline activity into `shaoline--log-buffer'.  Seek inner debugness."
   :type 'boolean
@@ -75,6 +73,20 @@ Increase if your favorite icons are wider."
   "If non-nil, enable dynamic segments like time and battery.
 When disabled, these segments return empty strings and do not load any dependencies.
 This purifies Shaoline for minimal setups, aligning with Wu Wei."
+  :type 'boolean
+  :group 'shaoline)
+
+(defcustom shaoline-always-visible t
+  "When non-nil, Shaoline stays visible continuously.
+User `message' output is captured and shown in the
+`shaoline-segment-echo-message' centre segment instead of
+temporarily replacing the modeline.  Shaoline is still hidden
+whenever the minibuffer (or isearch prompt) is active, so user
+input is never obstructed.
+
+Set this to nil (the default) for the original behaviour where
+foreign `message's are allowed to occupy the echo area for their
+full duration before Shaoline repaints."
   :type 'boolean
   :group 'shaoline)
 
@@ -111,15 +123,16 @@ Zen masters say: A log unread is a tree falling in a silent forest."
   :group 'shaoline)
 
 (defcustom shaoline-segments
-  '((:left shaoline-segment-position
-           shaoline-segment-major-mode-icon
-           shaoline-segment-minor-modes
-           shaoline-segment-buffer-name
-           shaoline-segment-modified)
+  '((:left
+     shaoline-segment-major-mode-icon
+     shaoline-segment-buffer-name
+     shaoline-segment-modified
+     shaoline-segment-minor-modes)
 
     (:center shaoline-segment-echo-message)
 
     (:right
+     shaoline-segment-position
      shaoline-segment-project-name
      shaoline-segment-git-branch
      shaoline-segment-battery
