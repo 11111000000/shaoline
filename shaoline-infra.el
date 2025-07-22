@@ -1,6 +1,6 @@
 ;;; shaoline-infra.el --- Infrastructure for Shaoline echo-area modeline -*- lexical-binding: t; -*-
 
-;; Version: 2.1.1
+;; Version: 2.2.0
 
 ;; Copyright (C) 2025 Peter
 ;; Author: Peter <11111000000@email.com>

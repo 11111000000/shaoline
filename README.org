@@ -1,6 +1,6 @@
 #+TITLE: Shaoline – Modeline of Nothingness  
 #+AUTHOR: A Wandering Byte
-#+VERSION: 2.1.1
+#+VERSION: 2.2.0
 #+EMAIL: 11111000000@email.com 
 #+LANGUAGE: en  
 #+OPTIONS: num:nil ^:nil toc:2
@@ -212,7 +212,7 @@ Side-effects are karmic debt—avoid them.
 | Center stays empty    | Segment not in :center or advice missing | Ensure =shaoline-segment-echo-message= is in :center |
 
 * *New leaves on the bamboo* — extended wisdom  
-  (Everything below is **new** in v2.1.1.)
+  (Everything below is **new** in v2.2.0.)
 
 ** Complete segment index (a pocket scroll)
 

@@ -1,6 +1,6 @@
 #+TITLE: Shaoline – Строка Пустоты
 #+AUTHOR: Бродячий Байт (следуя за пастушком вола)  
-#+VERSION: 2.1.1
+#+VERSION: 2.2.0
 #+EMAIL: 11111000000@email.com
 #+LANGUAGE: ru  
 #+OPTIONS: num:nil ^:nil toc:2
