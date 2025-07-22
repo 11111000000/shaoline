@@ -100,7 +100,9 @@ Shaoline по умолчанию подходит для большинства 
 | shaoline-enable-dynamic-segments    | t           | nil → отключить все таймеры и внешние ~require~’ы            |
 | shaoline-timer-interval             | 1           | Секунд между обновлениями (если таймер реально есть)         |
 | shaoline-always-visible             | t           | Если не nil — Shaoline не исчезает при (message ...)         |
-| shaoline-message-timeout            | 10          | В секундах: сколько Shaoline ждет после сообщения ~message~, если always-visible = nil |
+| shaoline-message-timeout            | 10          | Сек после ~message~ (если always-visible=nil)                |
+| shaoline-project-name-ttl           | 2           | Сколько секунд кэшировать имя проекта (TTL, меньше — чаще IO)|
+| shaoline-battery-ttl                | 5           | Секунд для кэша батареи (TTL, меньше — чаще dbus/IO)         |
 | shaoline-autohide-modeline          | t           | Скрыть старую mode-line глобально                            |
 | shaoline-exclude-modes              | list        | Режимы, где пояс остаётся                                    |
 | shaoline-update-hooks               | list        | Хуки, вызывающие пересчёт (по умолч. post-command и др.)     |
@@ -111,6 +113,17 @@ Shaoline по умолчанию подходит для большинства 
 =M-x customize-group RET shaoline RET=
 
 Чем меньше настроек — тем ближе к Пустоте.
+
+* TTL-кэш тяжёлых сегментов
+
+С v2.2.2, дорогие (IO-heavy) сегменты (`shaoline-segment-project-name`, `shaoline-segment-battery`) кэшируются на время TTL (по умолчанию 2с и 5с).
+
+- Настроить глубину кэша — в `M-x customize-group RET shaoline-caching RET` (`shaoline-project-name-ttl`, `shaoline-battery-ttl`).
+- Если нужно получить СЫРОЙ (некешированный) результат (например, для проверки/экспериментов), используйте алиас:
+  #+begin_src emacs-lisp
+  (shaoline--segment-project-name-raw)
+  (shaoline--segment-battery-raw)
+  #+end_src
 
 * Стандартные сегменты
 

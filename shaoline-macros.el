@@ -40,21 +40,21 @@ True elegance: nothing more than necessary."
 ;; ---------------------------------------------------------------------------
 (defmacro shaoline-define-cached-segment (name ttl docstring &rest body)
   "Define NAME as a cached segment.
-TTL is time-to-live in seconds.  DOCSTRING documents the segment.
+TTL is time-to-live in seconds. DOCSTRING documents the segment.
 BODY computes and returns the segment string."
   (declare (indent defun) (doc-string 3))
-  (let ((cache (intern (format \"shaoline--%s-cache\" name)))
-        (ts    (intern (format \"shaoline--%s-ts\"    name))))
+  (let* ((cache-var (intern (format "shaoline--%s-cache" (symbol-name name))))
+         (ts-var    (intern (format "shaoline--%s-ts" (symbol-name name)))))
     `(progn
-       (defvar ,cache nil)
-       (defvar ,ts 0)
+       (defvar ,cache-var nil)
+       (defvar ,ts-var 0)
        (shaoline-define-simple-segment ,name ,docstring
                                        (let ((now (float-time)))
-                                         (if (and ,cache
-                                                  (< (- now ,ts) ,ttl))
-                                             ,cache
-                                           (setq ,cache (progn ,@body)
-                                                 ,ts now))))))
+                                         (if (and ,cache-var
+                                                  (< (- now ,ts-var) ,ttl))
+                                             ,cache-var
+                                           (setq ,cache-var (progn ,@body)
+                                                 ,ts-var now)))))))
 
-  (provide 'shaoline-macros)
+(provide 'shaoline-macros)
 ;;; shaoline-macros.el ends here

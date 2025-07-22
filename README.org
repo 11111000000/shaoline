@@ -113,6 +113,8 @@ Variables worth chanting over:
 | =shaoline-update-hooks=            | list    | Hooks that trigger recompute (defaults include post-command).    |
 | =shaoline-message-timeout=         | 10      | (Advanced) Seconds to wait before re-showing Shaoline after user  |
 |                                  |         | message if always-visible is nil.                                |
+| =shaoline-project-name-ttl=        | 2       | TTL (seconds) to cache the project-name segment (less disk I/O). |
+| =shaoline-battery-ttl=             | 5       | TTL (seconds) to cache the battery segment (fewer DBus/syscalls).|
 | =shaoline-right-padding=           | 0       | Extra spaces after the right segment.                            |
 | =shaoline-debug=                   | nil     | Log to */shaoline-logs/* buffer.                                   |
 
@@ -123,6 +125,17 @@ M-x customize-group RET shaoline RET
 #+end_src
 
 Remember: the fewer settings you touch, the closer you are to Emptiness.
+
+* TTL-caching of heavy segments
+
+Since v2.2.2, expensive/IO-heavy segments (like `shaoline-segment-project-name` and `shaoline-segment-battery`) are automatically cached for their TTL (default 2s and 5s).
+
+- Tune cache duration in `M-x customize-group RET shaoline-caching RET` (variables `shaoline-project-name-ttl`, `shaoline-battery-ttl`).
+- To forcibly fetch an uncached value (for testing/refresh, e.g. in timers), call the raw segment alias:
+  #+begin_src emacs-lisp
+  (shaoline--segment-project-name-raw)
+  (shaoline--segment-battery-raw)
+  #+end_src
 
 * Standard segments
 

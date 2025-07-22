@@ -58,26 +58,18 @@
                                   (all-the-icons-icon-for-mode major-mode :height 0.9)))
 
 ;; ----------------------------------------------------------------------------
-;; "Neighboring Garden" — Project Name, if available
+;; "Neighboring Garden" — Project Name, if available (TTL-cached)
 ;;
-;; If the buffer belongs to a project, display its name.
-;; This helps with orientation in multi-project work.
+;; Public segment is TTL-cached!
+;; The uncached, original implementation is available as `shaoline--segment-project-name-raw`
+;; for extension/testing.
 ;; ----------------------------------------------------------------------------
-;; Project name.
-
-(shaoline-define-simple-segment shaoline-segment-project-name
-                                "Project name, if available."
-                                (unless (featurep 'projectile) (require 'projectile nil t))
-                                (let* ((project
-                                        (cond
-                                         ((and (featurep 'projectile) (projectile-project-name))
-                                          (projectile-project-name))
-                                         ((fboundp 'project-current)
-                                          (when-let ((pr (project-current)))
-                                            (file-name-nondirectory (directory-file-name (car (project-roots pr))))))
-                                         (t nil))))
-                                  (when (and project (not (string= "-" project)))
-                                    (propertize project 'face 'shaoline-project-face))))
+;;;###autoload
+(shaoline-define-cached-segment shaoline-segment-project-name shaoline-project-name-ttl
+  "Project name, if available. Cached for `shaoline-project-name-ttl' seconds (see \\[customize-group] RET shaoline-caching).
+If you want the immediate, non-cached value (for tests/use-cases that demand up-to-date info),
+call `shaoline--segment-project-name-raw` directly."
+  (shaoline--segment-project-name-raw))
 
 ;; ----------------------------------------------------------------------------
 ;; "Frost on the Branch" — Current Git Branch
@@ -124,76 +116,84 @@ Truncates long or multi-line messages gracefully. Width managed by the modeline.
                                     "")))
 
 ;; ----------------------------------------------------------------------------
-;; "Firefly in the Leaves" — Battery Status
+;; "Firefly in the Leaves" — Battery Status (TTL-cached)
 ;;
-;; Shows current battery level and status (charging/discharging), if available.
-;; Especially helpful for laptops and portable systems.
+;; Public segment is TTL-cached!
+;; The uncached, original implementation is available as `shaoline--segment-battery-raw`
+;; for extension/testing.
 ;; ----------------------------------------------------------------------------
-;; Battery.
+;;;###autoload
+(shaoline-define-cached-segment shaoline-segment-battery shaoline-battery-ttl
+  "Show battery percentage and charging status. Cached for `shaoline-battery-ttl' seconds (see \\[customize-group] RET shaoline-caching).
+If you want the immediate, non-cached value (for tests/use-cases that demand up-to-date info),
+call `shaoline--segment-battery-raw` directly."
+  (shaoline--segment-battery-raw))
 
-(shaoline-define-simple-segment
- shaoline-segment-battery
- "Show battery percentage and charging status. Returns 'N/A' if unavailable."
- (if (not shaoline-enable-dynamic-segments)
-     ""  ;; Returns empty if dynamic segments are disabled.
-   (unless (featurep 'battery) (require 'battery nil t))
-   (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
-   (let ((safe-n-a
-          (propertize
-           (if (featurep 'all-the-icons)
-               (concat (all-the-icons-faicon "battery-empty" :face 'shaoline-battery-face :v-adjust 0 :height 0.75) " N/A")
-             "N/A")
-           'face '(:inherit shaoline-battery-face :slant italic))))
-     (condition-case nil
-         (if (and (fboundp 'battery) battery-status-function)
-             (with-timeout (0.7 safe-n-a)
-               (let ((data (funcall battery-status-function)))
-                 (cond
-                  ((and (listp data) (cl-every #'consp data))
-                   (let* ((percent (or (cdr (assoc 112 data))   ; ?p
-                                       (cdr (assoc "percentage" data))
-                                       (cdr (assoc "perc" data))
-                                       (cdr (assoc "capacity" data))))
-                          (status (or (cdr (assoc 66 data))     ; ?b
-                                      (cdr (assoc "status" data))
-                                      (cdr (assoc "charging" data))
-                                      (cdr (assoc "state" data))))
-                          (icon
-                           (cond
-                            ((not (featurep 'all-the-icons)) "")
-                            ((and percent (string-match "\\([0-9]+\\)" percent))
-                             (let* ((n (string-to-number (match-string 1 percent)))
-                                    (icon-face
-                                     (cond
-                                      ((and status (string-match-p "\\`discharging\\'" status) (< n 25)) '(:foreground "#aa0000"))
-                                      ((and status (string-match-p "\\`charging\\'" status)) '(:foreground "#007700"))
-                                      (t 'shaoline-battery-face))))
-                               (cond
-                                ((>= n 90) (all-the-icons-faicon "battery-full" :face icon-face :v-adjust 0 :height 0.75))
-                                ((>= n 70) (all-the-icons-faicon "battery-three-quarters" :face icon-face :v-adjust 0 :height 0.75))
-                                ((>= n 40) (all-the-icons-faicon "battery-half" :face icon-face :v-adjust 0 :height 0.75))
-                                ((>= n 10) (all-the-icons-faicon "battery-quarter" :face icon-face :v-adjust 0 :height 0.75))
-                                (t          (all-the-icons-faicon "battery-empty" :face icon-face :v-adjust 0 :height 0.75)))))
-                            ((and status (string-match-p "full" status)) (all-the-icons-faicon "battery-full" :face 'shaoline-battery-face :v-adjust 0 :height 0.75))
-                            ((and status (string-match-p "\\<ac\\>" status)) (all-the-icons-octicon "plug" :face 'shaoline-battery-face))
-                            ((and status (string-match-p "charging" status)) (all-the-icons-faicon "bolt" :face '(:foreground "#007700") :v-adjust 0))
-                            ((and status (string-match-p "discharging" status)) (all-the-icons-faicon "battery-empty" :face '(:foreground "#aa0000") :v-adjust 0 :height 0.75))
-                            (t ""))))
-                     (if percent
-                         (concat
-                          (if (and (stringp icon) (not (string-empty-p icon))) (concat icon " "))
-                          (propertize (concat (replace-regexp-in-string "%" "" percent) "%")
-                                      'face 'shaoline-battery-face))
-                       (propertize
-                        (if (featurep 'all-the-icons)
-                            (concat (all-the-icons-faicon "battery-empty" :face 'shaoline-battery-face :v-adjust 0 :height 0.75) " No battery")
-                          "No battery")
-                        'face '(:inherit shaoline-battery-face :slant italic)))))
-                  ((and (stringp data) (not (string-empty-p data)))
-                   (propertize data 'face 'shaoline-battery-face))
-                  (t safe-n-a))))
-           safe-n-a)
-       (error safe-n-a)))))
+;; ----------------------------------------------------------------------------
+;; Uncached Raw Segment: Battery
+;; ----------------------------------------------------------------------------
+(shaoline-define-simple-segment shaoline--segment-battery-raw
+                                "Show battery percentage and charging status. Returns 'N/A' if unavailable (RAW, uncached)."
+                                (if (not shaoline-enable-dynamic-segments)
+                                    ""  ;; Returns empty if dynamic segments are disabled.
+                                  (unless (featurep 'battery) (require 'battery nil t))
+                                  (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
+                                  (let ((safe-n-a
+                                         (propertize
+                                          (if (featurep 'all-the-icons)
+                                              (concat (all-the-icons-faicon "battery-empty" :face 'shaoline-battery-face :v-adjust 0 :height 0.75) " N/A")
+                                            "N/A")
+                                          'face '(:inherit shaoline-battery-face :slant italic))))
+                                    (condition-case nil
+                                        (if (and (fboundp 'battery) battery-status-function)
+                                            (with-timeout (0.7 safe-n-a)
+                                              (let ((data (funcall battery-status-function)))
+                                                (cond
+                                                 ((and (listp data) (cl-every #'consp data))
+                                                  (let* ((percent (or (cdr (assoc 112 data))   ; ?p
+                                                                      (cdr (assoc "percentage" data))
+                                                                      (cdr (assoc "perc" data))
+                                                                      (cdr (assoc "capacity" data))))
+                                                         (status (or (cdr (assoc 66 data))     ; ?b
+                                                                     (cdr (assoc "status" data))
+                                                                     (cdr (assoc "charging" data))
+                                                                     (cdr (assoc "state" data))))
+                                                         (icon
+                                                          (cond
+                                                           ((not (featurep 'all-the-icons)) "")
+                                                           ((and percent (string-match "\\([0-9]+\\)" percent))
+                                                            (let* ((n (string-to-number (match-string 1 percent)))
+                                                                   (icon-face
+                                                                    (cond
+                                                                     ((and status (string-match-p "\\`discharging\\'" status) (< n 25)) '(:foreground "#aa0000"))
+                                                                     ((and status (string-match-p "\\`charging\\'" status)) '(:foreground "#007700"))
+                                                                     (t 'shaoline-battery-face))))
+                                                              (cond
+                                                               ((>= n 90) (all-the-icons-faicon "battery-full" :face icon-face :v-adjust 0 :height 0.75))
+                                                               ((>= n 70) (all-the-icons-faicon "battery-three-quarters" :face icon-face :v-adjust 0 :height 0.75))
+                                                               ((>= n 40) (all-the-icons-faicon "battery-half" :face icon-face :v-adjust 0 :height 0.75))
+                                                               ((>= n 10) (all-the-icons-faicon "battery-quarter" :face icon-face :v-adjust 0 :height 0.75))
+                                                               (t          (all-the-icons-faicon "battery-empty" :face icon-face :v-adjust 0 :height 0.75)))))
+                                                           ((and status (string-match-p "full" status)) (all-the-icons-faicon "battery-full" :face 'shaoline-battery-face :v-adjust 0 :height 0.75))
+                                                           ((and status (string-match-p "\\<ac\\>" status)) (all-the-icons-octicon "plug" :face 'shaoline-battery-face))
+                                                           ((and status (string-match-p "charging" status)) (all-the-icons-faicon "bolt" :face '(:foreground "#007700") :v-adjust 0))
+                                                           ((and status (string-match-p "discharging" status)) (all-the-icons-faicon "battery-empty" :face '(:foreground "#aa0000") :v-adjust 0 :height 0.75))
+                                                           (t ""))))
+                                                    (if percent
+                                                        (concat
+                                                         (if (and (stringp icon) (not (string-empty-p icon))) (concat icon " "))
+                                                         (propertize (concat (replace-regexp-in-string "%" "" percent) "%")
+                                                                     'face 'shaoline-battery-face))
+                                                      (propertize
+                                                       (if (featurep 'all-the-icons)
+                                                           (concat (all-the-icons-faicon "battery-empty" :face 'shaoline-battery-face :v-adjust 0 :height 0.75) " No battery")
+                                                         "No battery")
+                                                       'face '(:inherit shaoline-battery-face :slant italic)))))
+                                                 ((and (stringp data) (not (string-empty-p data)))
+                                                  (propertize data 'face 'shaoline-battery-face))
+                                                 (t safe-n-a))))
+                                          safe-n-a)
+                                      (error safe-n-a)))))
 
 ;; ----------------------------------------------------------------------------
 ;; "Sign at the Garden Gate" — Current major-mode (with optional icon)
@@ -393,8 +393,8 @@ Customize this to control which minor modes are shown and what icons are used."
   :group 'shaoline)
 
 (shaoline-define-simple-segment shaoline-segment-minor-modes
-                                "Show ONLY critically important minor modes, as Unicode emoji/symbols (portable), each with a unique color.
-Set and extend what to show via `shaoline-minor-modes-icon-map'."
+                                "Show ONLY critically important minor modes, as Unicode emoji/symbols (portable),
+each with a unique color. Set and extend what to show via `shaoline-minor-modes-icon-map'."
                                 (let* ((icon-map shaoline-minor-modes-icon-map)
                                        (seen (make-hash-table :test 'equal))
                                        ;; Helper: deterministic color for a string (from hash)
@@ -485,8 +485,22 @@ Set and extend what to show via `shaoline-minor-modes-icon-map'."
                                   (propertize indicator 'face 'shaoline-mode-face)))
 
 ;; ---------------------------------------------------------------------------
-;; Cached wrappers for heavy / I/O-intensive segments
+;; Cached wrappers for heavy / I/O-intensive segments (with customizable TTL)
 ;; ---------------------------------------------------------------------------
+
+(defgroup shaoline-caching nil
+  "Customization group for TTL-caching of heavy shaoline segments."
+  :group 'shaoline)
+
+(defcustom shaoline-project-name-ttl 2
+  "How many seconds to cache the project name segment. Lower for more frequent updates, higher for less disk I/O."
+  :type 'number
+  :group 'shaoline-caching)
+
+(defcustom shaoline-battery-ttl 5
+  "How many seconds to cache the battery segment. Increase if your system battery state changes slowly."
+  :type 'number
+  :group 'shaoline-caching)
 
 ;; The original, uncached implementations are still valuable; keep them
 ;; under private aliases so other code (or tests) can call them directly.
@@ -497,43 +511,17 @@ Set and extend what to show via `shaoline-minor-modes-icon-map'."
   (defalias 'shaoline--segment-battery-raw #'shaoline-segment-battery))
 
 ;; ------------------------------------------------------------------
-;; Project name – can touch disk / projectile; cache for 2 s
-;; ------------------------------------------------------------------
-(shaoline-define-cached-segment shaoline-segment-project-name 2
-                                "Project name, if available (cached 2 s)."
-                                (shaoline--segment-project-name-raw))
+;;;###autoload
+(shaoline-define-cached-segment shaoline-segment-project-name shaoline-project-name-ttl
+  "Project name, if available. Cached for `shaoline-project-name-ttl' seconds (see \\[customize-group] RET shaoline-caching)."
+  (shaoline--segment-project-name-raw))
 
 ;; ------------------------------------------------------------------
-;; Battery – DBus / upower may be costly; cache for 5 s
-;; ------------------------------------------------------------------
-(shaoline-define-cached-segment shaoline-segment-battery 5
-                                "Show battery percentage and charging status (cached 5 s)."
-                                (shaoline--segment-battery-raw))
+;;;###autoload
+(shaoline-define-cached-segment shaoline-segment-battery shaoline-battery-ttl
+  "Show battery percentage and charging status. Cached for `shaoline-battery-ttl' seconds (see \\[customize-group] RET shaoline-caching)."
+  (shaoline--segment-battery-raw))
 
-(provide 'shaoline-segments)
-;;; shaoline-segments.el ends here
-
-;; [duplicate tail removed – see single canonical definition above]
-(let* ((project
-        (cond
-         ((and (featurep 'projectile) (projectile-project-name))
-          (projectile-project-name))
-         ((fboundp 'project-current)
-          (when-let ((pr (project-current))
-                     (root (car (project-roots pr))))
-            (file-name-nondirectory (directory-file-name root))))
-         (t nil))))
-  (when (and project (not (string= "-" project)))
-    (propertize project 'face 'shaoline-project-face)))
-
-;; Preserve original (uncached) battery implementation
-(unless (fboundp 'shaoline--segment-battery-raw)
-  (defalias 'shaoline--segment-battery-raw #'shaoline-segment-battery))
-
-;; Battery – DBus / upower can be expensive; cache for 5 s
-(shaoline-define-cached-segment shaoline-segment-battery 5
-                                "Show battery percentage and charging status (cached 5 s)."
-                                (shaoline--segment-battery-raw))
 
 (provide 'shaoline-segments)
 ;;; shaoline-segments.el ends here
