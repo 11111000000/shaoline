@@ -343,35 +343,50 @@ N c Q g F G q C  (new, crescent, 1-st quarter, gibbous, full …)."
 ;; Displays icons for important or special minor-modes like read-only, flycheck, etc.
 ;; Customize `shaoline-minor-modes-icon-map` for your needs.
 (defface shaoline-minor-modes-face
-  '((t :inherit (shaoline-base-face) :height 0.8 :foreground "gray60"))
+  '((t :inherit (shaoline-base-face) :height 0.7 :foreground "gray60"))
   "Face for the minor modes segment in Shaoline (smaller)."
   :group 'shaoline)
 
 (defcustom shaoline-minor-modes-icon-map
-  '(("read-only-mode"            . "🔒")
-    ("overwrite-mode"            . "⛔")
-    ("auto-save-mode"            . "💾")
-    ("visual-line-mode"          . "↩")
-    ("ws-butler-mode"            . "🚫␣")
-    ("indent-tabs-mode"          . "⇆")
-    ("dtrt-indent-mode"          . "↕")
-    ("editorconfig-mode"         . "☰")
-    ("god-mode"                  . "🧘")
-    ("god-local-mode"            . "🧘")
-    ("projectile-mode"           . "🚀")
-    ("envrc-mode"                . "⛺")
-    ("flyspell-mode"             . "🔤")
-    ("spell-fu-mode"             . "📚")
-    ("lsp-mode"                  . "🦾")
-    ("eglot-managed-mode"        . "🦾")
-    ("flycheck-mode"             . "✅")
-    ("flymake-mode"              . "🧪")
-    ("gptel-mode"                . "🤖")
-    ("gptel-aibo-mode"           . "🐕‍🦺")
-    ("org-drill-mode"            . "🦉")
-    ("olivetti-mode"             . "✍")
-    ("org-fancy-priorities-mode" . "⚡")
-    ("org-auto-tangle-mode"      . "🧶"))
+  '(("read-only-mode"            . "🛡️")     ;; shield for read-only
+    ("overwrite-mode"            . "✏️")   ;; pencil barred
+    ("auto-save-mode"            . "⏳")   ;; memo with hourglass
+    ;; -- New additions start here --
+    ("aggressive-indent-mode"    . "⚡")     ;; auto-indentation
+    ("abbrev-mode"               . "✂️")     ;; abbreviation
+    ("company-mode"              . "🤝")     ;; auto-completion
+    ("yas-minor-mode"            . "🧩")     ;; snippets
+    ("evil-mode"                 . "😈")     ;; vim emulation
+    ("smartparens-mode"          . "()")     ;; smart parenthesis
+    ("show-paren-mode"           . "🔲")     ;; highlight parens
+    ("rainbow-mode"              . "🌈")     ;; color highlighting
+    ("undo-tree-mode"            . "🌲")     ;; undo-tree
+    ("which-key-mode"            . "❓")     ;; key hints
+    ("electric-pair-mode"        . "⛓️")    ;; electric pairs
+    ("hl-line-mode"              . "📏")     ;; highlight line
+    ("display-line-numbers-mode" . "#️⃣")    ;; line numbers
+    ("org-indent-mode"           . "⮞")     ;; org indentation
+    ;; -- New additions end here --
+    ("visual-line-mode"          . "↩️")     ;; return arrow
+    ("ws-butler-mode"            . "␣")    ;; visible space + NO
+    ("indent-tabs-mode"          . "⇄⇆")     ;; tab exchange
+    ("editorconfig-mode"         . "📐")     ;; set square
+    ("god-mode"                  . "🦶")     ;; foot/step to denote 'god walking'
+    ("god-local-mode"            . "👣")     ;; footprints for local god-mode
+    ("projectile-mode"           . "🌌")     ;; milky way for 'project/universe'
+    ("envrc-mode"                . "🔰")     ;; green badge for env
+    ("flyspell-mode"             . "🪶")     ;; feather/quill
+    ("spell-fu-mode"             . "🪄")     ;; magic wand = 'fu'
+    ("lsp-mode"                  . "🧠")     ;; brain for smart editor
+    ("eglot-managed-mode"        . "🎛️")     ;; control panel
+    ("flycheck-mode"             . "🩺")     ;; stethoscope (diagnostics)
+    ("flymake-mode"              . "🔬")     ;; microscope
+    ("gptel-mode"                . "🤖💬")     ;; speech balloon for AI chat
+    ("gptel-aibo-mode"           . "🐶")   ;; robot and dog
+    ("org-drill-mode"            . "🔔")     ;; bell for reminders
+    ("olivetti-mode"             . "📃")     ;; page for writing
+    ("org-fancy-priorities-mode" . "🚦")     ;; traffic light for priorities
+    ("org-auto-tangle-mode"      . "🧵"))    ;; thread for tangle
   "Mapping minor mode variable names (as strings) to an icon/emoji for Shaoline.
 Customize this to control which minor modes are shown and what icons are used."
   :type '(alist :key-type string :value-type string)

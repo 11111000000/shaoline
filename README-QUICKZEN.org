@@ -10,9 +10,9 @@
 (setq shaoline-segments
       '((:left shaoline-segment-position
                shaoline-segment-major-mode-icon
+               shaoline-segment-minor-modes
                shaoline-segment-buffer-name
-               shaoline-segment-modified
-               shaoline-segment-minor-modes)
+               shaoline-segment-modified)
         (:center shaoline-segment-echo-message)
         (:right shaoline-segment-project-name
                 shaoline-segment-git-branch
@@ -39,4 +39,6 @@
 
 ** A Koan for the Road:
 Student: "Master, why separate clock and moon?"
-Master: "Time flows; the moon waxes and wanes. Yet both are illusions. Use them or not — the Dao remains."
+Master: "Time flows; the moon waxes and wanes. Yet both are illusions.
+
+"
