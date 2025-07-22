@@ -71,16 +71,17 @@
 3. Быстрый пример собственной раскладки (с новыми сегментами):  
 
    #+begin_src emacs-lisp
-   (setq shaoline-segments
-         '((:left   shaoline-segment-icon-and-buffer
-                    shaoline-segment-modified
-                    shaoline-segment-minor-modes)
-           (:center shaoline-segment-echo-message)
-           (:right  shaoline-segment-project-name
-                    shaoline-segment-git-branch
-                    shaoline-segment-input-method
-                    shaoline-segment-digital-clock
-                    shaoline-segment-moon-phase)))
+(setq shaoline-segments
+      '((:left   shaoline-segment-major-mode-icon
+                 shaoline-segment-buffer-name
+                 shaoline-segment-modified
+                 shaoline-segment-minor-modes)
+        (:center shaoline-segment-echo-message)
+        (:right  shaoline-segment-project-name
+                 shaoline-segment-git-branch
+                 shaoline-segment-input-method
+                 shaoline-segment-digital-clock
+                 shaoline-segment-moon-phase)))
    #+end_src
 
 - 🛠️ Создание собственных сегментов

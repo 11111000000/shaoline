@@ -31,35 +31,6 @@
   (defvar shaoline-enable-dynamic-segments t "Shadow variable for compile-time checks."))
 
 
-;; ============================================================================
-;; SECTION: "Reflections on the Pond" — Buffer and its Name/Icon
-;;
-;; The buffer's symbol and name act as a marker: always visible, always specific,
-;; and the core identifier for any Emacs session.
-;; ----------------------------------------------------------------------------
-;; Buffer icon and name.
-
-(shaoline-define-segment shaoline-segment-icon-and-buffer (buffer)
-  "Colored buffer icon (by major mode, as in tabs) and buffer name."
-  (let* ((icon
-          (when (and shaoline-enable-dynamic-segments (featurep 'all-the-icons))
-            (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
-            (let* ((mode (buffer-local-value 'major-mode buffer))
-                   (raw (all-the-icons-icon-for-mode mode :height 0.9)))
-              (cond
-               ((stringp raw) raw)
-               ((buffer-file-name buffer)
-                (all-the-icons-icon-for-file
-                 (buffer-file-name buffer) :height 0.9))
-               (t (all-the-icons-faicon "file-o" :height 0.9))))))
-         (name (buffer-name buffer))
-         (text (if icon (concat icon " " name) name)))
-    (add-face-text-property
-     (if icon (length icon) 0) (length text)
-     'shaoline-buffer-face 'append
-     text)
-    text))
-
 ;; -------------------------------------------------------------------------
 ;; "Just Water" — Buffer name only
 ;;

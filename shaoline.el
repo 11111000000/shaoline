@@ -91,8 +91,7 @@ Zen masters say: A log unread is a tree falling in a silent forest."
         (insert msg "\n")))))
 
 (defcustom shaoline-available-segments
-  '((shaoline-segment-icon-and-buffer . "Icon and buffer name")
-    (shaoline-segment-buffer-name     . "Buffer name only")
+  '((shaoline-segment-buffer-name     . "Buffer name only")
     (shaoline-segment-major-mode-icon . "Major-mode icon only")
     (shaoline-segment-project-name    . "Project name (if any)")
     (shaoline-segment-git-branch      . "Git branch")
@@ -134,7 +133,6 @@ May be configured in Custom (see shaoline-available-segments)."
   :type '(alist
           :key-type (choice (const :left) (const :center) (const :right))
           :value-type (set (choice
-                            (const shaoline-segment-icon-and-buffer)
                             (const shaoline-segment-project-name)
                             (const shaoline-segment-git-branch)
                             (const shaoline-segment-battery)

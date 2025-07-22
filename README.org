@@ -84,7 +84,8 @@ Yet the Way is personal; tweak as you please.
 #+begin_src emacs-lisp
 (setq shaoline-segments
       '((:left   shaoline-segment-position
-                 shaoline-segment-icon-and-buffer
+                 shaoline-segment-major-mode-icon
+                 shaoline-segment-buffer-name
                  shaoline-segment-modified)
         (:center shaoline-segment-echo-message)
         (:right  shaoline-segment-minor-modes
@@ -119,7 +120,6 @@ Remember: the fewer settings you touch, the closer you are to Emptiness.
 | Symbol                             | What it shows                         | Depends on               |
 |------------------------------------+---------------------------------------+--------------------------|
 | shaoline-segment-position          | Line & column position                | –                        |
-| shaoline-segment-icon-and-buffer   | Icon + buffer name                    | all-the-icons (optional) |
 | shaoline-segment-modified          | “*” if buffer is modified             | –                        |
 | shaoline-segment-echo-message      | Last non-empty message (persistent)   | –                        |
 | shaoline-segment-minor-modes       | Important minor modes (icons)         | –                        |
@@ -218,7 +218,6 @@ Side-effects are karmic debt—avoid them.
 
 | Symbol                              | Pure? | Needs timer | Needs extra package      |
 |-------------------------------------+-------+-------------+--------------------------|
-| shaoline-segment-icon-and-buffer    | ✔︎     | –           | all-the-icons (optional) |
 | shaoline-segment-modified           | ✔︎     | –           | –                        |
 | shaoline-segment-position           | ✔︎     | –           | –                        |
 | shaoline-segment-minor-modes        | ✔︎     | –           | –                        |

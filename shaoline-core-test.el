@@ -36,7 +36,8 @@
 (ert-deftest shaoline-minimal-config-no-dependencies ()
   "Shaoline works in minimal Emacs setups without optional dependencies."
   (let ((old-features features)
-        (shaoline-segments '((:left shaoline-segment-icon-and-buffer)
+        (shaoline-segments '((:left shaoline-segment-major-mode-icon
+                                    shaoline-segment-buffer-name)
                              (:right shaoline-segment-battery shaoline-segment-time)))
         (result nil))
     ;; Simulate no optional features loaded
@@ -107,7 +108,8 @@
 (ert-deftest shaoline-tty-fallback ()
   "Segments degrade gracefully in TTY (no Unicode or icons)."
   (with-temp-buffer
-    (let ((shaoline-segments '((:left shaoline-segment-icon-and-buffer)
+    (let ((shaoline-segments '((:left shaoline-segment-major-mode-icon
+                                      shaoline-segment-buffer-name)
                                (:right shaoline-segment-time)))
           ;; Simulate TTY by disabling all-the-icons and assuming no Unicode
           (shaoline-enable-dynamic-segments nil))  ;; Temporarily disable to force fallback

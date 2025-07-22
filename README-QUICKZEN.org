@@ -9,7 +9,8 @@
 #+begin_src emacs-lisp
 (setq shaoline-segments
       '((:left shaoline-segment-position
-               shaoline-segment-icon-and-buffer
+               shaoline-segment-major-mode-icon
+               shaoline-segment-buffer-name
                shaoline-segment-modified
                shaoline-segment-minor-modes)
         (:center shaoline-segment-echo-message)

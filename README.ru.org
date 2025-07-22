@@ -80,7 +80,8 @@ M-x package-install RET shaoline RET
 
 #+begin_src emacs-lisp
 (setq shaoline-segments
-      '((:left   shaoline-segment-icon-and-buffer)
+      '((:left   shaoline-segment-major-mode-icon
+                 shaoline-segment-buffer-name)
         (:center shaoline-segment-echo-message)
         (:right  shaoline-segment-project-name
                  shaoline-segment-git-branch
@@ -107,7 +108,6 @@ M-x package-install RET shaoline RET
 
 | Символ                             | Что показывает                              | Зависимости              |
 |-----------------------------------+---------------------------------------------+--------------------------|
-| shaoline-segment-icon-and-buffer  | Иконка + имя буфера                         | all-the-icons (опц.)     |
 | shaoline-segment-project-name     | Имя проекта (project.el / projectile)       | projectile (опц.)        |
 | shaoline-segment-git-branch       | Текущая ветка Git                           | vc-git (builtin)         |
 | shaoline-segment-battery          | Батарея % / статус                          | battery.el (builtin)     |
@@ -179,7 +179,6 @@ M-x package-install RET shaoline RET
 
 | Символ                              | Чистый? | Таймер | Доп. пакеты          |
 |-------------------------------------+---------+--------+----------------------|
-| shaoline-segment-icon-and-buffer    | ✔︎       | —      | all-the-icons (опц.) |
 | shaoline-segment-modified           | ✔︎       | —      | —                    |
 | shaoline-segment-position           | ✔︎       | —      | —                    |
 | shaoline-segment-minor-modes        | ✔︎       | —      | —                    |
