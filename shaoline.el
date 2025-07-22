@@ -67,7 +67,7 @@ Increase if your favorite icons are wider."
 
 
 (defcustom shaoline-debug nil
-  "If non-nil, log shaoline activity into `shaoline--log-buffer'. Seek inner debugness."
+  "If non-nil, log shaoline activity into `shaoline--log-buffer'.  Seek inner debugness."
   :type 'boolean
   :group 'shaoline)
 
@@ -408,13 +408,6 @@ If its contents get shorter, the gap appears *to the left* of the rightmost char
      left
      gap-left
      center
-     ;; Вставляем один пробел, который «прыгнёт» так,
-     ;; чтобы следующий символ начинался в колонке
-     ;; (- right shaoline-right-padding right-width).
-     ;; Относительное выравнивание надёжно: если наши подсчёты
-     ;; вдруг неточны (иконки шире, тема поменялась и т.д.),
-     ;; Emacs *не* станет переносить строку — просто сместит
-     ;; сегмент чуть левее, но всегда в пределах одной строки.
      (propertize " " 'display
                  `(space :align-to (- right ,(+ shaoline-right-padding
                                                 right-width))))

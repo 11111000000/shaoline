@@ -1,4 +1,4 @@
-;;; shaoline-segments.el --- Standard segments for Shaoline modeline -*- lexical-binding: t; -*-
+;;; shaoline-segments.el --- Shaoline's Segment Garden: practical, functional, literate -*- lexical-binding: t; -*-
 
 ;; Version: 2.1.1
 
@@ -7,12 +7,35 @@
 ;; SPDX-License-Identifier: MIT
 ;; Homepage: https://github.com/11111000000/shaoline
 
-;; Segments require macros and msg-engine (core vars from shaoline.el are assumed loaded).
+;; ------------------------------------------------------------------------
+;; Introduction (Garden Gate)
+;;
+;; Each segment is like a plant in a well-tended garden: a simple, pure function,
+;; thriving on its own but best in harmony with others.
+;;
+;; This file is the Segment Garden. Add, remove, or rearrange segments as you need;
+;; each one provides some useful piece of modeline information.
+;;
+;; Guidelines for tending the garden:
+;;  - Each section includes commentary with practical advice.
+;;  - Segments strive for pure, functional style—no unnecessary "weeds" (side effects, heavy dependencies).
+;;  - Add your own "flowers" (segments), but keep the garden clean and maintainable.
+
+;; ------------------------------------------------------------------------
+;; Dependencies — the garden's soil
+;;
+;; All segments depend on the foundational macros and message engine.
 (require 'shaoline-macros)
 (require 'shaoline-msg-engine)
 (eval-when-compile
   (defvar shaoline-enable-dynamic-segments t "Shadow variable for compile-time checks."))
 
+
+;; ============================================================================
+;; SECTION: "Reflections on the Pond" — Buffer and its Name/Icon
+;;
+;; The buffer's symbol and name act as a marker: always visible, always specific,
+;; and the core identifier for any Emacs session.
 ;; ----------------------------------------------------------------------------
 ;; Buffer icon and name.
 
@@ -38,12 +61,20 @@
     text))
 
 ;; -------------------------------------------------------------------------
+;; "Just Water" — Buffer name only
+;;
+;; Sometimes you want simplicity: only the buffer’s name, no icon, no distraction.
+;; -------------------------------------------------------------------------
 ;; Buffer name only (without icon).
 
 (shaoline-define-segment shaoline-segment-buffer-name (buffer)
   "Only the buffer name, coloured as `shaoline-buffer-face'."
   (propertize (buffer-name buffer) 'face 'shaoline-buffer-face))
 
+;; -------------------------------------------------------------------------
+;; "Single Petal" — Icon for major-mode (no text)
+;;
+;; For minimalists: just the icon representing buffer mode, nothing else.
 ;; -------------------------------------------------------------------------
 ;; Major-mode icon only (without text).
 
@@ -55,6 +86,11 @@
                                   (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
                                   (all-the-icons-icon-for-mode major-mode :height 0.9)))
 
+;; ----------------------------------------------------------------------------
+;; "Neighboring Garden" — Project Name, if available
+;;
+;; If the buffer belongs to a project, display its name.
+;; This helps with orientation in multi-project work.
 ;; ----------------------------------------------------------------------------
 ;; Project name.
 
@@ -73,6 +109,10 @@
                                     (propertize project 'face 'shaoline-project-face))))
 
 ;; ----------------------------------------------------------------------------
+;; "Frost on the Branch" — Current Git Branch
+;;
+;; Version control helps track history. If in a Git repo, show the branch name.
+;; ----------------------------------------------------------------------------
 ;; Git branch.
 
 (shaoline-define-simple-segment shaoline-segment-git-branch
@@ -87,6 +127,11 @@
                                        " "
                                        (propertize branch 'face 'shaoline-git-face))))))
 
+;; ----------------------------------------------------------------------------
+;; "Echo in the Clearing" — Central message (echo-area)
+;;
+;; Shows the most recent user message, holding it in the center until a new one appears.
+;; Useful as a persistent notification or feedback area.
 ;; ----------------------------------------------------------------------------
 ;; Echo-area message.
 
@@ -107,6 +152,11 @@ Truncates long or multi-line messages gracefully. Width managed by the modeline.
                                         (propertize truncated 'face 'shaoline-echo-face))
                                     "")))
 
+;; ----------------------------------------------------------------------------
+;; "Firefly in the Leaves" — Battery Status
+;;
+;; Shows current battery level and status (charging/discharging), if available.
+;; Especially helpful for laptops and portable systems.
 ;; ----------------------------------------------------------------------------
 ;; Battery.
 
@@ -175,6 +225,10 @@ Truncates long or multi-line messages gracefully. Width managed by the modeline.
        (error safe-n-a)))))
 
 ;; ----------------------------------------------------------------------------
+;; "Sign at the Garden Gate" — Current major-mode (with optional icon)
+;;
+;; Shows the editing mode for the current buffer—helpful context at a glance.
+;; ----------------------------------------------------------------------------
 ;; Major mode.
 
 (shaoline-define-simple-segment shaoline-segment-major-mode
@@ -190,8 +244,11 @@ Truncates long or multi-line messages gracefully. Width managed by the modeline.
                                                'face 'shaoline-mode-face))))
 
 ;; ----------------------------------------------------------------------------
-;; Time and moon phase.
-
+;; "Heaven Above the Garden" — Time and Moon Phase
+;;
+;; Adds a digital clock and the current moon phase, if you want a cosmic touch
+;; on your modeline. These segments require dynamic updates and extra packages.
+;;
 ;; --------------------------------------------------------------------------
 ;; Accurate moon-phase helper (uses calendar.el + lunar.el).
 ;; Caches result for the current calendar date, so heavy astronomy
@@ -262,6 +319,10 @@ N c Q g F G q C  (new, crescent, 1-st quarter, gibbous, full …)."
                                     (propertize moon 'face 'shaoline-moon-face))))
 
 ;; ----------------------------------------------------------------------------
+;; "Raindrop on a Leaf" — Buffer Modified Indicator
+;;
+;; Shows a "*" if the buffer has unsaved changes—simple, universal.
+;; ----------------------------------------------------------------------------
 ;; Modified status.
 
 (shaoline-define-simple-segment shaoline-segment-modified
@@ -270,6 +331,10 @@ N c Q g F G q C  (new, crescent, 1-st quarter, gibbous, full …)."
                                            (buffer-file-name))
                                   (propertize "*" 'face 'shaoline-modified-face)))
 
+;; ----------------------------------------------------------------------------
+;; "Island of Calm" — Visual Spacer
+;;
+;; A blank segment, used to pad the modeline or separate components.
 ;; ----------------------------------------------------------------------------
 ;; Visual spacer.
 
@@ -280,6 +345,10 @@ N c Q g F G q C  (new, crescent, 1-st quarter, gibbous, full …)."
 (shaoline-define-simple-segment shaoline-segment-position
                                 "Show current line and column position."
                                 (propertize (format "%d:%d" (line-number-at-pos) (current-column)) 'face 'shaoline-mode-face))
+
+;; ----------------------------------------------------------------------------
+;; Each stone in its place, each segment a reflection on the pond.
+;; Extend the modeline garden with your own well-crafted segments.
 
 ;; ----------------------------------------------------------------------------
 ;; Encoding and EOL.
@@ -298,9 +367,12 @@ N c Q g F G q C  (new, crescent, 1-st quarter, gibbous, full …)."
                                     (propertize (format "%s %s" coding eol) 'face 'shaoline-mode-face))))
 
 ;; ----------------------------------------------------------------------------
-;; Minor modes summary (compact).
+;; Minor Modes Summary (Compact)
+;;
+;; Displays icons for important or special minor-modes like read-only, flycheck, etc.
+;; Customize `shaoline-minor-modes-icon-map` for your needs.
 (defface shaoline-minor-modes-face
-  '((t :inherit (shaoline-base-face) :height 0.7 :foreground "gray60"))
+  '((t :inherit (shaoline-base-face) :height 0.8 :foreground "gray60"))
   "Face for the minor modes segment in Shaoline (smaller)."
   :group 'shaoline)
 
@@ -315,8 +387,6 @@ N c Q g F G q C  (new, crescent, 1-st quarter, gibbous, full …)."
     ("editorconfig-mode"         . "☰")
     ("god-mode"                  . "🧘")
     ("god-local-mode"            . "🧘")
-    ("corfu-mode"                . "⚇")
-    ("vertico-mode"              . "V")
     ("projectile-mode"           . "🚀")
     ("envrc-mode"                . "⛺")
     ("flyspell-mode"             . "🔤")
@@ -370,12 +440,14 @@ Set and extend what to show via `shaoline-minor-modes-icon-map'."
                                                minor-mode-list))))
                                   (when modes
                                     (propertize
-                                     (concat "" (mapconcat #'identity modes "") "")
+                                     (concat "(" (mapconcat #'identity modes "") ")")
                                      'face 'shaoline-minor-modes-face))))
 
 
 ;; ----------------------------------------------------------------------------
-;; Flycheck/Flymake status (errors/warnings).
+;; Flycheck/Flymake Status (Errors/Warnings)
+;;
+;; Displays current linting/compiler errors and warnings count for feedback.
 
 (shaoline-define-simple-segment shaoline-segment-flycheck
                                 "Show Flycheck/Flymake error and warning counts if available."
@@ -396,7 +468,9 @@ Set and extend what to show via `shaoline-minor-modes-icon-map'."
                                  (t "")))
 
 ;; ----------------------------------------------------------------------------
-;; VCS state extension (Git dirty/clean/basic symbol).
+;; VCS State Extension (Git indicator)
+;;
+;; Quickly shows whether the buffer is edited, added, removed, etc. in git.
 
 (shaoline-define-simple-segment shaoline-segment-vcs-state
                                 "Show Git status short indicator (+ for unstaged, ! for unstaged+staged, nothing for clean)."
@@ -411,7 +485,10 @@ Set and extend what to show via `shaoline-minor-modes-icon-map'."
                                       (`up-to-date "")
                                       (_ "")))))
 
-;; Input method (layout/language indicator)
+;; ----------------------------------------------------------------------------
+;; Input Method (Layout/Language Indicator)
+;;
+;; Indicates active input method, such as "EN" for English or a code for the current layout.
 (shaoline-define-simple-segment shaoline-segment-input-method
                                 "Show current input method title (layout) if any, else 'EN'."
                                 (let ((indicator
