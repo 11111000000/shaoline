@@ -55,7 +55,7 @@
                                            (featurep 'all-the-icons)
                                            major-mode)
                                   (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
-                                  (all-the-icons-icon-for-mode major-mode :height 0.9)))
+                                  (all-the-icons-icon-for-mode major-mode :height 0.8)))
 
 ;; ----------------------------------------------------------------------------
 ;; "Neighboring Garden" — Project Name, if available (TTL-cached)
@@ -260,8 +260,6 @@ Falls back to 0 on any error; result is cached for the day."
                  (mod (floor (* age (/ 8.0 shaoline--synodic-month))) 8)))))
         (setq shaoline--moon-cache (cons today (or idx 0)))
         (cdr shaoline--moon-cache)))))
-
-
 
 (shaoline-define-simple-segment shaoline-segment-digital-clock
                                 "Show current digital clock, e.g. ' 21:43 '."

@@ -95,24 +95,49 @@ Shaoline по умолчанию подходит для большинства 
 
 Переменные для медитации:
 
-| Переменная                         | По умолчанию | Значение                                                     |
-|-------------------------------------|-------------|--------------------------------------------------------------|
-| shaoline-enable-dynamic-segments    | t           | nil → отключить все таймеры и внешние ~require~’ы            |
-| shaoline-timer-interval             | 1           | Секунд между обновлениями (если таймер реально есть)         |
-| shaoline-always-visible             | t           | Если не nil — Shaoline не исчезает при (message ...)         |
-| shaoline-message-timeout            | 10          | Сек после ~message~ (если always-visible=nil)                |
-| shaoline-project-name-ttl           | 2           | Сколько секунд кэшировать имя проекта (TTL, меньше — чаще IO)|
-| shaoline-battery-ttl                | 5           | Секунд для кэша батареи (TTL, меньше — чаще dbus/IO)         |
-| shaoline-autohide-modeline          | t           | Скрыть старую mode-line глобально                            |
-| shaoline-exclude-modes              | list        | Режимы, где пояс остаётся                                    |
-| shaoline-update-hooks               | list        | Хуки, вызывающие пересчёт (по умолч. post-command и др.)     |
-| shaoline-right-padding              | 0           | Пробелы после правого сегмента                               |
-| shaoline-debug                      | nil         | Логировать в */shaoline-logs/*                               |
+| Переменная                       | По умолчанию | Значение                                                      |
+|----------------------------------+--------------+---------------------------------------------------------------|
+| shaoline-enable-dynamic-segments | t            | nil → отключить все таймеры и внешние ~require~’ы             |
+| shaoline-timer-interval          | 1            | Секунд между обновлениями (если таймер реально есть)          |
+| shaoline-always-visible          | t            | Если не nil — Shaoline не исчезает при (message ...)          |
+| shaoline-enable-hooks            | t            | nil → отключить все автоперерисовки (только ручные)           |
+| shaoline-attach-advices          | t            | (НОВОЕ) nil → не подключать advice на message/warning         |
+| shaoline-attach-hooks            | t            | (НОВОЕ) nil → не добавлять/убирать *никаких* хуков              |
+| shaoline-message-timeout         | 10           | Сек после ~message~ (если always-visible=nil)                   |
+| shaoline-project-name-ttl        | 2            | Сколько секунд кэшировать имя проекта (TTL, меньше — чаще IO) |
+| shaoline-battery-ttl             | 5            | Секунд для кэша батареи (TTL, меньше — чаще dbus/IO)          |
+| shaoline-autohide-modeline       | t            | Скрыть старую mode-line глобально                             |
+| shaoline-exclude-modes           | list         | Режимы, где пояс остаётся                                     |
+| shaoline-update-hooks            | list         | Хуки, вызывающие пересчёт (по умолч. post-command и др.)      |
+| shaoline-right-padding           | 0            | Пробелы после правого сегмента                                |
+| shaoline-debug                   | nil          | Логировать в */shaoline-logs/*                                  |
 
 Интерактивная настройка:  
 =M-x customize-group RET shaoline RET=
 
 Чем меньше настроек — тем ближе к Пустоте.
+
+** Чистейший режим: полный контроль над хуками, advice и динамикой (таймерами)
+
+Для максимальной “функциональной чистоты” или полной ручной работы Shaoline теперь поддерживает все необходимые переключатели:
+
+#+begin_src emacs-lisp
+(setq shaoline-enable-hooks nil               ;; отключить автоматические обновления по событиям
+      shaoline-always-visible nil             ;; классическое поведение сообщений (echo)
+      shaoline-enable-dynamic-segments nil    ;; отключить таймеры и require-tяжёлых сегментов
+      shaoline-attach-advices nil             ;; (НОВОЕ) не подключать advice ни к каким функциям
+      shaoline-attach-hooks nil)              ;; (НОВОЕ) не добавлять/убирать глобальные хуки совсем
+(shaoline-mode 1)
+;; Теперь обновление происходит только вручную:
+(global-set-key (kbd "<f8>") #'shaoline--update) ;; либо добавьте в свой хук или меню
+#+end_src
+
+- Если потребуется *полностью* убрать все эффекты Shaoline (к примеру, после сторонних включений), вызовите:
+  #+begin_src emacs-lisp
+  (shaoline-purge-infra)
+  #+end_src
+
+Полный контроль, абсолютная предсказуемость.
 
 * TTL-кэш тяжёлых сегментов
 

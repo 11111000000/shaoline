@@ -163,25 +163,18 @@ Never clears if already empty or a suppression is in effect."
   :global t
   :lighter ""
   (if shaoline-mode
-      (progn
-        (require 'shaoline)
-        (when shaoline-autohide-modeline
-          (shaoline--autohide-modeline-globally))
-        ;; Backup and disable vertical resizing of the echo area
-        (setq shaoline--resize-mini-windows-backup resize-mini-windows)
-        (setq resize-mini-windows nil)
-        ;; All hooks and timers are orchestrated in shaoline-events.el
-        (shaoline--update)
-        )
-    ;; turn off
-    ;; All hooks/timers are torn down in shaoline-events.el
-    (shaoline--clear-display)
-    (when shaoline-autohide-modeline
-      (shaoline--unhide-modeline-globally))
-    ;; Restore minibuffer resize behavior
-    (when shaoline--resize-mini-windows-backup
-      (setq resize-mini-windows shaoline--resize-mini-windows-backup)
-      (setq shaoline--resize-mini-windows-backup nil))))
+      (progn (require 'shaoline)
+             (when shaoline-autohide-modeline
+               (shaoline--autohide-modeline-globally))
+             (setq shaoline--resize-mini-windows-backup resize-mini-windows)
+             (setq resize-mini-windows nil)
+             (shaoline--update))
+    (progn (shaoline--clear-display)
+           (when shaoline-autohide-modeline
+             (shaoline--unhide-modeline-globally))
+           (when shaoline--resize-mini-windows-backup
+             (setq resize-mini-windows shaoline--resize-mini-windows-backup)
+             (setq shaoline--resize-mini-windows-backup nil)))))
 
 (provide 'shaoline-infra)
 ;;; shaoline-infra.el ends here

@@ -90,6 +90,28 @@ full duration before Shaoline repaints."
   :type 'boolean
   :group 'shaoline)
 
+(defcustom shaoline-enable-hooks t
+  "If non-nil, enable all update hooks (post-command, etc.) for Shaoline.
+When disabled, Shaoline will not automatically update on events — you must
+call `shaoline--update' manually for changes to appear.
+
+Set to nil for a pure, hook-free mode (manual refreshes only)."
+  :type 'boolean
+  :group 'shaoline)
+
+(defcustom shaoline-attach-advices t
+  "If non-nil, attach advices (message interception, display-warning, etc.).
+Set to nil to completely avoid adding/removing any Shaoline advices.
+For ultimate purity or troubleshooting only."
+  :type 'boolean
+  :group 'shaoline)
+
+(defcustom shaoline-attach-hooks t
+  "If non-nil, attach Shaoline update hooks; if nil, hooks will NOT be added/removed,
+even if `shaoline-enable-hooks' is t. Useful for advanced users."
+  :type 'boolean
+  :group 'shaoline)
+
 (defvar shaoline--log-buffer "*shaoline-logs*"
   "Debug buffer for logs. Quiet scroll, if you wish to listen.")
 
@@ -439,10 +461,6 @@ If its contents get shorter, the gap appears *to the left* of the rightmost char
     (condition-case err
         (load user-file nil t)
       (error (shaoline--log "Could not load user segments: %s" err)))))
-
-;; ----------------------------------------------------------------------------
-;; Load infrastructure lazily when mode is enabled (avoids circular deps).
-;; This is a stub; actual minor mode is in shaoline-infra.el and autoloaded.
 
 (provide 'shaoline)
 ;;; shaoline.el ends here

@@ -101,46 +101,60 @@ If called repeatedly, only update after 0.12s delay."
 
 (defun shaoline-events-enable ()
   "Enable all Shaoline global hooks, advices and timers for impure infrastructure."
-  ;; Message advice.
-  (advice-add #'message            :filter-args   #'shaoline--capture-message-args)
-  (advice-add #'message            :filter-return #'shaoline--capture-message-ret)
-  (advice-add #'display-warning    :around        #'shaoline--around-display-warning)
-  (advice-add #'minibuffer-message :around        #'shaoline--around-minibuffer-message)
-  ;; Update hooks (with/without debounce)
-  (dolist (hook shaoline-update-hooks)
-    (add-hook hook (if (eq hook 'post-command-hook)
-                       #'shaoline--update
-                     #'shaoline--debounced-update)))
-  ;; Pre-minibuffer and isearch hooks to clear/restore display
-  (add-hook 'minibuffer-setup-hook    #'shaoline--clear-display)
-  (add-hook 'minibuffer-exit-hook     #'shaoline--update)
-  (add-hook 'isearch-mode-hook        #'shaoline--clear-display)
-  (add-hook 'isearch-mode-end-hook    #'shaoline--update)
-  ;; Predictive clear on pre-command (before minibuffer-activating commands)
-  (add-hook 'pre-command-hook         #'shaoline--predictive-clear)
+  ;; Message advice (only if always-visible *and* advices enabled).
+  (when (and shaoline-attach-advices shaoline-always-visible)
+    (advice-add #'message            :filter-args   #'shaoline--capture-message-args)
+    (advice-add #'message            :filter-return #'shaoline--capture-message-ret)
+    (advice-add #'display-warning    :around        #'shaoline--around-display-warning)
+    (advice-add #'minibuffer-message :around        #'shaoline--around-minibuffer-message))
+  ;; Update hooks (with/without debounce) — only if enabled and hooks allowed.
+  (when (and shaoline-enable-hooks shaoline-attach-hooks)
+    (dolist (hook shaoline-update-hooks)
+      (add-hook hook (if (eq hook 'post-command-hook)
+                         #'shaoline--update
+                       #'shaoline--debounced-update)))
+    ;; Pre-minibuffer and isearch hooks to clear/restore display
+    (add-hook 'minibuffer-setup-hook    #'shaoline--clear-display)
+    (add-hook 'minibuffer-exit-hook     #'shaoline--update)
+    (add-hook 'isearch-mode-hook        #'shaoline--clear-display)
+    (add-hook 'isearch-mode-end-hook    #'shaoline--update)
+    ;; Predictive clear on pre-command (before minibuffer-activating commands)
+    (add-hook 'pre-command-hook         #'shaoline--predictive-clear))
   ;; Start periodic timer if needed
-  (shaoline--maybe-start-timer))
+  (when shaoline-enable-dynamic-segments
+    (shaoline--maybe-start-timer)))
 
 (defun shaoline-events-disable ()
   "Disable all Shaoline global hooks, advices and timers for impure infrastructure."
-  (advice-remove #'message            #'shaoline--capture-message-args)
-  (advice-remove #'message            #'shaoline--capture-message-ret)
-  (advice-remove #'display-warning    #'shaoline--around-display-warning)
-  (advice-remove #'minibuffer-message #'shaoline--around-minibuffer-message)
-  (dolist (hook shaoline-update-hooks)
-    (remove-hook hook (if (eq hook 'post-command-hook)
-                          #'shaoline--update
-                        #'shaoline--debounced-update)))
-  (remove-hook 'minibuffer-setup-hook    #'shaoline--clear-display)
-  (remove-hook 'minibuffer-exit-hook     #'shaoline--update)
-  (remove-hook 'isearch-mode-hook        #'shaoline--clear-display)
-  (remove-hook 'isearch-mode-end-hook    #'shaoline--update)
-  (remove-hook 'pre-command-hook         #'shaoline--predictive-clear)
+  ;; Advice always removed (if advices were enabled).
+  (when shaoline-attach-advices
+    (advice-remove #'message            #'shaoline--capture-message-args)
+    (advice-remove #'message            #'shaoline--capture-message-ret)
+    (advice-remove #'display-warning    #'shaoline--around-display-warning)
+    (advice-remove #'minibuffer-message #'shaoline--around-minibuffer-message))
+  ;; Hooks — only if they were enabled and allowed.
+  (when shaoline-attach-hooks
+    (dolist (hook shaoline-update-hooks)
+      (remove-hook hook (if (eq hook 'post-command-hook)
+                            #'shaoline--update
+                          #'shaoline--debounced-update)))
+    (remove-hook 'minibuffer-setup-hook    #'shaoline--clear-display)
+    (remove-hook 'minibuffer-exit-hook     #'shaoline--update)
+    (remove-hook 'isearch-mode-hook        #'shaoline--clear-display)
+    (remove-hook 'isearch-mode-end-hook    #'shaoline--update)
+    (remove-hook 'pre-command-hook         #'shaoline--predictive-clear))
   (shaoline--maybe-cancel-timer)
   ;; Cancel debounce timer
   (when (timerp shaoline--debounce-timer)
     (cancel-timer shaoline--debounce-timer)
     (setq shaoline--debounce-timer nil)))
+
+(defun shaoline-purge-infra ()
+  "Completely remove all Shaoline hooks, advice, and timers regardless of settings.
+For emergency/manual cleanup."
+  (let ((shaoline-attach-advices t)
+        (shaoline-attach-hooks t))
+    (shaoline-events-disable)))
 
 (provide 'shaoline-events)
 ;;; shaoline-events.el ends here

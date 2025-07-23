@@ -103,20 +103,22 @@ Right side segment order is now: position, then project name, VCS, battery, inpu
 
 Variables worth chanting over:
 
-| Variable                         | Default | Meaning                                                             |
-|----------------------------------+---------+---------------------------------------------------------------------|
-| =shaoline-enable-dynamic-segments= | t       | Disable to drop *all* timers & external ~require~s.                   |
-| =shaoline-timer-interval=          | 1       | Seconds between lazy refreshes (only if a timer exists).            |
-| =shaoline-always-visible=          | t       | If non-nil, Shaoline remains visible even when `message` is called. |
-| =shaoline-autohide-modeline=       | t       | Hide the old mode-line globally.                                    |
-| =shaoline-exclude-modes=           | list    | Major modes that keep their belt.                                   |
-| =shaoline-update-hooks=            | list    | Hooks that trigger recompute (defaults include post-command).       |
-| =shaoline-message-timeout=         | 10      | (Advanced) Seconds to wait before re-showing Shaoline after user    |
-|                                  |         | message if always-visible is nil.                                   |
-| =shaoline-project-name-ttl=        | 2       | TTL (seconds) to cache the project-name segment (less disk I/O).    |
-| =shaoline-battery-ttl=             | 5       | TTL (seconds) to cache the battery segment (fewer DBus/syscalls).   |
-| =shaoline-right-padding=           | 0       | Extra spaces after the right segment.                               |
-| =shaoline-debug=                   | nil     | Log to */shaoline-logs/* buffer.                                      |
+| Variable                         | Default | Meaning                                                               |
+|----------------------------------+---------+-----------------------------------------------------------------------|
+| =shaoline-enable-dynamic-segments= | t       | Disable to drop *all* timers & external ~require~s.                     |
+| =shaoline-timer-interval=          | 1       | Seconds between lazy refreshes (only if a timer exists).              |
+| =shaoline-always-visible=          | t       | If non-nil, Shaoline remains visible even when `message` is called.   |
+| =shaoline-enable-hooks=            | t       | If nil, disable all update hooks; manual `shaoline--update` required. |
+| =shaoline-autohide-modeline=       | t       | Hide the old mode-line globally.                                      |
+| =shaoline-exclude-modes=           | list    | Major modes that keep their belt.                                     |
+| =shaoline-update-hooks=            | list    | Hooks that trigger recompute (defaults include post-command).         |
+| =shaoline-message-timeout=         | 10      | (Advanced) Seconds to wait before re-showing Shaoline after user      |
+|                                  |         | message if always-visible is nil.                                     |
+| =shaoline-project-name-ttl=        | 2       | TTL (seconds) to cache the project-name segment (less disk I/O).      |
+| =shaoline-battery-ttl=             | 5       | TTL (seconds) to cache the battery segment (fewer DBus/syscalls).     |
+| =shaoline-right-padding=           | 0       | Extra spaces after the right segment.                                 |
+| =shaoline-debug=                   | nil     | Log to */shaoline-logs/* buffer.                                        |
+
 
 Interactively customise with:
 
@@ -125,6 +127,27 @@ M-x customize-group RET shaoline RET
 #+end_src
 
 Remember: the fewer settings you touch, the closer you are to Emptiness.
+** NEW: Pure Mode — Total Control Over Hooks, Advice, and Timers
+
+For ultimate purity or full manual control (total “Wu Wei” style), Shaoline exposes several settings:
+
+#+begin_src emacs-lisp
+(setq shaoline-enable-hooks nil               ;; No automatic event-driven updates
+      shaoline-always-visible nil             ;; Don't override messages; classic echo
+      shaoline-enable-dynamic-segments nil    ;; No timers/dynamic segments or external requires
+      shaoline-attach-advices nil             ;; (NEW) Don't hook advice on message/warnings
+      shaoline-attach-hooks nil)              ;; (NEW) Don't add/remove *any* global hooks
+(shaoline-mode 1)
+;; Now update only via (shaoline--update) when you desire:
+(global-set-key (kbd "<f8>") #'shaoline--update) ;; Or add to a personal hook
+#+end_src
+
+- If you later want to *completely clean up* any left-over hooks/advice (e.g. after toggling modes off/on via code), use:
+  #+begin_src emacs-lisp
+  (shaoline-purge-infra)
+  #+end_src
+
+This lets you control Shaoline’s “worldly effects” finely: use only what you want, when you want, with zero surprises.
 
 * TTL-caching of heavy segments
 
