@@ -6,7 +6,7 @@ TITLE: Shaoline – Modeline of Nothingness
 
 #+begin_quote
 “The mode-line that can be seen is not the eternal mode-line.”  
-  — Lao-Tse, ~Emacs 27+ edition~
+  — Lao-Tse, ~Emacs 27+ edition~
 #+end_quote
 
 #+ATTR_ORG: :width 80%
@@ -23,7 +23,7 @@ To walk its Dao, do nothing; all gets done.
 
 #+begin_quote
 “When nothing is done, nothing remains undone.”  
-  — Tao Te Ching, §48
+  — Tao Te Ching, §48
 #+end_quote
 
 ---
@@ -58,7 +58,7 @@ Curious? Let the water flow on.
 #+begin_quote
 Student: “Master, how many dependencies does Shaoline have?”  
 Master: “Mu.”  
-— classic koan
+  — classic koan
 #+end_quote
 
 ---
@@ -363,7 +363,7 @@ https://github.com/11111000000/shaoline
 
 #+begin_quote
 “If you meet the maintainer on the road, invite him for noodles.”  
-— Zen proverb
+  — Zen proverb
 #+end_quote
 
 ---
@@ -374,6 +374,4 @@ MIT. Copy it, fork it, glue it to a kite and let it fly.
 
 ---
 
-End of scroll. Close this buffer, breathe in, return to code.  
-The true treasure is the friends we made on the Way…  
-and a well-placed koan.
+End of scroll. Close this buffer, breathe in, return to code. 
