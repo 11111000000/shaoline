@@ -22,19 +22,7 @@
 (require 'cl-lib)                    ; for cl-member etc.
 
 ;; ----------------------------------------------------------------------------
-;; Customization: here dwell options with effects.
-
-(defcustom shaoline-timer-interval 1
-  "Interval (seconds) for Shaoline’s optional periodic refresh.
-Only used when dynamic segments such as time/battery are present."
-  :type 'number
-  :group 'shaoline)
-
-(defcustom shaoline-message-timeout 10
-  "How many seconds a normal `message' remains before Shaoline redraws.
-If non-positive, Shaoline repaints immediately after the `message'."
-  :type 'number
-  :group 'shaoline)
+;; Customization: timer/message defcustom moved to shaoline.el for proper user customization.
 
 ;; ----------------------------------------------------------------------------
 ;; Helpers for hiding the classic mode-line.

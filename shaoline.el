@@ -208,6 +208,23 @@ You can exclude certain major-modes from hiding using `shaoline-exclude-modes`."
   :group 'shaoline)
 
 ;; ----------------------------------------------------------------------------
+;; Timer, Message Customization (moved from infra)
+;;
+;; All user-facing options should be here for discoverability.
+
+(defcustom shaoline-timer-interval 1
+  "Interval (seconds) for Shaoline’s optional periodic refresh.
+Only used when dynamic segments such as time/battery are present."
+  :type 'number
+  :group 'shaoline)
+
+(defcustom shaoline-message-timeout 10
+  "How many seconds a normal `message' remains before Shaoline redraws.
+If non-positive, Shaoline repaints immediately after the `message'."
+  :type 'number
+  :group 'shaoline)
+
+;; ----------------------------------------------------------------------------
 ;; Faces
 ;;
 ;; Outward form: all faces dwell here.
