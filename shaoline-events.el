@@ -99,6 +99,10 @@ If called repeatedly, only update after 0.12s delay."
     (unless should-keep
       (shaoline--maybe-cancel-timer))))
 
+(defun shaoline--delayed-update ()
+  "Schedule a slightly delayed update to prevent blinking or disappearing after minibuffer/isearch."
+  (run-with-idle-timer 0.1 nil #'shaoline--update))
+
 (defun shaoline-events-enable ()
   "Enable all Shaoline global hooks, advices and timers for impure infrastructure."
   ;; Message advice (only if always-visible *and* advices enabled).
@@ -115,11 +119,13 @@ If called repeatedly, only update after 0.12s delay."
                        #'shaoline--debounced-update)))
     ;; Pre-minibuffer and isearch hooks to clear/restore display
     (add-hook 'minibuffer-setup-hook    #'shaoline--clear-display)
-    (add-hook 'minibuffer-exit-hook     #'shaoline--update)
+    (add-hook 'minibuffer-exit-hook     #'shaoline--delayed-update)
     (add-hook 'isearch-mode-hook        #'shaoline--clear-display)
-    (add-hook 'isearch-mode-end-hook    #'shaoline--update)
+    (add-hook 'isearch-mode-end-hook    #'shaoline--delayed-update)
     ;; Predictive clear on pre-command (before minibuffer-activating commands)
-    (add-hook 'pre-command-hook         #'shaoline--predictive-clear))
+    (add-hook 'pre-command-hook         #'shaoline--predictive-clear)
+    ;; Focus-in for restoring after frame focus changes
+    (add-hook 'focus-in-hook            #'shaoline--debounced-update))
   ;; Start periodic timer if needed
   (when shaoline-enable-dynamic-segments
     (shaoline--maybe-start-timer)))
@@ -139,10 +145,11 @@ If called repeatedly, only update after 0.12s delay."
                             #'shaoline--update
                           #'shaoline--debounced-update)))
     (remove-hook 'minibuffer-setup-hook    #'shaoline--clear-display)
-    (remove-hook 'minibuffer-exit-hook     #'shaoline--update)
+    (remove-hook 'minibuffer-exit-hook     #'shaoline--delayed-update)
     (remove-hook 'isearch-mode-hook        #'shaoline--clear-display)
-    (remove-hook 'isearch-mode-end-hook    #'shaoline--update)
-    (remove-hook 'pre-command-hook         #'shaoline--predictive-clear))
+    (remove-hook 'isearch-mode-end-hook    #'shaoline--delayed-update)
+    (remove-hook 'pre-command-hook         #'shaoline--predictive-clear)
+    (remove-hook 'focus-in-hook            #'shaoline--debounced-update))
   (shaoline--maybe-cancel-timer)
   ;; Cancel debounce timer
   (when (timerp shaoline--debounce-timer)

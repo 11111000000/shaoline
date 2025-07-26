@@ -50,12 +50,19 @@
 ;; Major-mode icon only (without text).
 
 (shaoline-define-simple-segment shaoline-segment-major-mode-icon
-                                "Only the all-the-icons glyph that corresponds to `major-mode'."
-                                (when (and shaoline-enable-dynamic-segments
-                                           (featurep 'all-the-icons)
-                                           major-mode)
+                                "Show major mode icon in GUI, mode name text in TTY or if icon unavailable."
+                                (cond
+                                 ;; GUI and icons available: show icon
+                                 ((and (display-graphic-p)
+                                       shaoline-enable-dynamic-segments
+                                       (featurep 'all-the-icons)
+                                       major-mode)
                                   (unless (featurep 'all-the-icons) (require 'all-the-icons nil t))
-                                  (all-the-icons-icon-for-mode major-mode :height 0.8)))
+                                  (all-the-icons-icon-for-mode major-mode :height 0.8))
+                                 ;; TTY or no icons: show mode name only
+                                 (major-mode
+                                  (propertize (format-mode-line mode-name) 'face 'shaoline-mode-face))
+                                 (t "")))
 
 ;; ----------------------------------------------------------------------------
 ;; "Neighboring Garden" — Project Name, if available (TTL-cached)
@@ -274,17 +281,16 @@ Falls back to 0 on any error; result is cached for the day."
                                 (shaoline-segment-digital-clock))
 
 (shaoline-define-simple-segment shaoline-segment-moon-phase
-                                "Show current moon phase as an icon.
-In GUI frames use the Unicode glyphs 🌑…🌘.
-In TTY (or when glyphs are unavailable) fall back to simple ASCII:
-N c Q g F G q C  (new, crescent, 1-st quarter, gibbous, full …)."
+                                "Show current moon phase as an icon or letters.
+In GUI frames: Unicode glyph (🌑…🌘).
+In TTY: letters N, FQ, F, G, F, G, LQ, C."
                                 (if (not shaoline-enable-dynamic-segments)
                                     ""
                                   (let* ((idx (shaoline--moon-phase-idx))
-                                         (icons (if (display-graphic-p)
-                                                    ["🌑" "🌒" "🌓" "🌔" "🌕" "🌖" "🌗" "🌘"] ; GUI / Unicode
-                                                  ["N"  "c"  "Q"  "g"  "F"  "G"  "q"  "C"])) ; TTY / ASCII
-                                         (moon (aref icons idx)))
+                                         (moon
+                                          (if (display-graphic-p)
+                                              (aref ["🌑" "🌒" "🌓" "🌔" "🌕" "🌖" "🌗" "🌘"] idx)
+                                            (aref ["N" "FQ" "F" "G" "F" "G" "LQ" "C"] idx))))
                                     (propertize moon 'face 'shaoline-moon-face))))
 
 ;; ----------------------------------------------------------------------------
@@ -341,9 +347,50 @@ N c Q g F G q C  (new, crescent, 1-st quarter, gibbous, full …)."
 ;; Displays icons for important or special minor-modes like read-only, flycheck, etc.
 ;; Customize `shaoline-minor-modes-icon-map` for your needs.
 (defface shaoline-minor-modes-face
-  '((t :inherit (shaoline-base-face) :height 0.7 :foreground "gray60"))
+  '((t :inherit (shaoline-base-face) :height 0.8 :foreground "gray60"))
   "Face for the minor modes segment in Shaoline (smaller)."
   :group 'shaoline)
+
+;; TTY: textual fallback mapping for minor mode names -> short strings
+(defconst shaoline-minor-modes-tty-map
+  '(("read-only-mode"            . "RO")
+    ("overwrite-mode"            . "OL")
+    ("auto-save-mode"            . "AS")
+    ("aggressive-indent-mode"    . "AI")
+    ("abbrev-mode"               . "AB")
+    ("company-mode"              . "CO")
+    ("yas-minor-mode"            . "YS")
+    ("evil-mode"                 . "EV")
+    ("smartparens-mode"          . "SP")
+    ("show-paren-mode"           . "SP")
+    ("rainbow-mode"              . "RB")
+    ("undo-tree-mode"            . "UT")
+    ("which-key-mode"            . "WK")
+    ("electric-pair-mode"        . "EP")
+    ("hl-line-mode"              . "HL")
+    ("display-line-numbers-mode" . "LN")
+    ("org-indent-mode"           . "OI")
+    ("visual-line-mode"          . "VL")
+    ("ws-butler-mode"            . "WS")
+    ("indent-tabs-mode"          . "IT")
+    ("editorconfig-mode"         . "EC")
+    ("god-mode"                  . "GO")
+    ("god-local-mode"            . "GL")
+    ("projectile-mode"           . "PJ")
+    ("envrc-mode"                . "EN")
+    ("flyspell-mode"             . "FS")
+    ("spell-fu-mode"             . "SF")
+    ("lsp-mode"                  . "LS")
+    ("eglot-managed-mode"        . "EG")
+    ("flycheck-mode"             . "FC")
+    ("flymake-mode"              . "FM")
+    ("gptel-mode"                . "GT")
+    ("gptel-aibo-mode"           . "GB")
+    ("org-drill-mode"            . "OD")
+    ("olivetti-mode"             . "OL")
+    ("org-fancy-priorities-mode" . "OP")
+    ("org-auto-tangle-mode"      . "OT"))
+  "Mapping minor mode variable names (as strings) to short 1-3 letter identifiers for Shaoline on TTY.")
 
 (defcustom shaoline-minor-modes-icon-map
   '(("read-only-mode"            . "🛡️")     ;; shield for read-only
@@ -417,29 +464,51 @@ Customize this to control which minor modes are shown and what icons are used."
   :group 'shaoline)
 
 (shaoline-define-simple-segment shaoline-segment-minor-modes
-                                "Show ONLY critically important minor modes, icons as Unicode emoji/symbols (with deterministic color, c 0.5s)."
+                                "Show enabled minor modes: icons (GUI), abbreviations or upcased initials (TTY)."
                                 (let ((now (float-time)))
                                   (if (and shaoline--minor-modes-cache-str
                                            (< (- now shaoline--minor-modes-cache-ts) shaoline-minor-modes-cache-ttl))
                                       shaoline--minor-modes-cache-str
-                                    (let* ((icon-map shaoline-minor-modes-icon-map)
+                                    (let* ((graphical (display-graphic-p))
+                                           (icon-map shaoline-minor-modes-icon-map)
+                                           (tty-map shaoline-minor-modes-tty-map)
                                            (seen (make-hash-table :test 'equal))
                                            (modes
                                             (delq nil
                                                   (mapcar
-                                                   (lambda (sym)
-                                                     (let* ((name (symbol-name sym))
-                                                            (icon (cdr (assoc name icon-map))))
-                                                       (when (and icon
-                                                                  (boundp sym)
-                                                                  (symbol-value sym)
-                                                                  (not (gethash name seen)))
+                                                   (lambda (mm)
+                                                     (let* ((var-sym (car mm))
+                                                            (enabled (and (boundp var-sym) (symbol-value var-sym)))
+                                                            (name    (symbol-name var-sym)))
+                                                       (when (and enabled (not (gethash name seen)))
                                                          (puthash name t seen)
-                                                         (propertize icon 'face (shaoline--minor-mode-get-face name)))))
-                                                   minor-mode-list))))
-                                      (let ((str (when modes
-                                                   (propertize (concat "(" (mapconcat #'identity modes "") ")")
-                                                               'face 'shaoline-minor-modes-face))))
+                                                         (if graphical
+                                                             (let ((icon (cdr (assoc name icon-map))))
+                                                               (when icon
+                                                                 (propertize icon 'face (shaoline--minor-mode-get-face name))))
+                                                           ;; TTY: text abbreviation
+                                                           (let ((text (cdr (assoc name tty-map))))
+                                                             (let ((abbrev
+                                                                    (or text
+                                                                        (let* ((words (split-string name "-"))
+                                                                               ;; Remove boilerplate words
+                                                                               (main (cl-remove-if (lambda (w)
+                                                                                                     (member w '("mode" "minor" "global" ""))) words))
+                                                                               (abbr (mapconcat (lambda (w)
+                                                                                                  (upcase (substring w 0 (min 2 (length w)))))
+                                                                                                main "")))
+                                                                          (cond ((> (length abbr) 0) abbr)
+                                                                                ((>= (length name) 2) (upcase (substring name 0 2)))
+                                                                                (t (upcase name)))))))
+                                                               (when (and abbrev (stringp abbrev) (> (length abbrev) 0))
+                                                                 (propertize abbrev 'face 'shaoline-minor-modes-face))))))))
+                                                   ;; Use minor-mode-alist: covers all enabled visible minor modes.
+                                                   minor-mode-alist))))
+                                      (let* ((clean-modes (delq nil (cl-remove-if-not #'stringp modes)))
+                                             (str (if (and clean-modes (> (length clean-modes) 0))
+                                                      (propertize (concat "(" (mapconcat #'identity clean-modes " ") ")")
+                                                                  'face 'shaoline-minor-modes-face)
+                                                    "")))
                                         (setq shaoline--minor-modes-cache-str str
                                               shaoline--minor-modes-cache-ts now)
                                         str)))))
