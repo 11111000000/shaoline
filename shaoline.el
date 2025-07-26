@@ -159,8 +159,8 @@ Zen masters say: A log unread is a tree falling in a silent forest."
      shaoline-segment-git-branch
      shaoline-segment-battery
      shaoline-segment-input-method
+     (shaoline-segment-day-date :with-year nil)
      shaoline-segment-digital-clock
-     (shaoline-segment-day-date :with-year t)
      shaoline-segment-moon-phase))
 
   "Alist describing segments for :left, :center and :right.

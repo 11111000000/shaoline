@@ -290,14 +290,16 @@ When nil, omits year (e.g., 'понедельник, 29.07')."
   :type 'boolean
   :group 'shaoline)
 
-;; Localized day and date segment with :with-year argument
-(shaoline-define-segment shaoline-segment-day-date (&optional with-year)
-  "Show the current day of the week and date, localized. If WITH-YEAR is non-nil, includes year.
-To set default globally, customize `shaoline-day-date-with-year'."
+;; Localized day and date segment with :with-year plist parameter
+(shaoline-define-segment shaoline-segment-day-date (&rest args)
+  "Show the current day of the week and date, localized.
+Accepts keyword argument :with-year. If non-nil, includes year. Example:
+   (shaoline-segment-day-date :with-year t)
+If omitted, uses `shaoline-day-date-with-year' as default."
   (if (not shaoline-enable-dynamic-segments)
       ""
-    (let* ((with-year (if (null with-year) shaoline-day-date-with-year with-year))
-           (fmt (if with-year "%A, %d.%m.%Y" "%A, %d.%m")))
+    (let* ((with-year (or (plist-get args :with-year) shaoline-day-date-with-year))
+           (fmt (if with-year " %d.%m.%Y " " %d.%m ")))
       (propertize (format-time-string fmt) 'face 'shaoline-time-face))))
 
 
@@ -528,7 +530,7 @@ Customize this to control which minor modes are shown and what icons are used."
                                                    minor-mode-alist))))
                                       (let* ((clean-modes (delq nil (cl-remove-if-not #'stringp modes)))
                                              (str (if (and clean-modes (> (length clean-modes) 0))
-                                                      (propertize (concat "(" (mapconcat #'identity clean-modes " ") ")")
+                                                      (propertize (concat "(" (mapconcat #'identity clean-modes "") ")")
                                                                   'face 'shaoline-minor-modes-face)
                                                     "")))
                                         (setq shaoline--minor-modes-cache-str str
