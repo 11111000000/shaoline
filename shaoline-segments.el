@@ -280,6 +280,28 @@ Falls back to 0 on any error; result is cached for the day."
                                 "Deprecated alias – use `shaoline-segment-digital-clock'."
                                 (shaoline-segment-digital-clock))
 
+;; ------------------------------------------------------------------
+;; :with-year parameter and customizable variable for day/date segment
+
+(defcustom shaoline-day-date-with-year nil
+  "Whether `shaoline-segment-day-date' should display the year by default.
+When non-nil, day/date segment shows the year (e.g., 'понедельник, 29.07.2024').
+When nil, omits year (e.g., 'понедельник, 29.07')."
+  :type 'boolean
+  :group 'shaoline)
+
+;; Localized day and date segment with :with-year argument
+(shaoline-define-segment shaoline-segment-day-date (&optional with-year)
+  "Show the current day of the week and date, localized. If WITH-YEAR is non-nil, includes year.
+To set default globally, customize `shaoline-day-date-with-year'."
+  (if (not shaoline-enable-dynamic-segments)
+      ""
+    (let* ((with-year (if (null with-year) shaoline-day-date-with-year with-year))
+           (fmt (if with-year "%A, %d.%m.%Y" "%A, %d.%m")))
+      (propertize (format-time-string fmt) 'face 'shaoline-time-face))))
+
+
+
 (shaoline-define-simple-segment shaoline-segment-moon-phase
                                 "Show current moon phase as an icon or letters.
 In GUI frames: Unicode glyph (🌑…🌘).

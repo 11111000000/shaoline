@@ -160,6 +160,7 @@ Zen masters say: A log unread is a tree falling in a silent forest."
      shaoline-segment-battery
      shaoline-segment-input-method
      shaoline-segment-digital-clock
+     (shaoline-segment-day-date :with-year t)
      shaoline-segment-moon-phase))
 
   "Alist describing segments for :left, :center and :right.
@@ -358,25 +359,35 @@ Restored exactly as it was when the mode is toggled off.")
 (defun shaoline--apply-segment (fn buffer)
   "Call segment FN with BUFFER (or with no args if not needed) and return its string.
 Errors or missing segment yield an empty string (quiet fail), diagnostics go to log if `shaoline-debug`."
-  (if (fboundp fn)
-      (condition-case err
-          (let* ((arity (help-function-arglist fn t))
-                 (res (if arity
-                          (funcall fn buffer)
-                        (funcall fn))))
-            (if (stringp res) res ""))
-        (error
-         (let ((msg (format "[SEGMENT ERROR: %s in %s]" err fn)))
-           (when shaoline-debug
-             (shaoline--log "%s" msg)
-             (shaoline--log "Traceback: %s" (with-output-to-string (backtrace))))
-           "")))
-    (when shaoline-debug
-      (shaoline--log "[VOID SEGMENT: %s (not defined)]" fn))
-    ""))
+  (let* ((fn-call (if (consp fn) fn (list fn))))
+    (let ((fun (car fn-call))
+          (args (cdr fn-call)))
+      (if (fboundp fun)
+          (condition-case err
+              (let* ((arity (help-function-arglist fun t))
+                     (res (cond
+                           ;; If ARGS are present — call with ARGS,
+                           ;; else try to call with BUFFER if arity allows, else with no args.
+                           ((not (null args))
+                            (apply fun args))
+                           (arity
+                            (funcall fun buffer))
+                           (t
+                            (funcall fun)))))
+                (if (stringp res) res ""))
+            (error
+             (let ((msg (format "[SEGMENT ERROR: %s in %s]" err fun)))
+               (when shaoline-debug
+                 (shaoline--log "%s" msg)
+                 (shaoline--log "Traceback: %s" (with-output-to-string (backtrace))))
+               "")))
+        (when shaoline-debug
+          (shaoline--log "[VOID SEGMENT: %s (not defined)]" fun))
+        ""))))
 
 (defun shaoline--collect-segments (side buffer)
   "Render all segments for SIDE (:left, :center, :right) within BUFFER.
+Supports both symbol and (fn . args) cons-style segments.
 Only non-empty and valid string results are included."
   (cl-loop for fn in (cdr (assq side shaoline-segments))
            for str = (shaoline--apply-segment fn buffer)
