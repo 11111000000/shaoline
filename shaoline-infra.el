@@ -92,7 +92,19 @@ If a buffer's mode-line-format was not changed by Shaoline, it is left untouched
       (setq shaoline--last-str str)
       (let* ((msg-with-prop (propertize str 'shaoline t))
              (message-log-max nil))
-        (message "%s" msg-with-prop)))))
+        (message "%s" msg-with-prop)
+        (run-with-idle-timer shaoline-guard-delay nil #'shaoline--ensure-visible)))))
+
+(defun shaoline--ensure-visible ()
+  "Re-draw Shaoline if echo area is blank while `shaoline-always-visible' is active."
+  (when (and shaoline-mode
+             shaoline-always-visible
+             (not (active-minibuffer-window))
+             (not (minibufferp))
+             (not (bound-and-true-p isearch-mode))
+             (let ((cur (current-message)))
+               (or (null cur) (string-empty-p cur))))
+    (shaoline--update)))
 
 (defun shaoline--predictive-clear ()
   "Predictive clear before commands that may activate minibuffer."
@@ -123,7 +135,9 @@ Never clears if already empty or a suppression is in effect."
     ;; call only if really non-empty, or else never clear
     (unless (or (not (current-message))
                 (string-empty-p (current-message)))
-      (message nil)))
+      (message nil)
+      (when shaoline-always-visible
+        (shaoline--display (shaoline-compose-modeline)))))
   (setq shaoline--last-str ""))
 
 ;; ----------------------------------------------------------------------------
