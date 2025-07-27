@@ -156,7 +156,7 @@ Never clears if already empty or a suppression is in effect."
                (shaoline--autohide-modeline-globally))
              (setq shaoline--resize-mini-windows-backup resize-mini-windows)
              (setq resize-mini-windows nil)
-             (shaoline--update))
+             (run-with-idle-timer 0.1 nil #'shaoline--update))
     (progn (shaoline--clear-display)
            (when shaoline-autohide-modeline
              (shaoline--unhide-modeline-globally))
