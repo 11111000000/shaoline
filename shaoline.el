@@ -225,6 +225,14 @@ If non-positive, Shaoline repaints immediately after the `message'."
   :type 'number
   :group 'shaoline)
 
+(defcustom shaoline-guard-delay 0.15
+  "Idle seconds after which Shaoline re-checks that it is still visible.
+With `shaoline-always-visible' non-nil, this tiny watchdog brings the
+modeline back if another package has silently erased the echo area.
+Set to a small positive value (≈0.1–0.3) or 0 to disable."
+  :type 'number
+  :group 'shaoline)
+
 ;; ----------------------------------------------------------------------------
 ;; Faces
 ;;
