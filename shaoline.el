@@ -1,6 +1,6 @@
 ;;; shaoline.el --- Functional minimalist echo-area modeline -*- lexical-binding: t; -*-
 
-;; Version: 2.2.2
+;; Version: 2.2.3
 
 ;; Copyright (C) 2025 Peter
 ;; Author: Peter <11111000000@email.com>

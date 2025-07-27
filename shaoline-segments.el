@@ -1,6 +1,6 @@
 ;;; shaoline-segments.el --- Shaoline's Segment Garden: practical, functional, literate -*- lexical-binding: t; -*-
 
-;; Version: 2.2.2
+;; Version: 2.2.3
 
 ;; Copyright (C) 2025 Peter
 ;; Author: Peter <11111000000@email.com>
