@@ -64,37 +64,56 @@ If called repeatedly, only update after 0.12s delay."
 (defvar shaoline--timer nil
   "Timer for slow periodic updates, if any.")
 
+;;;;
+;; Dynamic Segments Declaration
+;;
+;; To avoid hardcoding, we define a list of segments that require periodic updates (e.g., time, battery, moon-phase).
+;; Users can customize this if they add new dynamic segments.
+
+(defcustom shaoline-dynamic-segments
+  '(shaoline-segment-digital-clock
+    shaoline-segment-time  ; deprecated alias
+    shaoline-segment-battery
+    shaoline-segment-moon-phase
+    shaoline-segment-day-date)
+  "List of dynamic segments that require periodic timer updates (e.g., time/battery).
+Customize this if you add new time-sensitive segments."
+  :type '(repeat symbol)
+  :group 'shaoline)
+
+(defun shaoline--has-dynamic-segments ()
+  "Return non-nil if any dynamic segment is present in any position (:left, :center, :right)."
+  (let ((all-segs (append (cdr (assq :left shaoline-segments))
+                          (cdr (assq :center shaoline-segments))
+                          (cdr (assq :right shaoline-segments)))))
+    (cl-some (lambda (seg)
+               (if (consp seg) (memq (car seg) shaoline-dynamic-segments)
+                 (memq seg shaoline-dynamic-segments)))
+             all-segs)))
+
 (defun shaoline--maybe-start-timer ()
-  "Start timer only if dynamic segments are enabled and present in :right or :center."
+  "Start timer only if dynamic segments are enabled and any are present in the segments list."
   (when (and (null shaoline--timer)
              shaoline-mode
              shaoline-enable-dynamic-segments
-             (or (cl-member 'shaoline-segment-time (cdr (assq :right shaoline-segments)))
-                 (cl-member 'shaoline-segment-time (cdr (assq :center shaoline-segments)))
-                 (cl-member 'shaoline-segment-battery (cdr (assq :right shaoline-segments)))
-                 (cl-member 'shaoline-segment-battery (cdr (assq :center shaoline-segments)))))
+             (shaoline--has-dynamic-segments))
     (setq shaoline--timer
           (run-with-timer shaoline-timer-interval
                           shaoline-timer-interval
                           #'shaoline--lazy-update))))
 
 (defun shaoline--maybe-cancel-timer ()
-  "Cancel timer if it is not needed."
+  "Cancel timer if it is not needed (no dynamic segments present)."
   (when (timerp shaoline--timer)
     (cancel-timer shaoline--timer)
     (setq shaoline--timer nil)))
 
 (defun shaoline--lazy-update ()
-  "Disable timer if nothing dynamic is needed. No message check (persistent)."
+  "Update Shaoline and disable timer if no dynamic segments are needed anymore."
   (shaoline--log "shaoline--lazy-update")
   (let ((should-keep
          (and shaoline-enable-dynamic-segments
-              (or
-               ;; Check if a dynamic segment (time/battery) is present.
-               (cl-member 'shaoline-segment-time (cdr (assq :right shaoline-segments)))
-               (cl-member 'shaoline-segment-time (cdr (assq :center shaoline-segments)))
-               (cl-member 'shaoline-segment-battery (cdr (assq :right shaoline-segments)))
-               (cl-member 'shaoline-segment-battery (cdr (assq :center shaoline-segments)))))))
+              (shaoline--has-dynamic-segments))))
     (shaoline--update)
     (unless should-keep
       (shaoline--maybe-cancel-timer))))

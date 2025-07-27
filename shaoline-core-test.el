@@ -117,40 +117,54 @@
         (should-not (string-match-p "[\uE000-\uF8FF]" rendered))  ;; No icons
         (should-not (string-match-p "🌑" rendered))  ;; No moon
         (should (string-match-p (buffer-name) rendered))  ;; Buffer name fallback
-        (should (string-empty-p (or (cl-find-if (lambda (s) (string-match-p "%H:%M" s)) (split-string rendered " ")) ""))))))  ;; Time disabled
+        (should (string-empty-p (or (cl-find-if (lambda (s) (string-match-p "%H:%M" s)) (split-string rendered " ")) "")))))))
+;; Time disabled
 
-  ;; ----------------------------------------------------------------------------
-  ;; Test: Debounce prevents excessive updates
+;; ----------------------------------------------------------------------------
+;; Test: Debounce prevents excessive updates
 
-  (ert-deftest shaoline-debounce-performance ()
-    "Debounce ensures no more than one update per rapid sequence."
-    (let ((update-count 0))
-      (advice-add 'shaoline--update :before (lambda (&rest _) (cl-incf update-count)))
-      (dotimes (_ 5) (shaoline--debounced-update))
-      (sit-for 0.2)  ;; Wait for debounce
-      (should (= update-count 1))  ;; Only one actual update
-      (advice-remove 'shaoline--update (lambda (&rest _) (cl-incf update-count)))))
+(ert-deftest shaoline-debounce-performance ()
+  "Debounce ensures no more than one update per rapid sequence."
+  (let ((update-count 0))
+    (advice-add 'shaoline--update :before (lambda (&rest _) (cl-incf update-count)))
+    (dotimes (_ 5) (shaoline--debounced-update))
+    (sit-for 0.2)  ;; Wait for debounce
+    (should (= update-count 1))  ;; Only one actual update
+    (advice-remove 'shaoline--update (lambda (&rest _) (cl-incf update-count)))))
 
-  ;; ----------------------------------------------------------------------------
-  ;; Add more property-based or ERT tests below if needed.
+;; ----------------------------------------------------------------------------
+;; Add more property-based or ERT tests below if needed.
 
-  ;; ----------------------------------------------------------------------------
-  ;; Moon-phase helpers
+;; ----------------------------------------------------------------------------
+;; Test: Dynamic segments detection
 
-  (ert-deftest shaoline-moon-phase-idx-range ()
-    "shaoline--moon-phase-idx returns an integer between 0 and 7 inclusive."
-    (let ((idx (shaoline--moon-phase-idx)))
-      (should (integerp idx))
-      (should (<= 0 idx))
-      (should (<= idx 7))))
+(ert-deftest shaoline-has-dynamic-segments-detection ()
+  "shaoline--has-dynamic-segments detects dynamic segments in any position."
+  (let* ((shaoline-dynamic-segments '(shaoline-segment-digital-clock shaoline-segment-battery))
+         (shaoline-segments '((:left shaoline-segment-buffer-name)
+                              (:center shaoline-segment-digital-clock)
+                              (:right shaoline-segment-battery))))
+    (should (shaoline--has-dynamic-segments)))  ;; Present
+  (let ((shaoline-segments '((:left shaoline-segment-buffer-name))))
+    (should-not (shaoline--has-dynamic-segments))))  ;; Absent
 
-  (ert-deftest shaoline-moon-phase-segment-string ()
-    "shaoline-segment-moon-phase yields a single-character string (icon or ASCII)."
-    (let ((out (shaoline-segment-moon-phase)))
-      (should (stringp out))
-      ;; Длина может быть 1 (ASCII) или 2 (UTF-8 суррогаты в Emacs за один
-      ;; символ width=1). Проверяем display-width, а не raw length.
-      (should (= (string-width out) 1))))
+;; ----------------------------------------------------------------------------
+;; Moon-phase helpers
+
+(ert-deftest shaoline-moon-phase-idx-range ()
+  "shaoline--moon-phase-idx returns an integer between 0 and 7 inclusive."
+  (let ((idx (shaoline--moon-phase-idx)))
+    (should (integerp idx))
+    (should (<= 0 idx))
+    (should (<= idx 7))))
+
+(ert-deftest shaoline-moon-phase-segment-string ()
+  "shaoline-segment-moon-phase yields a single-character string (icon or ASCII)."
+  (let ((out (shaoline-segment-moon-phase)))
+    (should (stringp out))
+    ;; Длина может быть 1 (ASCII) или 2 (UTF-8 суррогаты в Emacs за один
+    ;; символ width=1). Проверяем display-width, а не raw length.
+    (should (= (string-width out) 1))))
 
 
-  (provide 'shaoline-core-test)
+(provide 'shaoline-core-test)
