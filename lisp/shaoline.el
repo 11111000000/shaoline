@@ -39,7 +39,7 @@
 
 ;;; Code:
 
-(add-to-list 'load-path (file-name-directory (or load-file-name buffer-file-name)))
+(add-to-list 'load-path (expand-file-name "lisp" (file-name-directory (or load-file-name buffer-file-name))))
 (require 'cl-lib)
 (eval-when-compile (require 'rx))
 (require 'shaoline-macros)
@@ -543,4 +543,6 @@ If its contents get shorter, the gap appears *to the left* of the rightmost char
 (eval-when-compile (require 'async nil t))
 
 ;; (require 'shaoline-impure)  ;; Removed to break require cycle; users can require 'shaoline-impure separately for the minor mode
+(provide 'shaoline)
+
 ;;; shaoline.el ends here

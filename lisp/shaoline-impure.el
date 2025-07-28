@@ -12,7 +12,7 @@
 ;; All side effects are gathered here, keeping the core pure.
 
 ;; Infra requires core (shaoline.el) for variables/faces.
-;; (require 'shaoline)  ;; Removed; assume shaoline is loaded before enabling the mode
+(require 'shaoline)  ;; Removed; assume shaoline is loaded before enabling the mode
 
 (eval-when-compile
   (defvar shaoline-autohide-modeline)
