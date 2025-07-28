@@ -140,6 +140,7 @@ M-x customize-group RET shaoline RET
 ** TTL-кэш для ресурсозатратных сегментов
 
 Сегменты, требующие много IO (shaoline-segment-project-name, shaoline-segment-battery), кэшируются на их TTL в секундах.
+Сегмент батареи дополнительно использует асинхронную загрузку (`async-start`) для неблокирующего обновления, показывая "Batt..." как placeholder во время вычисления.
 
 ** Настройка кэша — через =M-x customize-group RET shaoline-caching RET=.
 ** Для немедленного запроса свежих данных используйте алиас-функции:
@@ -148,7 +149,6 @@ M-x customize-group RET shaoline RET
 (shaoline--segment-project-name-raw)
 (shaoline--segment-battery-raw)
 #+end_src
-
 ** Стандартные сегменты
 
 | Символ                           | Что показывает                           | Требует пакет         |
@@ -159,7 +159,7 @@ M-x customize-group RET shaoline RET
 | shaoline-segment-minor-modes     | Важные minor-modes (иконки)              | —                    |
 | shaoline-segment-project-name    | Имя проекта (project/projectile)         | projectile (опц.)    |
 | shaoline-segment-git-branch      | Текущая ветка git                        | vc-git (builtin)     |
-| shaoline-segment-battery         | Состояние батареи                        | battery.el (builtin) |
+| shaoline-segment-battery         | Состояние батареи (асинхронно)           | battery.el, async.el |
 | shaoline-segment-input-method    | Активный метод ввода/раскладка           | —                    |
 | shaoline-segment-digital-clock   | Электронные часы                         | calendar.el          |
 | shaoline-segment-moon-phase      | Фаза луны (значок или ASCII)             | calendar.el          |

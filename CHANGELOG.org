@@ -1,4 +1,17 @@
 TITLE: Shaoline – Change Log
+* 2.3.0 (Async Firefly & Core Harmony)
+  :PROPERTIES:
+  :CUSTOM_ID: v2.3.0
+  :END:
+
+- Release date: 2025-07-28
+- Implemented asynchronous loading for battery segment using `async-start` (non-blocking, with "Batt..." placeholder during computation).
+- Simplified architecture: merged `shaoline-macros.el` and `shaoline-msg-engine.el` into core `shaoline.el`; deleted separate files.
+- Removed deprecated alias `shaoline-segment-time` (use `shaoline-segment-digital-clock` instead).
+- Expanded tests in `shaoline-core-test.el` to cover async battery behavior.
+- Updated README.org and README.ru.org to reflect async battery and new simplifications.
+- Version bump: 2.3.0.
+
 * 2.2.2 (Cache of Still Waters)
   :PROPERTIES:
   :CUSTOM_ID: v2.2.2

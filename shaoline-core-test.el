@@ -149,22 +149,38 @@
     (should-not (shaoline--has-dynamic-segments))))  ;; Absent
 
 ;; ----------------------------------------------------------------------------
-;; Moon-phase helpers
+;; Test: Async Battery Placeholder and Callback
 
-(ert-deftest shaoline-moon-phase-idx-range ()
-  "shaoline--moon-phase-idx returns an integer between 0 and 7 inclusive."
-  (let ((idx (shaoline--moon-phase-idx)))
-    (should (integerp idx))
-    (should (<= 0 idx))
-    (should (<= idx 7))))
+(ert-deftest shaoline-battery-async-placeholder ()
+  "Battery segment returns placeholder while async is pending."
+  (with-temp-buffer
+    (let ((shaoline-enable-dynamic-segments t))
+      ;; Mock async-start to return immediately with placeholder
+      (cl-letf (((symbol-function 'async-start) (lambda (_proc callback) (funcall callback nil))))
+        (should (string-match-p "Batt..." (shaoline--segment-battery-raw))))))
 
-(ert-deftest shaoline-moon-phase-segment-string ()
-  "shaoline-segment-moon-phase yields a single-character string (icon or ASCII)."
-  (let ((out (shaoline-segment-moon-phase)))
-    (should (stringp out))
-    ;; Длина может быть 1 (ASCII) или 2 (UTF-8 суррогаты в Emacs за один
-    ;; символ width=1). Проверяем display-width, а не raw length.
-    (should (= (string-width out) 1))))
+  (ert-deftest shaoline-battery-async-callback ()
+    "Battery callback formats data correctly."
+    (let ((mock-data '((?p . "50") (?b . "discharging"))))
+      (should (string-match-p "50%" (shaoline--format-battery mock-data "N/A")))))
+
+  ;; ----------------------------------------------------------------------------
+  ;; Moon-phase helpers
+
+  (ert-deftest shaoline-moon-phase-idx-range ()
+    "shaoline--moon-phase-idx returns an integer between 0 and 7 inclusive."
+    (let ((idx (shaoline--moon-phase-idx)))
+      (should (integerp idx))
+      (should (<= 0 idx))
+      (should (<= idx 7))))
+
+  (ert-deftest shaoline-moon-phase-segment-string ()
+    "shaoline-segment-moon-phase yields a single-character string (icon or ASCII)."
+    (let ((out (shaoline-segment-moon-phase)))
+      (should (stringp out))
+      ;; Длина может быть 1 (ASCII) или 2 (UTF-8 суррогаты в Emacs за один
+      ;; символ width=1). Проверяем display-width, а не raw length.
+      (should (= (string-width out) 1))))
 
 
-(provide 'shaoline-core-test)
+  (provide 'shaoline-core-test)

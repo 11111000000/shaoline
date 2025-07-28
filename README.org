@@ -132,6 +132,7 @@ To remove all traces after experimenting:
 * TTL (Time-To-Live) Cache for Heavier Segments
 
 Segments like the project name and battery level may be slow to compute, so they're TTL-cached (defaults: 2s and 5s).
+The battery segment additionally uses asynchronous computation (`async-start`) for non-blocking updates, showing "Batt..." as a placeholder while loading.
 
 - Customize via =M-x customize-group RET shaoline-caching RET=
 - To get an immediate uncached value for testing:
@@ -150,7 +151,7 @@ Segments like the project name and battery level may be slow to compute, so they
 | shaoline-segment-minor-modes   | Minor-mode icons                          | —                      |
 | shaoline-segment-project-name  | Project name                              | projectile (optional)  |
 | shaoline-segment-git-branch    | Current Git branch                        | vc-git                 |
-| shaoline-segment-battery       | Battery percent/status                    | battery.el             |
+| shaoline-segment-battery       | Battery percent/status (async)            | battery.el, async.el   |
 | shaoline-segment-input-method  | Active input method                       | —                      |
 | shaoline-segment-digital-clock | 24h clock (e.g. “21:43”)                  | calendar.el            |
 | shaoline-segment-moon-phase    | Moon phase (icon or ASCII)                | calendar.el            |

@@ -41,12 +41,96 @@
 
 (require 'cl-lib)
 (eval-when-compile (require 'rx))
-;; Core requires: macros and msg-engine first for definitions.
-(require 'shaoline-macros)
-(require 'shaoline-msg-engine)
 
 ;; project-specific libraries are only needed by segments (see shaoline-segments.el);
 ;; keeping the core truly “pure”.
+
+;; ----------------------------------------------------------------------------
+;; Msg-Engine (Integrated from shaoline-msg-engine.el)
+;;
+;; Silent implementation. Not for loading by user.
+
+;; State.
+(defvar shaoline-msg--last-user-message nil
+  "Last user message captured by Shaoline (string or nil).")
+
+(defvar shaoline-msg--last-user-message-ts 0
+  "Timestamp (float value) when the last user message appeared.")
+
+;; Actions.
+(defun shaoline-msg-clear ()
+  "Clear last user message and timestamp."
+  (setq shaoline-msg--last-user-message nil
+        shaoline-msg--last-user-message-ts 0))
+
+(defun shaoline-msg-save (str)
+  "Save STR as the last user message and record its timestamp."
+  (setq shaoline-msg--last-user-message str
+        shaoline-msg--last-user-message-ts (float-time)))
+
+;; Query.
+(defun shaoline-msg-active-p (_timeout)
+  "Return non-nil if there is a current user message (persistent until new non-empty)."
+  (and shaoline-msg--last-user-message
+       (not (string-empty-p shaoline-msg--last-user-message))))
+
+(defun shaoline-msg-current ()
+  "Return the current user message string, or nil."
+  shaoline-msg--last-user-message)
+
+(defun shaoline-msg-age ()
+  "Return the age (seconds, float) of the current user message, or 0."
+  (if shaoline-msg--last-user-message-ts
+      (float-time (time-since shaoline-msg--last-user-message-ts))
+    0))
+
+;; ----------------------------------------------------------------------------
+;; Macros (Integrated from shaoline-macros.el)
+;;
+;; Definitions of shaoline-define-segment and shaoline-define-simple-segment.
+
+(defmacro shaoline-define-segment (name args &rest body)
+  "Define segment NAME taking ARGS, register it, and return its symbol.
+Every segment is independent; every function a ripple in the pond."
+  (declare (indent defun))
+  (let ((func `(defun ,name ,args ,@body)))
+    `(progn
+       ,func
+       (puthash ',name #',name shaoline--segment-table)
+       ',name)))
+
+(defmacro shaoline-define-simple-segment (name docstring &rest body)
+  "Define a segment NAME with no arguments. BODY is run on each render.
+True elegance: nothing more than necessary."
+  `(shaoline-define-segment ,name ()
+     ,docstring
+     ,@body))
+
+;; Cached segment helper
+;;
+;; Simple TTL-based caching to avoid heavy I/O on every post-command.
+;;
+;;   (shaoline-define-cached-segment name ttl "Docstring" BODY…)
+;;
+;; BODY is evaluated only when the cached value is older than TTL seconds;
+;; otherwise the cached value is returned immediately.
+(defmacro shaoline-define-cached-segment (name ttl docstring &rest body)
+  "Define NAME as a cached segment.
+TTL is time-to-live in seconds. DOCSTRING documents the segment.
+BODY computes and returns the segment string."
+  (declare (indent defun) (doc-string 3))
+  (let* ((cache-var (intern (format "shaoline--%s-cache" (symbol-name name))))
+         (ts-var    (intern (format "shaoline--%s-ts" (symbol-name name)))))
+    `(progn
+       (defvar ,cache-var nil)
+       (defvar ,ts-var 0)
+       (shaoline-define-simple-segment ,name ,docstring
+                                       (let ((now (float-time)))
+                                         (if (and ,cache-var
+                                                  (< (- now ,ts-var) ,ttl))
+                                             ,cache-var
+                                           (setq ,cache-var (progn ,@body)
+                                                 ,ts-var now)))))))
 
 ;; ----------------------------------------------------------------------------
 ;; Customization Group and Variables
@@ -159,8 +243,8 @@ Zen masters say: A log unread is a tree falling in a silent forest."
      shaoline-segment-git-branch
      shaoline-segment-battery
      shaoline-segment-input-method
-     (shaoline-segment-day-date :with-year nil)
      shaoline-segment-digital-clock
+     (shaoline-segment-day-date :with-year nil)
      shaoline-segment-moon-phase))
 
   "Alist describing segments for :left, :center and :right.
@@ -506,5 +590,8 @@ If its contents get shorter, the gap appears *to the left* of the rightmost char
         (load user-file nil t)
       (error (shaoline--log "Could not load user segments: %s" err)))))
 
-(provide 'shaoline)
+;; Lazy require for async (used in battery)
+(eval-when-compile (require 'async nil t))
+
+(require 'shaoline-impure)
 ;;; shaoline.el ends here
