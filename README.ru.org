@@ -88,6 +88,7 @@ Shaoline по умолчанию готов для большинства пол
                  shaoline-segment-battery
                  shaoline-segment-input-method
                  shaoline-segment-digital-clock
+                 (shaoline-segment-day-date :with-year nil)
                  shaoline-segment-moon-phase)))
 #+end_src
 
@@ -103,13 +104,16 @@ Shaoline по умолчанию готов для большинства пол
 | shaoline-attach-advices           | t            | Если nil — не добавлять advice ни на что, абсолютно чистый режим  |
 | shaoline-attach-hooks             | t            | Если nil — глобальные хуки не трогаются                           |
 | shaoline-message-timeout          | 10           | Сколько секунд ждать перед возвращением после сообщения            |
-| shaoline-project-name-ttl         | 2            | TTL (сек) кэша имени проекта                                      |
-| shaoline-battery-ttl              | 5            | TTL (сек) кэша батареи                                            |
+| shaoline-project-name-ttl         | 2            | TTL (сек) кэша имени проекта (группа shaoline-caching)            |
+| shaoline-battery-ttl              | 5            | TTL (сек) кэша батареи (группа shaoline-caching)                  |
+| shaoline-minor-modes-cache-ttl    | 0.5          | TTL (сек) кэша minor-modes (группа shaoline-caching)              |
 | shaoline-autohide-modeline        | t            | Прятать классическую mode-line                                    |
 | shaoline-exclude-modes            | список       | Режимы, где mode-line не скрывать                                 |
 | shaoline-update-hooks             | список       | Список хуков, запускающих перерасчёт                              |
 | shaoline-right-padding            | 0            | Отступ справа                                                     |
 | shaoline-debug                    | nil          | Вести лог в //shaoline-logs//                                     |
+| shaoline-dynamic-segments         | список       | Сегменты, требующие таймера (напр., часы, батарея)                |
+| shaoline-day-date-with-year       | nil          | Включать год в сегменте дня/даты                                 |
 
 Настройка:
 
@@ -156,13 +160,20 @@ M-x customize-group RET shaoline RET
 | shaoline-segment-position        | Строка:столбец                           | —                    |
 | shaoline-segment-modified        | “*”, если буфер изменён                  | —                    |
 | shaoline-segment-echo-message    | Последнее непустое сообщение (центр)     | —                    |
-| shaoline-segment-minor-modes     | Важные minor-modes (иконки)              | —                    |
-| shaoline-segment-project-name    | Имя проекта (project/projectile)         | projectile (опц.)    |
+| shaoline-segment-minor-modes     | Иконки/аббревиатуры minor-modes (расширенные маппинги для LSP, Flycheck и т.д.) | —     |
+| shaoline-segment-project-name    | Имя проекта (TTL-кэшировано)             | projectile (опц.)    |
 | shaoline-segment-git-branch      | Текущая ветка git                        | vc-git (builtin)     |
-| shaoline-segment-battery         | Состояние батареи (асинхронно)           | battery.el, async.el |
+| shaoline-segment-vcs-state       | Индикатор Git-статуса (+/!/✗)            | vc-git (builtin)     |
+| shaoline-segment-battery         | Состояние батареи (асинхронно, TTL-кэшировано) | battery.el, async.el |
 | shaoline-segment-input-method    | Активный метод ввода/раскладка           | —                    |
-| shaoline-segment-digital-clock   | Электронные часы                         | calendar.el          |
+| shaoline-segment-digital-clock   | Электронные часы (например, «21:43»)     | calendar.el          |
+| shaoline-segment-day-date        | День недели и дата (опционально год)     | calendar.el          |
 | shaoline-segment-moon-phase      | Фаза луны (значок или ASCII)             | calendar.el          |
+| shaoline-segment-encoding        | Кодировка файла и тип EOL                | —                    |
+| shaoline-segment-flycheck        | Ошибки/предупреждения Flycheck/Flymake   | flycheck или flymake |
+| shaoline-segment-major-mode      | Major-mode с опциональной иконкой        | all-the-icons (опц.) |
+| shaoline-segment-buffer-name     | Только имя буфера                        | —                    |
+| shaoline-segment-major-mode-icon | Только иконка major-mode                 | all-the-icons (опц.) |
 
 Убирайте всё лишнее — просветление легкое, как перо.
 

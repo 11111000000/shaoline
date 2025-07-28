@@ -85,6 +85,7 @@ Shaoline’s default setup fits most needs, but the Dao is personal — customiz
                  shaoline-segment-battery
                  shaoline-segment-input-method
                  shaoline-segment-digital-clock
+                 (shaoline-segment-day-date :with-year nil)
                  shaoline-segment-moon-phase)))
 #+end_src
 
@@ -99,13 +100,16 @@ Each section (:left, :center, :right) is fully customizable.
 | shaoline-attach-advices          | t       | If nil, never adds advices (for message/warning interception)    |
 | shaoline-attach-hooks            | t       | If nil, never adds/removes hooks automatically                   |
 | shaoline-message-timeout         | 10      | Seconds to wait before shaoline redraw after a message           |
-| shaoline-project-name-ttl        | 2       | TTL (sec) for caching project name, reduces disk I/O             |
-| shaoline-battery-ttl             | 5       | TTL (sec) for caching battery status/level                       |
+| shaoline-project-name-ttl        | 2       | TTL (sec) for caching project name (in shaoline-caching group)   |
+| shaoline-battery-ttl             | 5       | TTL (sec) for caching battery status (in shaoline-caching group) |
+| shaoline-minor-modes-cache-ttl   | 0.5     | TTL (sec) for minor-modes cache (in shaoline-caching group)      |
 | shaoline-autohide-modeline       | t       | Hide the traditional mode-line while Shaoline is active          |
-| shaoline-exclude-modes           | list    | Modes in which to *not* hide classic mode-line                     |
+| shaoline-exclude-modes           | list    | Modes in which to *not* hide classic mode-line                    |
 | shaoline-update-hooks            | list    | Hooks which trigger repaint                                      |
 | shaoline-right-padding           | 0       | Extra spaces added at the right                                  |
-| shaoline-debug                   | nil     | Enable logs in //shaoline-logs//                                   |
+| shaoline-debug                   | nil     | Enable logs in //shaoline-logs//                                 |
+| shaoline-dynamic-segments        | list    | Segments that require timers (e.g., clock, battery)              |
+| shaoline-day-date-with-year      | nil     | Include year in day/date segment                                 |
 
 Customize interactively:  
 #+begin_src emacs-lisp
@@ -148,13 +152,20 @@ The battery segment additionally uses asynchronous computation (`async-start`) f
 | shaoline-segment-position      | Line and column                           | —                      |
 | shaoline-segment-modified      | “*” if buffer is modified                 | —                      |
 | shaoline-segment-echo-message  | Last non-empty message (center)           | —                      |
-| shaoline-segment-minor-modes   | Minor-mode icons                          | —                      |
-| shaoline-segment-project-name  | Project name                              | projectile (optional)  |
+| shaoline-segment-minor-modes   | Minor-mode icons or abbreviations (expanded mappings for LSP, Flycheck, etc.) | —          |
+| shaoline-segment-project-name  | Project name (TTL-cached)                 | projectile (optional)  |
 | shaoline-segment-git-branch    | Current Git branch                        | vc-git                 |
-| shaoline-segment-battery       | Battery percent/status (async)            | battery.el, async.el   |
+| shaoline-segment-vcs-state     | Git status indicator (+/!/✗)              | vc-git                 |
+| shaoline-segment-battery       | Battery percent/status (async, TTL-cached)| battery.el, async.el   |
 | shaoline-segment-input-method  | Active input method                       | —                      |
 | shaoline-segment-digital-clock | 24h clock (e.g. “21:43”)                  | calendar.el            |
+| shaoline-segment-day-date      | Localized day/date (optional year)        | calendar.el            |
 | shaoline-segment-moon-phase    | Moon phase (icon or ASCII)                | calendar.el            |
+| shaoline-segment-encoding      | File encoding and EOL type                | —                      |
+| shaoline-segment-flycheck      | Flycheck/Flymake errors/warnings          | flycheck or flymake    |
+| shaoline-segment-major-mode    | Major mode with optional icon             | all-the-icons (opt.)   |
+| shaoline-segment-buffer-name   | Buffer name only                          | —                      |
+| shaoline-segment-major-mode-icon | Major-mode icon only                    | all-the-icons (opt.)   |
 
 Remove what doesn’t serve you.  
 True enlightenment is lighter than a feather.

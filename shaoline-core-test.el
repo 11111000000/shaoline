@@ -117,7 +117,7 @@
         (should-not (string-match-p "[\uE000-\uF8FF]" rendered))  ;; No icons
         (should-not (string-match-p "🌑" rendered))  ;; No moon
         (should (string-match-p (buffer-name) rendered))  ;; Buffer name fallback
-        (should (string-empty-p (or (cl-find-if (lambda (s) (string-match-p "%H:%M" s)) (split-string rendered " ")) "")))))))
+        (should (string-empty-p (or (cl-find-if (lambda (s) (string-match-p "[0-9]\\{2\\}:[0-9]\\{2\\}" s)) (split-string rendered " ")) "")))))))
 ;; Time disabled
 
 ;; ----------------------------------------------------------------------------
@@ -157,30 +157,30 @@
     (let ((shaoline-enable-dynamic-segments t))
       ;; Mock async-start to return immediately with placeholder
       (cl-letf (((symbol-function 'async-start) (lambda (_proc callback) (funcall callback nil))))
-        (should (string-match-p "Batt..." (shaoline--segment-battery-raw))))))
+        (should (string-match-p "Batt..." (shaoline--segment-battery-raw)))))))
 
-  (ert-deftest shaoline-battery-async-callback ()
-    "Battery callback formats data correctly."
-    (let ((mock-data '((?p . "50") (?b . "discharging"))))
-      (should (string-match-p "50%" (shaoline--format-battery mock-data "N/A")))))
+(ert-deftest shaoline-battery-async-callback ()
+  "Battery callback formats data correctly."
+  (let ((mock-data '((?p . "50") (?b . "discharging"))))
+    (should (string-match-p "50%" (shaoline--format-battery mock-data "N/A")))))
 
-  ;; ----------------------------------------------------------------------------
-  ;; Moon-phase helpers
+;; ----------------------------------------------------------------------------
+;; Moon-phase helpers
 
-  (ert-deftest shaoline-moon-phase-idx-range ()
-    "shaoline--moon-phase-idx returns an integer between 0 and 7 inclusive."
-    (let ((idx (shaoline--moon-phase-idx)))
-      (should (integerp idx))
-      (should (<= 0 idx))
-      (should (<= idx 7))))
+(ert-deftest shaoline-moon-phase-idx-range ()
+  "shaoline--moon-phase-idx returns an integer between 0 and 7 inclusive."
+  (let ((idx (shaoline--moon-phase-idx)))
+    (should (integerp idx))
+    (should (<= 0 idx))
+    (should (<= idx 7))))
 
-  (ert-deftest shaoline-moon-phase-segment-string ()
-    "shaoline-segment-moon-phase yields a single-character string (icon or ASCII)."
-    (let ((out (shaoline-segment-moon-phase)))
-      (should (stringp out))
-      ;; Длина может быть 1 (ASCII) или 2 (UTF-8 суррогаты в Emacs за один
-      ;; символ width=1). Проверяем display-width, а не raw length.
-      (should (= (string-width out) 1))))
+(ert-deftest shaoline-moon-phase-segment-string ()
+  "shaoline-segment-moon-phase yields a single-character string (icon or ASCII)."
+  (let ((out (shaoline-segment-moon-phase)))
+    (should (stringp out))
+    ;; Длина может быть 1 (ASCII) или 2 (UTF-8 суррогаты в Emacs за один
+    ;; символ width=1). Проверяем display-width, а не raw length.
+    (should (= (string-width out) 1))))
 
 
-  (provide 'shaoline-core-test)
+(provide 'shaoline-core-test)

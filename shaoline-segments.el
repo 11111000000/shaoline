@@ -7,6 +7,8 @@
 ;; SPDX-License-Identifier: MIT
 ;; Homepage: https://github.com/11111000000/shaoline
 
+(eval-when-compile (require 'shaoline-macros))
+
 ;; ------------------------------------------------------------------------
 ;; Introduction (Garden Gate)
 ;;
@@ -25,8 +27,6 @@
 ;; Dependencies — the garden's soil
 ;;
 ;; All segments depend on the foundational macros and message engine.
-(require 'shaoline-macros)
-(require 'shaoline-msg-engine)
 (eval-when-compile
   (defvar shaoline-enable-dynamic-segments t "Shadow variable for compile-time checks."))
 
@@ -151,16 +151,17 @@ Uses async-start for non-blocking computation."
                                           'face '(:inherit shaoline-battery-face :slant italic)))
                                         (placeholder (propertize "Batt..." 'face 'shaoline-battery-face)))
                                     (if (and (fboundp 'async-start) (fboundp 'battery) battery-status-function)
-                                        (async-start
-                                         `(lambda ()
-                                            (require 'battery)
-                                            (funcall ',battery-status-function))
-                                         (lambda (data)
-                                           (let ((str (shaoline--format-battery data safe-n-a)))
-                                             (setq shaoline--segment-battery-cache str)  ;; Update cache directly
-                                             (shaoline--update))))  ;; Redraw on callback
-                                      placeholder)  ;; Immediate return: placeholder
-                                    safe-n-a)))
+                                        (progn
+                                          (async-start
+                                           `(lambda ()
+                                              (require 'battery)
+                                              (funcall ',battery-status-function))
+                                           (lambda (data)
+                                             (let ((str (shaoline--format-battery data safe-n-a)))
+                                               (setq shaoline--segment-battery-cache str)  ;; Update cache directly
+                                               (shaoline--update))))  ;; Redraw on callback
+                                          placeholder)  ;; Immediate return: placeholder
+                                      safe-n-a))))
 
 (defun shaoline--format-battery (data safe-n-a)
   "Format battery DATA into string."
