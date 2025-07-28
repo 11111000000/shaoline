@@ -1,4 +1,5 @@
 ;;; shaoline-segments.el --- Shaoline's Segment Garden: practical, functional, literate -*- lexical-binding: t; -*-
+(message "[shaoline debug] shaoline-segments.el LOADING: load-file-name=%S buffer-file-name=%S default-directory=%S" load-file-name buffer-file-name default-directory)
 
 ;; Version: 2.2.3
 
@@ -7,7 +8,8 @@
 ;; SPDX-License-Identifier: MIT
 ;; Homepage: https://github.com/11111000000/shaoline
 
-(eval-when-compile (require 'shaoline-macros))
+(require 'shaoline-macros)
+(message "[shaoline debug] shaoline-macros loaded")
 
 ;; ------------------------------------------------------------------------
 ;; Introduction (Garden Gate)
@@ -39,8 +41,8 @@
 ;; Buffer name only (without icon).
 
 (shaoline-define-segment shaoline-segment-buffer-name (buffer)
-  "Only the buffer name, coloured as `shaoline-buffer-face'."
-  (propertize (buffer-name buffer) 'face 'shaoline-buffer-face))
+                         "Only the buffer name, coloured as `shaoline-buffer-face'."
+                         (propertize (buffer-name buffer) 'face 'shaoline-buffer-face))
 
 ;; -------------------------------------------------------------------------
 ;; "Single Petal" — Icon for major-mode (no text)
@@ -71,12 +73,13 @@
 ;; The uncached, original implementation is available as `shaoline--segment-project-name-raw`
 ;; for extension/testing.
 ;; ----------------------------------------------------------------------------
+(message "[shaoline debug] REGISTERING autoload segment: shaoline-segment-project-name")
 ;;;###autoload
 (shaoline-define-cached-segment shaoline-segment-project-name shaoline-project-name-ttl
-  "Project name, if available. Cached for `shaoline-project-name-ttl' seconds (see \\[customize-group] RET shaoline-caching).
+                                "Project name, if available. Cached for `shaoline-project-name-ttl' seconds (see \\[customize-group] RET shaoline-caching).
 If you want the immediate, non-cached value (for tests/use-cases that demand up-to-date info),
 call `shaoline--segment-project-name-raw` directly."
-  (shaoline--segment-project-name-raw))
+                                (shaoline--segment-project-name-raw))
 
 ;; ----------------------------------------------------------------------------
 ;; "Frost on the Branch" — Current Git Branch
@@ -129,11 +132,12 @@ Truncates long or multi-line messages gracefully. Width managed by the modeline.
 ;; The uncached, original implementation is available as `shaoline--segment-battery-raw`
 ;; for extension/testing.
 ;; ----------------------------------------------------------------------------
+(message "[shaoline debug] REGISTERING autoload segment: shaoline-segment-battery")
 ;;;###autoload
 (shaoline-define-cached-segment shaoline-segment-battery shaoline-battery-ttl
-  "Show battery percentage and charging status asynchronously. Cached for `shaoline-battery-ttl' seconds.
+                                "Show battery percentage and charging status asynchronously. Cached for `shaoline-battery-ttl' seconds.
 Uses async-start for non-blocking computation."
-  (shaoline--segment-battery-raw))
+                                (shaoline--segment-battery-raw))
 
 ;; ----------------------------------------------------------------------------
 ;; Uncached Raw Segment: Battery (Async)
@@ -294,15 +298,15 @@ When nil, omits year (e.g., 'понедельник, 29.07')."
 
 ;; Localized day and date segment with :with-year plist parameter
 (shaoline-define-segment shaoline-segment-day-date (&rest args)
-  "Show the current day of the week and date, localized.
+                         "Show the current day of the week and date, localized.
 Accepts keyword argument :with-year. If non-nil, includes year. Example:
    (shaoline-segment-day-date :with-year t)
 If omitted, uses `shaoline-day-date-with-year' as default."
-  (if (not shaoline-enable-dynamic-segments)
-      ""
-    (let* ((with-year (or (plist-get args :with-year) shaoline-day-date-with-year))
-           (fmt (if with-year "%d.%m.%Y" "%d.%m")))
-      (propertize (format-time-string fmt) 'face 'shaoline-date-face))))
+                         (if (not shaoline-enable-dynamic-segments)
+                             ""
+                           (let* ((with-year (or (plist-get args :with-year) shaoline-day-date-with-year))
+                                  (fmt (if with-year "%d.%m.%Y" "%d.%m")))
+                             (propertize (format-time-string fmt) 'face 'shaoline-date-face))))
 
 (shaoline-define-simple-segment shaoline-segment-moon-phase
                                 "Show current moon phase as an icon or letters.
@@ -633,16 +637,16 @@ Customize this to control which minor modes are shown and what icons are used."
 ;; ------------------------------------------------------------------
 ;;;###autoload
 (shaoline-define-cached-segment shaoline-segment-project-name shaoline-project-name-ttl
-  "Project name, if available. Cached for `shaoline-project-name-ttl' seconds (see \\[customize-group] RET shaoline-caching)."
-  (let ((name (shaoline--segment-project-name-raw)))
-    (when name
-      (propertize name 'face 'shaoline-project-face))))
+                                "Project name, if available. Cached for `shaoline-project-name-ttl' seconds (see \\[customize-group] RET shaoline-caching)."
+                                (let ((name (shaoline--segment-project-name-raw)))
+                                  (when name
+                                    (propertize name 'face 'shaoline-project-face))))
 
 ;; ------------------------------------------------------------------
 ;;;###autoload
 (shaoline-define-cached-segment shaoline-segment-battery shaoline-battery-ttl
-  "Show battery percentage and charging status. Cached for `shaoline-battery-ttl' seconds (see \\[customize-group] RET shaoline-caching)."
-  (shaoline--segment-battery-raw))
+                                "Show battery percentage and charging status. Cached for `shaoline-battery-ttl' seconds (see \\[customize-group] RET shaoline-caching)."
+                                (shaoline--segment-battery-raw))
 
 (provide 'shaoline-segments)
 ;;; shaoline-segments.el ends here

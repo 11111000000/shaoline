@@ -1,6 +1,6 @@
 ;;; shaoline.el --- Functional minimalist echo-area modeline -*- lexical-binding: t; -*-
 
-;; Version: 2.2.3
+;; Version: 2.3.0
 
 ;; Copyright (C) 2025 Peter
 ;; Author: Peter <11111000000@email.com>
@@ -39,9 +39,10 @@
 
 ;;; Code:
 
+(add-to-list 'load-path (file-name-directory (or load-file-name buffer-file-name)))
 (require 'cl-lib)
 (eval-when-compile (require 'rx))
-(eval-when-compile (require 'shaoline-macros))
+(require 'shaoline-macros)
 
 ;; project-specific libraries are only needed by segments (see shaoline-segments.el);
 ;; keeping the core truly “pure”.
