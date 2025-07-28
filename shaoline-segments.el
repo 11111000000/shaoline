@@ -300,7 +300,7 @@ If omitted, uses `shaoline-day-date-with-year' as default."
       ""
     (let* ((with-year (or (plist-get args :with-year) shaoline-day-date-with-year))
            (fmt (if with-year " %d.%m.%Y " " %d.%m ")))
-      (propertize (format-time-string fmt) 'face 'shaoline-time-face))))
+      (propertize (format-time-string fmt) 'face 'shaoline-date-face))))
 
 
 

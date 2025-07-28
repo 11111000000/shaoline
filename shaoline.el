@@ -265,6 +265,14 @@ Set to a small positive value (≈0.1–0.3) or 0 to disable."
 For full dynamic adaptation, reload after theme changes."
   :group 'shaoline)
 
+(defface shaoline-date-face
+  '((t :inherit default  ;; Inherit from default to adapt to themes
+       :height 1.0
+       :bold nil))
+  "Face for the date segment, adapting to the current theme at load time.
+For full dynamic adaptation, reload after theme changes."
+  :group 'shaoline)
+
 (defface shaoline-moon-face
   `((t :inherit default
        :height 1.0
