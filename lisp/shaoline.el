@@ -102,7 +102,7 @@ Increase if your favorite icons are wider."
   :type 'integer
   :group 'shaoline)
 
-(defcustom shaoline-debug nil
+(defcustom shaoline-debug t
   "If non-nil, log shaoline activity into `shaoline--log-buffer'.  Seek inner debugness."
   :type 'boolean
   :group 'shaoline)
@@ -153,14 +153,81 @@ even if `shaoline-enable-hooks' is t. Useful for advanced users."
 (defvar shaoline--log-buffer "*shaoline-logs*"
   "Debug buffer for logs. Quiet scroll, if you wish to listen.")
 
+;; ---------------------------------------------------------------------------
+;; Debounced, coalescing logger
+;;
+;;  • Consecutive identical messages are collapsed into one line with a
+;;    trailing  [xN] repetition counter.
+;;  • Output is flushed to `shaoline--log-buffer' in batches every
+;;    `shaoline-log-debounce-interval' seconds, keeping the UI responsive.
+;; ---------------------------------------------------------------------------
+
+(defcustom shaoline-log-debounce-interval 0.4
+  "Seconds to debounce debug log output.
+Lower values yield more immediate logs; higher values reduce UI churn."
+  :type 'number
+  :group 'shaoline)
+
+(defvar shaoline--log-pending nil
+  "List of log lines waiting to be written to `shaoline--log-buffer'.")
+
+(defvar shaoline--log-last-message nil
+  "Last message passed to `shaoline--log' (for repeat coalescing).")
+
+(defvar shaoline--log-repeat-count 1
+  "Repeat counter for `shaoline--log-last-message'.")
+
+(defvar shaoline--log-timer nil
+  "Internal timer object for debounced log flushing.")
+
+(defun shaoline--log--enqueue (msg)
+  "Queue MSG for later flush, coalescing consecutive duplicates."
+  (if (equal msg shaoline--log-last-message)
+      (cl-incf shaoline--log-repeat-count)
+    ;; Commit previous run before starting a new one
+    (when shaoline--log-last-message
+      (push (if (> shaoline--log-repeat-count 1)
+                (format "%s [x%d]" shaoline--log-last-message shaoline--log-repeat-count)
+              shaoline--log-last-message)
+            shaoline--log-pending))
+    (setq shaoline--log-last-message msg
+          shaoline--log-repeat-count 1)))
+
+(defun shaoline--log--commit ()
+  "Flush pending log lines to `shaoline--log-buffer'."
+  ;; Add the still-unflushed last message.
+  (when shaoline--log-last-message
+    (push (if (> shaoline--log-repeat-count 1)
+              (format "%s [x%d]" shaoline--log-last-message shaoline--log-repeat-count)
+            shaoline--log-last-message)
+          shaoline--log-pending)
+    (setq shaoline--log-last-message nil
+          shaoline--log-repeat-count 1))
+  ;; Write batch, if any.
+  (when shaoline--log-pending
+    (with-current-buffer (get-buffer-create shaoline--log-buffer)
+      (goto-char (point-max))
+      (dolist (line (nreverse shaoline--log-pending))
+        (insert line "\n")))
+    (setq shaoline--log-pending nil)))
+
+(defun shaoline--log--timer-fn ()
+  "Timer callback flushing the queued log messages."
+  (shaoline--log--commit)
+  (setq shaoline--log-timer nil))
+
 (defun shaoline--log (fmt &rest args)
-  "Write formatted FMT/ARGS message to `shaoline--log-buffer' if `shaoline-debug' is non-nil.
-Zen masters say: A log unread is a tree falling in a silent forest."
+  "Format FMT ARGS and enqueue into Shaoline debug log.
+Messages are debounced and consecutive duplicates are coalesced.
+Does nothing unless `shaoline-debug' is non-nil."
   (when shaoline-debug
     (let ((msg (apply #'format fmt args)))
-      (with-current-buffer (get-buffer-create shaoline--log-buffer)
-        (goto-char (point-max))
-        (insert msg "\n")))))
+      (shaoline--log--enqueue msg)
+      (unless shaoline--log-timer
+        (setq shaoline--log-timer
+              (run-with-timer shaoline-log-debounce-interval
+                              nil
+                              #'shaoline--log--timer-fn))))))
 
 (defcustom shaoline-available-segments
   '((shaoline-segment-buffer-name     . "Buffer name only")
@@ -543,6 +610,12 @@ If its contents get shorter, the gap appears *to the left* of the rightmost char
 (eval-when-compile (require 'async nil t))
 
 ;; (require 'shaoline-impure)  ;; Removed to break require cycle; users can require 'shaoline-impure separately for the minor mode
+
+;; IMPORTANT: To make the global minor mode and event system available,
+;; you must also load shaoline-impure.el.
+;; Either add `(require 'shaoline-impure)` to your config after shaoline load,
+;; or, for automatic infra loading on `shaoline-mode' call:
+
 (provide 'shaoline)
 
 ;;; shaoline.el ends here

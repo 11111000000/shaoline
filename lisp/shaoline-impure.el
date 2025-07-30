@@ -12,7 +12,7 @@
 ;; All side effects are gathered here, keeping the core pure.
 
 ;; Infra requires core (shaoline.el) for variables/faces.
-(require 'shaoline)  ;; Removed; assume shaoline is loaded before enabling the mode
+(require 'shaoline)  ;; Ensure core is loaded so shaoline--log etc. are always available
 
 (eval-when-compile
   (defvar shaoline-autohide-modeline)
@@ -79,10 +79,19 @@ If a buffer's mode-line-format was not changed by Shaoline, it is left untouched
 ;; Display and update.
 
 (defun shaoline--display (str)
-  "Show STR in the echo area. Tag the string so only Shaoline output is affected."
+  "Show STR in the echo area and tag it so only Shaoline output is affected.
+Re-display whenever the echo area is
+
+  • empty,
+  • shows a *non-Shaoline* message,
+  • or when STR itself changed.
+
+This guarantees Shaoline immediately re-claims the echo area after any
+foreign output (keypress echos, «Mark set», timers, etc.)."
   (let ((cur-msg (current-message)))
-    (when (or (not (string-equal str shaoline--last-str))
-              (null cur-msg))
+    (when (or (null cur-msg)                               ;; echo area empty
+              (not (get-text-property 0 'shaoline cur-msg)) ;; foreign message
+              (not (string-equal str shaoline--last-str)))  ;; text changed
       ;; Remember *unmodified* string for width-comparison / clearing,
       ;; but send the *tagged* one to `message'.
       (setq shaoline--last-str str)
@@ -108,20 +117,34 @@ If a buffer's mode-line-format was not changed by Shaoline, it is left untouched
              (memq this-command '(execute-extended-command find-file)))
     (shaoline--clear-display)))
 
+(defvar shaoline--update-call-count 0 "Number of times shaoline--update was called across session.")
+
 (defun shaoline--update (&rest _)
   "Recompute and display modeline for the currently selected window.
 Skips update and clears during isearch or minibuffer input."
-  (shaoline--log "shaoline--update")
+  (cl-incf shaoline--update-call-count)
+  (shaoline--log "shaoline--update (buffer=%S major-mode=%S point=%d win=%S)"
+                 (current-buffer)
+                 major-mode
+                 (point)
+                 (selected-window))
   (if (or (active-minibuffer-window)
           (minibufferp)
           (bound-and-true-p isearch-mode))
       (shaoline--clear-display)
-    (let ((cur-msg (current-message)))
+    (let ((cur-msg (current-message))
+          (win (selected-window)))
       (unless (and (not shaoline-always-visible)
                    cur-msg
                    (not (get-text-property 0 'shaoline cur-msg)))
-        (shaoline--display
-         (shaoline-compose-modeline))))))
+        ;; Выполняем рендер в контексте именно выбранного окна,
+        ;; чтобы (current-buffer), (point) и прочие обращались
+        ;; к правильным данным, даже внутри таймера.
+        (with-selected-window win
+          (shaoline--display
+           (shaoline-compose-modeline
+            (current-buffer)
+            win)))))))
 
 (defun shaoline--clear-display ()
   "Clear the echo area if the last output was from Shaoline.
@@ -247,56 +270,101 @@ Customize this if you add new time-sensitive segments."
 
 (defun shaoline-events-enable ()
   "Enable all Shaoline global hooks, advices and timers for impure infrastructure."
+  ;; ------------------------------------------------------------------
+  ;; DEBUG
+  ;; Показываем в логах факт активации и состояние ключевых флагов.
+  (shaoline--log
+   "shaoline-events-enable called (attach-hooks=%s attach-advices=%s enable-dynamic=%s enable-hooks=%s shaoline-mode=%s)"
+   shaoline-attach-hooks shaoline-attach-advices shaoline-enable-dynamic-segments shaoline-enable-hooks shaoline-mode)
+  (shaoline--log "  shaoline-update-hooks=%S" shaoline-update-hooks)
+  (shaoline--log "  All hook values now: post-command-hook=%S find-file-hook=%S after-save-hook=%S"
+                 (and (boundp 'post-command-hook) post-command-hook)
+                 (and (boundp 'find-file-hook) find-file-hook)
+                 (and (boundp 'after-save-hook) after-save-hook))
+  (shaoline--log "  enable-hooks=%S attach-hooks=%S always-visible=%S" shaoline-enable-hooks shaoline-attach-hooks shaoline-always-visible)
+
   ;; Message advice (only if always-visible *and* advices enabled).
   (when (and shaoline-attach-advices shaoline-always-visible)
+    (shaoline--log "Attaching advices")
     (advice-add #'message            :filter-args   #'shaoline--capture-message-args)
     (advice-add #'message            :filter-return #'shaoline--capture-message-ret)
     (advice-add #'display-warning    :around        #'shaoline--around-display-warning)
     (advice-add #'minibuffer-message :around        #'shaoline--around-minibuffer-message))
   ;; Update hooks (with/without debounce) — only if enabled and hooks allowed.
   (when (and shaoline-enable-hooks shaoline-attach-hooks)
+    (shaoline--log "XX DEBUG: shaoline-update-hooks=%S, shaoline-enable-hooks=%S, shaoline-attach-hooks=%S" shaoline-update-hooks shaoline-enable-hooks shaoline-attach-hooks)
+    (shaoline--log "Attaching update hooks: %S" shaoline-update-hooks)
     (dolist (hook shaoline-update-hooks)
-      (add-hook hook (if (eq hook 'post-command-hook)
-                         #'shaoline--update
-                       #'shaoline--debounced-update)))
+      (shaoline--log "XX DEBUG: Preparing to add-hook for %S" hook)
+      (let* ((fn (if (eq hook 'post-command-hook)
+                     #'shaoline--update
+                   #'shaoline--debounced-update))
+             (wrapper
+              (let ((h hook)
+                    (f fn))
+                (lambda (&rest args)
+                  (shaoline--log "HOOK FIRED: %s -> %s (args=%S)" h f args)
+                  (apply f args)))))
+        (let ((wrapsym (intern (format "shaoline--hook-wrapper-%s" (symbol-name hook)))))
+          (shaoline--log "XX DEBUG: fset + add-hook wrapper %S (calls %S)" wrapsym fn)
+          (fset wrapsym wrapper)
+          (add-hook hook wrapper)
+          (shaoline--log "  add-hook %s wrapper=%s (calls=%s)" hook wrapsym fn)
+          (shaoline--log "XX DEBUG: post add-hook %S: %S" hook (and (boundp hook) (symbol-value hook)))
+          (shaoline--log "  CHECK after add-hook: %s contains wrapper? %s"
+                         hook (memq wrapper (and (boundp hook) (symbol-value hook)))))))
     ;; Pre-minibuffer and isearch hooks to clear/restore display
-    (add-hook 'minibuffer-setup-hook    #'shaoline--clear-display)
-    (add-hook 'minibuffer-exit-hook     #'shaoline--delayed-update)
-    (add-hook 'isearch-mode-hook        #'shaoline--clear-display)
-    (add-hook 'isearch-mode-end-hook    #'shaoline--delayed-update)
-    ;; Predictive clear on pre-command (before minibuffer-activating commands)
-    (add-hook 'pre-command-hook         #'shaoline--predictive-clear)
-    ;; Focus-in for restoring after frame focus changes
-    (add-hook 'focus-in-hook            #'shaoline--debounced-update))
+    (add-hook 'minibuffer-setup-hook    #'shaoline--clear-display)    (shaoline--log "  add-hook minibuffer-setup-hook shaoline--clear-display")
+    (add-hook 'minibuffer-exit-hook     #'shaoline--delayed-update)   (shaoline--log "  add-hook minibuffer-exit-hook shaoline--delayed-update")
+    (add-hook 'isearch-mode-hook        #'shaoline--clear-display)    (shaoline--log "  add-hook isearch-mode-hook shaoline--clear-display")
+    (add-hook 'isearch-mode-end-hook    #'shaoline--delayed-update)   (shaoline--log "  add-hook isearch-mode-end-hook shaoline--delayed-update")
+    (add-hook 'pre-command-hook         #'shaoline--predictive-clear) (shaoline--log "  add-hook pre-command-hook shaoline--predictive-clear")
+    (add-hook 'focus-in-hook            #'shaoline--debounced-update) (shaoline--log "  add-hook focus-in-hook shaoline--debounced-update"))
   ;; Start periodic timer if needed
   (when shaoline-enable-dynamic-segments
+    (shaoline--log "shaoline-enable-dynamic-segments=%s, calling shaoline--maybe-start-timer" shaoline-enable-dynamic-segments)
     (shaoline--maybe-start-timer)))
 
 (defun shaoline-events-disable ()
   "Disable all Shaoline global hooks, advices and timers for impure infrastructure."
+  (shaoline--log "shaoline-events-disable called")
   ;; Advice always removed (if advices were enabled).
   (when shaoline-attach-advices
+    (shaoline--log "Removing advices")
     (advice-remove #'message            #'shaoline--capture-message-args)
     (advice-remove #'message            #'shaoline--capture-message-ret)
     (advice-remove #'display-warning    #'shaoline--around-display-warning)
     (advice-remove #'minibuffer-message #'shaoline--around-minibuffer-message))
   ;; Hooks — only if they were enabled and allowed.
   (when shaoline-attach-hooks
+    (shaoline--log "Removing hooks")
     (dolist (hook shaoline-update-hooks)
-      (remove-hook hook (if (eq hook 'post-command-hook)
-                            #'shaoline--update
-                          #'shaoline--debounced-update)))
-    (remove-hook 'minibuffer-setup-hook    #'shaoline--clear-display)
-    (remove-hook 'minibuffer-exit-hook     #'shaoline--delayed-update)
-    (remove-hook 'isearch-mode-hook        #'shaoline--clear-display)
-    (remove-hook 'isearch-mode-end-hook    #'shaoline--delayed-update)
-    (remove-hook 'pre-command-hook         #'shaoline--predictive-clear)
-    (remove-hook 'focus-in-hook            #'shaoline--debounced-update))
+      (let* ((wrapsym (intern (format "shaoline--hook-wrapper-%s" (symbol-name hook)))))
+        (when (fboundp wrapsym)
+          (remove-hook hook (symbol-function wrapsym))
+          (shaoline--log "  remove-hook %s wrapper=%s" hook wrapsym)
+          (fmakunbound wrapsym))))
+    (remove-hook 'minibuffer-setup-hook    #'shaoline--clear-display)    (shaoline--log "  remove-hook minibuffer-setup-hook shaoline--clear-display")
+    (remove-hook 'minibuffer-exit-hook     #'shaoline--delayed-update)   (shaoline--log "  remove-hook minibuffer-exit-hook shaoline--delayed-update")
+    (remove-hook 'isearch-mode-hook        #'shaoline--clear-display)    (shaoline--log "  remove-hook isearch-mode-hook shaoline--clear-display")
+    (remove-hook 'isearch-mode-end-hook    #'shaoline--delayed-update)   (shaoline--log "  remove-hook isearch-mode-end-hook shaoline--delayed-update")
+    (remove-hook 'pre-command-hook         #'shaoline--predictive-clear) (shaoline--log "  remove-hook pre-command-hook shaoline--predictive-clear")
+    (remove-hook 'focus-in-hook            #'shaoline--debounced-update) (shaoline--log "  remove-hook focus-in-hook shaoline--debounced-update"))
   (shaoline--maybe-cancel-timer)
   ;; Cancel debounce timer
   (when (timerp shaoline--debounce-timer)
+    (shaoline--log "Cancelling debounce timer")
     (cancel-timer shaoline--debounce-timer)
-    (setq shaoline--debounce-timer nil)))
+    (setq shaoline--debounce-timer nil))
+  ;; Cancel any remaining timers that may still fire after the mode
+  ;; has been disabled (e.g. one-off idle timers created earlier).
+  (dolist (fn '(shaoline--update
+                shaoline--lazy-update
+                shaoline--debounced-update
+                shaoline--ensure-visible
+                shaoline--log--timer-fn))
+    (shaoline--log "Cancelling function timers for %s" fn)
+    (cancel-function-timers fn)))
 
 (defun shaoline-purge-infra ()
   "Completely remove all Shaoline hooks, advice, and timers regardless of settings.
@@ -309,9 +377,12 @@ For emergency/manual cleanup."
 ;; Activate advice and hooks/timers when shaoline-mode toggles.
 (add-hook 'shaoline-mode-hook
           (lambda ()
+            (shaoline--log "shaoline-mode-hook fired (shaoline-mode=%s)" shaoline-mode)
             (if shaoline-mode
-                (shaoline-events-enable)
-              (shaoline-events-disable))))
+                (progn (shaoline--log "Enabling infra via shaoline-events-enable")
+                       (shaoline-events-enable))
+              (progn (shaoline--log "Disabling infra via shaoline-events-disable")
+                     (shaoline-events-disable)))))
 
 ;; ----------------------------------------------------------------------------
 ;; Shaoline minor mode engine.
@@ -321,19 +392,26 @@ For emergency/manual cleanup."
   "Global minor mode that displays a functional minimalist modeline in echo-area."
   :global t
   :lighter ""
+  (shaoline--log "shaoline-mode toggled: %s" shaoline-mode)
   (if shaoline-mode
       (progn
+        (shaoline--log "shaoline-mode enabled")
         (when shaoline-autohide-modeline
+          (shaoline--log "Autohiding classic mode-line")
           (shaoline--autohide-modeline-globally))
         (setq shaoline--resize-mini-windows-backup resize-mini-windows)
         (setq resize-mini-windows nil)
+        (shaoline--log "Scheduling shaoline--update via idle-timer")
         (run-with-idle-timer 0.1 nil #'shaoline--update))
-    (progn (shaoline--clear-display)
-           (when shaoline-autohide-modeline
-             (shaoline--unhide-modeline-globally))
-           (when shaoline--resize-mini-windows-backup
-             (setq resize-mini-windows shaoline--resize-mini-windows-backup)
-             (setq shaoline--resize-mini-windows-backup nil)))))
+    (progn
+      (shaoline--log "shaoline-mode disabled")
+      (shaoline--clear-display)
+      (when shaoline-autohide-modeline
+        (shaoline--log "Restoring classic mode-line")
+        (shaoline--unhide-modeline-globally))
+      (when shaoline--resize-mini-windows-backup
+        (setq resize-mini-windows shaoline--resize-mini-windows-backup)
+        (setq shaoline--resize-mini-windows-backup nil)))))
 
 (provide 'shaoline-impure)
 ;;; shaoline-impure.el ends here
