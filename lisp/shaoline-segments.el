@@ -163,12 +163,28 @@
 ;; ----------------------------------------------------------------------------
 
 (shaoline-define-segment shaoline-segment-echo-message ()
-  "Current captured message, excluding Shaoline's own content."
+  "Last useful message from Messages buffer, excluding Shaoline's own content."
   (when-let ((msg (shaoline-msg-current)))
     (unless (get-text-property 0 'shaoline-origin msg)
-      (if (string-match "\n" msg)
-          (propertize (concat (car (split-string msg "\n")) " [more]") 'face 'shaoline-echo)
-        (propertize msg 'face 'shaoline-echo)))))
+      (let ((cleaned-msg (if (string-match "\n" msg)
+                             (concat (car (split-string msg "\n")) " [more]")
+                           msg)))
+        ;; Always show the last useful message, not current keys
+        (when (and (stringp cleaned-msg)
+                   (not (string-empty-p (string-trim cleaned-msg)))
+                   (not (string-match-p "^Key:" cleaned-msg)))
+          (propertize cleaned-msg 'face 'shaoline-echo))))))
+
+(shaoline-define-segment shaoline-segment-current-keys ()
+  "Display current prefix key combination being typed."
+  (shaoline--log "shaoline-segment-current-keys: called")
+  (let* ((keys (progn
+                 (shaoline--log "shaoline-segment-current-keys: about to call shaoline--get-current-keys")
+                 (shaoline--get-current-keys))))
+    (shaoline--log "shaoline-segment-current-keys: after shaoline--get-current-keys, keys=%S" keys)
+    (when (and keys (not (string-empty-p keys)))
+      (shaoline--log "shaoline-segment-current-keys: will return [%s]" keys)
+      (propertize (format "[%s]" keys) 'face 'shaoline-yang))))
 
 ;; ----------------------------------------------------------------------------
 ;; 六 Time and Cosmic Elements — Dynamic Universe
@@ -417,6 +433,7 @@
                   shaoline-segment-git-branch
                   shaoline-segment-vcs-state
                   shaoline-segment-echo-message
+                  shaoline-segment-current-keys
                   shaoline-segment-time
                   shaoline-segment-digital-clock
                   shaoline-segment-day-date

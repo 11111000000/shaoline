@@ -180,14 +180,5 @@ Use \\[shaoline-clear] to clear display."
   (shaoline--restore-mode-lines-globally)
   (message "Shaoline: returned to emptiness"))
 
-;; ----------------------------------------------------------------------------
-;; Compatibility Bridge — Bridge Old and New
-;; ----------------------------------------------------------------------------
-
-(defun shaoline-cleanup ()
-  "Legacy cleanup function for backward compatibility."
-  (interactive)
-  (shaoline-total-cleanup))
-
 (provide 'shaoline-mode)
 ;;; shaoline-mode.el ends here

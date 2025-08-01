@@ -48,7 +48,7 @@
 (defcustom shaoline-segments
   '((:left shaoline-segment-major-mode  shaoline-segment-buffer-name shaoline-segment-modified)
     (:center shaoline-segment-echo-message)
-    (:right  shaoline-segment-position shaoline-segment-time))
+    (:right  shaoline-segment-current-keys shaoline-segment-position shaoline-segment-time))
   "Segment configuration following the Three Treasures pattern.
 Structure: ((:left segment ...) (:center segment ...) (:right segment ...))"
   :type 'sexp
@@ -71,7 +71,7 @@ Structure: ((:left segment ...) (:center segment ...) (:right segment ...))"
   :type 'boolean
   :group 'shaoline)
 
-(defcustom shaoline-debug nil
+(defcustom shaoline-debug niloo
   "Enable debug logging for troubleshooting."
   :type 'boolean
   :group 'shaoline)
