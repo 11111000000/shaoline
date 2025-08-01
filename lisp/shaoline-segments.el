@@ -1,6 +1,6 @@
 ;;; shaoline-segments.el --- Segment garden for Shaoline 3.0 Dao -*- lexical-binding: t; -*-
 
-;; Version: 3.0.0-dao
+;; Version: 3.0.0
 
 ;; Copyright (C) 2025 Peter
 ;; Author: Peter <11111000000@email.com>
@@ -20,7 +20,7 @@
 ;;; Code:
 
 (require 'shaoline)
-(require 'async nil :noerror)          ;; необязательная зависимость
+(require 'async nil :noerror)
 (eval-when-compile
   (require 'calendar nil t)
   (require 'lunar nil t))
@@ -163,18 +163,12 @@
 ;; ----------------------------------------------------------------------------
 
 (shaoline-define-segment shaoline-segment-echo-message ()
-  "Persistent echo message display."
+  "Current captured message, excluding Shaoline's own content."
   (when-let ((msg (shaoline-msg-current)))
-    (if (string-match "\n" msg)
-        ;; Multi-line: show first line + indicator
-        (let* ((first-line (car (split-string msg "\n")))
-               (width (shaoline-available-center-width))
-               (truncated (truncate-string-to-width first-line (max 1 (- width 8)) nil nil "…")))
-          (propertize (concat truncated " [more]") 'face 'shaoline-echo))
-      ;; Single line: truncate if too long
-      (let ((width (shaoline-available-center-width)))
-        (propertize (truncate-string-to-width msg (max 1 width) nil nil "…")
-                    'face 'shaoline-echo)))))
+    (unless (get-text-property 0 'shaoline-origin msg)
+      (if (string-match "\n" msg)
+          (propertize (concat (car (split-string msg "\n")) " [more]") 'face 'shaoline-echo)
+        (propertize msg 'face 'shaoline-echo)))))
 
 ;; ----------------------------------------------------------------------------
 ;; 六 Time and Cosmic Elements — Dynamic Universe

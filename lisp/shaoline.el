@@ -49,10 +49,8 @@
   '((:left shaoline-segment-major-mode  shaoline-segment-buffer-name shaoline-segment-modified)
     (:center shaoline-segment-echo-message)
     (:right  shaoline-segment-position shaoline-segment-time))
-  "Segment configuration following the Three Treasures pattern. Warning: Alist syntax, not plist!
-If you want the old plist support, ensure your code passes & uses
-the plist syntax–but SHAOLINE now treats shaoline-segments as
-an alist: ((:left seg ...) (:center seg ...) (:right seg ...))."
+  "Segment configuration following the Three Treasures pattern.
+Structure: ((:left segment ...) (:center segment ...) (:right segment ...))"
   :type 'sexp
   :group 'shaoline)
 
@@ -81,6 +79,13 @@ an alist: ((:left seg ...) (:center seg ...) (:right seg ...))."
 (defcustom shaoline-right-margin 2
   "Fixed right margin in characters for right-aligned segments."
   :type 'integer
+  :group 'shaoline)
+
+(defcustom shaoline-hide-modeline t
+  "When non-nil, hide traditional modelines in all buffers.
+The original modeline-format of each buffer is saved and restored
+when Shaoline is disabled or this option is turned off."
+  :type 'boolean
   :group 'shaoline)
 
 ;; ----------------------------------------------------------------------------
@@ -234,10 +239,10 @@ an alist: ((:left seg ...) (:center seg ...) (:right seg ...))."
 
 (defun shaoline--collect-side (side)
   "Collect all segments for SIDE (:left, :center, :right)."
-  (let* ((segments (cdr (assoc side shaoline-segments))) ;; Ensure correct extraction for both plist & alist
+  (let* ((segments (cdr (assoc side shaoline-segments)))
          (results (mapcar #'shaoline--call-segment
                           (or segments
-                              (plist-get shaoline-segments side) ; fallback for plist-style
+                              (plist-get shaoline-segments side)
                               '()))))
     (shaoline--log "shaoline--collect-side %s in buffer: %s: %S" side (buffer-name) results)
     results))
@@ -312,7 +317,7 @@ Takes no global state, produces modeline string."
               'face 'shaoline-mode-face))
 
 (shaoline-define-segment shaoline-segment-echo-message ()
-  "Current captured message, если это не строка Shaoline."
+  "Current captured message, excluding Shaoline's own content."
   (when-let ((msg (shaoline-msg-current)))
     (unless (get-text-property 0 'shaoline-origin msg)
       (propertize msg 'face 'shaoline-echo))))
@@ -353,14 +358,11 @@ Takes no global state, produces modeline string."
 (defun shaoline--should-display-p (content)
   "Return non-nil when Shaoline should (re)display CONTENT.
 
-Особый случай: если включён флаг `always-visible`, мы обязаны
-перебивать чужие сообщения даже тогда, когда CONTENT не изменился."
+In always-visible mode, overrides foreign messages even when content unchanged."
   (and content
        (stringp content)
        (not (string-empty-p content))
        (or (shaoline--content-changed-p content)
-           ;; В «yang»/always-visible режиме — если текущее сообщение
-           ;; не наше, требуется немедленное восстановление.
            (and (shaoline--resolve-setting 'always-visible)
                 (let ((cur (current-message)))
                   (or (null cur)
@@ -376,17 +378,20 @@ Takes no global state, produces modeline string."
                (use-hooks     . nil)
                (use-advice    . nil)
                (use-timers    . nil)
-               (always-visible . nil)))
+               (always-visible . nil)
+               (hide-modelines . nil)))
     (yang   . ((update-method . automatic)
                (use-hooks     . t)
                (use-advice    . t)
                (use-timers    . t)
-               (always-visible . t)))
+               (always-visible . t)
+               (hide-modelines . t)))
     (adaptive . ((update-method . context)
                  (use-hooks     . adaptive)
                  (use-advice    . adaptive)
                  (use-timers    . adaptive)
-                 (always-visible . adaptive))))
+                 (always-visible . adaptive)
+                 (hide-modelines . adaptive))))
   "Strategy definitions for different operational modes.")
 
 (defun shaoline--get-strategy-setting (setting)
@@ -402,8 +407,8 @@ Takes no global state, produces modeline string."
     ('use-hooks (not (file-remote-p default-directory))) ; No hooks for remote files
     ('use-advice (display-graphic-p))          ; Advice in GUI only
     ('use-timers (< (buffer-size) 100000))     ; Timers for small buffers
-    ('always-visible nil)                               ; In adaptive mode we stay
-                                        ; unobtrusive by default.
+    ('always-visible nil)
+    ('hide-modelines shaoline-hide-modeline)
     (_ nil)))
 
 (defun shaoline--resolve-setting (setting)
@@ -430,22 +435,7 @@ without activating a minibuffer window."
       (active-minibuffer-window)
       (and (boundp 'isearch-mode) isearch-mode)))
 
-(defun shaoline-available-center-width ()
-  "Calculate available width for center segment based on previously rendered segments.
-If no rendering has happened yet, returns frame-width/3 as default."
-  (let* ((frame-w (frame-width))
-         (last-left-w (or (shaoline--state-get :last-left-width) 0))
-         (last-right-w (or (shaoline--state-get :last-right-width) 0))
-         (spacing 4) ; accounting for gaps and margins
-         (available (- frame-w last-left-w last-right-w spacing shaoline-right-margin - 20)))
-    ;; If we haven't rendered yet, or if calculation gives unreasonable result
-    (if (or (zerop last-left-w)
-            (zerop last-right-w)
-            (< available 20))
-        (max 20 (/ frame-w 3))
-      (max 20 available))))
-
-;; Legacy function bridge (useful for transitions)
+;; Legacy function bridge
 (defun shaoline--update ()
   "Legacy update function bridge."
   (when (fboundp 'shaoline-update)

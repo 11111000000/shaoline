@@ -1,6 +1,6 @@
 ;;; shaoline-mode.el --- Minor mode interface for Shaoline -*- lexical-binding: t; -*-
 
-;; Version: 3.0.0-dao
+;; Version: 3.0.0
 
 ;; Copyright (C) 2025 Peter
 ;; Author: Peter <11111000000@email.com>
@@ -101,9 +101,7 @@ Use \\[shaoline-clear] to clear display."
       (shaoline-switch-to-adaptive)
     (shaoline--apply-strategy shaoline-mode-strategy))
 
-  ;; Hide traditional mode-lines if configured
-  (when (shaoline--resolve-setting 'hide-mode-lines)
-    (shaoline--hide-mode-lines-globally))
+
 
   ;; Initial display
   (run-with-idle-timer 0.1 nil #'shaoline-update))
@@ -135,7 +133,7 @@ Use \\[shaoline-clear] to clear display."
 (add-hook 'after-load-theme-hook #'shaoline--after-theme-change)
 
 ;; ----------------------------------------------------------------------------
-;; Diagnostic Functions — Self-Awareness (ИСПРАВЛЕНО)
+;; Diagnostic Functions — Self-Awareness
 ;; ----------------------------------------------------------------------------
 
 (defun shaoline-status ()

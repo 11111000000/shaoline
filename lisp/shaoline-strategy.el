@@ -1,6 +1,6 @@
 ;;; shaoline-strategy.el --- Strategic adaptation for Shaoline -*- lexical-binding: t; -*-
 
-;; Version: 3.0.0-dao
+;; Version: 3.0.0
 
 ;; Copyright (C) 2025 Peter
 ;; Author: Peter <11111000000@email.com>
@@ -218,8 +218,6 @@
        (not (shaoline--echo-area-busy-p))
        (or (shaoline--context-changed-p)
            (shaoline--content-changed-p (shaoline-compose))
-           ;; В always-visible режиме обновляемся, если в эхо-области
-           ;; сейчас не наше сообщение.
            (and (shaoline--resolve-setting 'always-visible)
                 (let ((cur (current-message)))
                   (or (null cur)

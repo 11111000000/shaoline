@@ -1,6 +1,6 @@
 ;;; shaoline-effects.el --- Effect system for Shaoline -*- lexical-binding: t; -*-
 
-;; Version: 3.0.0-dao
+;; Version: 3.0.0
 
 ;; Copyright (C) 2025 Peter
 ;; Author: Peter <11111000000@email.com>
@@ -140,21 +140,27 @@
 ;; Mode Line Effects — Traditional Display Manipulation
 ;; ----------------------------------------------------------------------------
 
-(defvar shaoline--hidden-mode-lines nil
-  "Backup of hidden mode-line-formats.")
+;; Mode Line Effects — Traditional Display Manipulation
+;; ----------------------------------------------------------------------------
+
+(defvar shaoline--modeline-backup-registry (make-hash-table :weakness 'key)
+  "Registry mapping buffers to their original mode-line-format.
+Uses weak references so buffers can be garbage collected normally.")
 
 (shaoline-defeffect shaoline--hide-mode-line ()
   "Hide traditional mode-line in current buffer."
-  (unless (local-variable-p 'shaoline--original-mode-line)
-    (setq-local shaoline--original-mode-line mode-line-format)
-    (setq-local mode-line-format nil)
-    (force-mode-line-update)))
+  (unless (gethash (current-buffer) shaoline--modeline-backup-registry)
+    ;; Save original mode-line-format
+    (puthash (current-buffer) mode-line-format shaoline--modeline-backup-registry)
+    (setq mode-line-format nil)
+    (force-mode-line-update)
+    (push `(modeline . ,(current-buffer)) shaoline--active-effects)))
 
 (shaoline-defeffect shaoline--restore-mode-line ()
   "Restore traditional mode-line in current buffer."
-  (when (local-variable-p 'shaoline--original-mode-line)
-    (setq-local mode-line-format shaoline--original-mode-line)
-    (kill-local-variable 'shaoline--original-mode-line)
+  (when-let ((original (gethash (current-buffer) shaoline--modeline-backup-registry)))
+    (setq mode-line-format original)
+    (remhash (current-buffer) shaoline--modeline-backup-registry)
     (force-mode-line-update)))
 
 (defun shaoline--hide-mode-lines-globally ()
@@ -166,22 +172,33 @@
 (defun shaoline--restore-mode-lines-globally ()
   "Restore mode-lines in all buffers."
   (dolist (buffer (buffer-list))
-    (with-current-buffer buffer
-      (shaoline--restore-mode-line))))
+    (when (gethash buffer shaoline--modeline-backup-registry)
+      (with-current-buffer buffer
+        (shaoline--restore-mode-line)))))
+
+(defun shaoline--cleanup-all-modelines ()
+  "Clean up all modeline effects."
+  (maphash (lambda (buffer original)
+             (when (buffer-live-p buffer)
+               (with-current-buffer buffer
+                 (setq mode-line-format original)
+                 (force-mode-line-update))))
+           shaoline--modeline-backup-registry)
+  (clrhash shaoline--modeline-backup-registry))
 
 ;; ----------------------------------------------------------------------------
-;; Effect Orchestration — Coordinated World Changes (ИСПРАВЛЕНО)
+;; Effect Orchestration — Coordinated World Changes
 ;; ----------------------------------------------------------------------------
 
 (defun shaoline--apply-strategy (strategy)
   "Apply STRATEGY by orchestrating appropriate effects."
   (shaoline--cleanup-all-effects) ; Clean slate
 
-  (when (shaoline--resolve-setting 'use-hooks)  ; ИСПРАВЛЕНО: shaoline вместо shaolin
+  (when (shaoline--resolve-setting 'use-hooks)
     (shaoline--attach-hook 'post-command-hook #'shaoline-update)
     (shaoline--attach-hook 'after-save-hook #'shaoline-update)
     (shaoline--attach-hook 'window-configuration-change-hook #'shaoline-update)
-    ;; Capture prefix keys (e.g. “C-x …”) so they appear in yang mode
+
     (shaoline--attach-hook 'pre-command-hook #'shaoline--capture-prefix-keys))
 
   (when (shaoline--resolve-setting 'use-advice)
@@ -189,8 +206,11 @@
 
   (when (shaoline--resolve-setting 'use-timers)
     (shaoline--start-timer 'update 1.0 t #'shaoline-update)
-    ;; guard-таймер чаще (0.15) для более плавного возврата, особенно поверх чужих сообщений
+
     (shaoline--start-timer 'guard 0.15 t #'shaoline--guard-visibility))
+
+  (when (shaoline--resolve-setting 'hide-modelines)
+    (shaoline--hide-mode-lines-globally))
 
   (shaoline--state-put :strategy strategy))
 
@@ -199,6 +219,7 @@
   (shaoline--cleanup-all-timers)
   (shaoline--cleanup-all-hooks)
   (shaoline--cleanup-all-advice)
+  (shaoline--cleanup-all-modelines)
   (shaoline--clear-echo-area)
   (setq shaoline--active-effects nil))
 
@@ -207,17 +228,14 @@
 ;; ----------------------------------------------------------------------------
 
 (defun shaoline--advice-capture-message (orig-fn format-string &rest args)
-  "Capture message content before display.
-   Не захватывать сообщения, сгенерированные самим Shaoline."
+  "Capture message content before display, excluding Shaoline's own messages."
   (let ((content (when format-string
                    (apply #'format format-string args))))
     (unless (and content
                  (stringp content)
-                 ;; Если content содержит хотя бы один символ с text-property 'shaoline-origin, не сохраняем
                  (get-text-property 0 'shaoline-origin content))
       (when content
         (shaoline-msg-save content)
-        ;; КЛЮЧЕВАЯ ДОБАВКА: сразу восстанавливаем shaoline, чтобы перебивать чужое сообщение
         (when (and (shaoline--resolve-setting 'always-visible)
                    (not (minibufferp))
                    (not (active-minibuffer-window)))
@@ -225,14 +243,25 @@
     (apply orig-fn format-string args)))
 
 ;; ----------------------------------------------------------------------------
+;; Prefix Key Capture — Yang Mode Enhancement
+;; ----------------------------------------------------------------------------
+
+(defun shaoline--capture-prefix-keys ()
+  "Capture prefix keys for display in yang mode."
+  (when (and (vectorp (this-command-keys))
+             (> (length (this-command-keys)) 0))
+    (let* ((keys (this-command-keys))
+           (key-desc (key-description keys)))
+      (when (string-match-p "^C-\\|^M-\\|^s-\\|^H-" key-desc)
+        ;; This is a prefix key, save it as a message
+        (shaoline-msg-save (format "Key: %s" key-desc))))))
+
+;; ----------------------------------------------------------------------------
 ;; Guard Timer — Gentle Persistence
 ;; ----------------------------------------------------------------------------
 
 (defun shaoline--guard-visibility ()
-  "Gentle guardian ensuring Shaoline remains visible when appropriate.
-
-In yang mode, forcibly redraw Shaoline even over foreign messages.
-"
+  "Gentle guardian ensuring Shaoline remains visible when appropriate."
   (when (and (shaoline--resolve-setting 'always-visible)
              (not (shaoline--echo-area-busy-p)))
     (shaoline-update)))
