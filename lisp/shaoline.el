@@ -1,6 +1,6 @@
 ;;; shaoline.el --- Functional minimalist echo-area modeline -*- lexical-binding: t; -*-
 
-;; Version: 2.3.0
+;; Version: 3.0.0
 
 ;; Copyright (C) 2025 Peter
 ;; Author: Peter <11111000000@email.com>
@@ -9,613 +9,483 @@
 
 ;;; Commentary:
 
-;; In the land of the rising buffer, modelines wandered the world in excess—
-;; until Shaoline arrived, shaved its segments, and sat quietly in the echo area.
-;; The true path has neither timers nor distractions.
+;; 道可道，非常道 — The Dao that can be expressed is not the eternal Dao
 ;;
-;; Shaoline-echo is a trimmed-down edition of the original: a Shaolin monk
-;; among modelines. There is no child-frame and no in-window modeline —
-;; the only rendering target is the echo area (the minibuffer). The architecture
-;; remains functional: each segment is a pure function, unaffected by worldly
-;; state, and the only side effects are writing to the echo area and (optionally)
-;; hiding the regular `mode-line` (so your modeline too may attain Nirvana).
+;; Shaoline 3.0 follows the path of Wu Wei (無為) — effortless action.
+;; Pure functions compose reality; impure effects merely manifest it.
 ;;
-;; Key features (as written upon a bamboo leaf):
-;;   • Minimalist, declarative segment configuration. Add, remove, or swap
-;;     segments like stones in the Zen garden.
-;;   • No polling timers — the modeline is refreshed only by the wind
-;;     (or `post-command-hook`, etc.).
-;;   • Global minor mode `shaoline-mode` toggles everything with serenity.
-;;   • Optional hiding of the traditional mode line, for those seeking emptiness.
-;;   • A unit-test-friendly “core” — the composing function is a silent
-;;     observer, causing no side effects (Wu Wei by design).
+;; Architecture of Emptiness:
+;;   • Pure Core (此文件) — functional composition, no side effects
+;;   • Effect Layer (shaoline-effects.el) — isolated world changes
+;;   • Strategy Layer (shaoline-strategy.el) — adaptive behaviors
+;;   • Mode Interface (shaoline-mode.el) — user interaction gateway
 ;;
-;; Quick start:
-;;
-;;   (require 'shaoline-echo)
-;;   (shaoline-mode 1)
-;;
-;; See the README on GitHub for scrolls and stories about writing custom segments.
+;; Like water flowing around rocks, Shaoline adapts without forcing.
 
 ;;; Code:
 
-(add-to-list 'load-path (expand-file-name "lisp" (file-name-directory (or load-file-name buffer-file-name))))
 (require 'cl-lib)
 (eval-when-compile (require 'rx))
-(require 'shaoline-macros)
-
-;; project-specific libraries are only needed by segments (see shaoline-segments.el);
-;; keeping the core truly “pure”.
 
 ;; ----------------------------------------------------------------------------
-;; Msg-Engine (Integrated from shaoline-msg-engine.el)
-;;
-;; Silent implementation. Not for loading by user.
-
-;; State.
-(defvar shaoline-msg--last-user-message nil
-  "Last user message captured by Shaoline (string or nil).")
-
-(defvar shaoline-msg--last-user-message-ts 0
-  "Timestamp (float value) when the last user message appeared.")
-
-;; Actions.
-(defun shaoline-msg-clear ()
-  "Clear last user message and timestamp."
-  (setq shaoline-msg--last-user-message nil
-        shaoline-msg--last-user-message-ts 0))
-
-(defun shaoline-msg-save (str)
-  "Save STR as the last user message and record its timestamp."
-  (setq shaoline-msg--last-user-message str
-        shaoline-msg--last-user-message-ts (float-time)))
-
-;; Query.
-(defun shaoline-msg-active-p (_timeout)
-  "Return non-nil if there is a current user message (persistent until new non-empty)."
-  (and shaoline-msg--last-user-message
-       (not (string-empty-p shaoline-msg--last-user-message))))
-
-(defun shaoline-msg-current ()
-  "Return the current user message string, or nil."
-  shaoline-msg--last-user-message)
-
-(defun shaoline-msg-age ()
-  "Return the age (seconds, float) of the current user message, or 0."
-  (if shaoline-msg--last-user-message-ts
-      (float-time (time-since shaoline-msg--last-user-message-ts))
-    0))
-
+;; 一 Fundamental Variables — The Unchanging Essence
 ;; ----------------------------------------------------------------------------
-;; Customization Group and Variables
-;;
-;; All is possible. Customize, or leave as it is.
 
 (defgroup shaoline nil
-  "Functional minimalist echo-area modeline."
+  "Functional minimalist echo-area modeline following the Dao."
   :group 'convenience
   :prefix "shaoline-")
 
-(defcustom shaoline-icon-width 2
-  "Width in characters to pad or truncate all-the-icons icons for consistent spacing.
-Increase if your favorite icons are wider."
-  :type 'integer
-  :group 'shaoline)
-
-(defcustom shaoline-debug t
-  "If non-nil, log shaoline activity into `shaoline--log-buffer'.  Seek inner debugness."
-  :type 'boolean
-  :group 'shaoline)
-
-(defcustom shaoline-enable-dynamic-segments t
-  "If non-nil, enable dynamic segments like time and battery.
-When disabled, these segments return empty strings and do not load any dependencies.
-This purifies Shaoline for minimal setups, aligning with Wu Wei."
-  :type 'boolean
-  :group 'shaoline)
-
-(defcustom shaoline-always-visible t
-  "When non-nil, Shaoline stays visible continuously.
-User `message' output is captured and shown in the
-`shaoline-segment-echo-message' centre segment instead of
-temporarily replacing the modeline.  Shaoline is still hidden
-whenever the minibuffer (or isearch prompt) is active, so user
-input is never obstructed.
-
-Set this to nil (the default) for the original behaviour where
-foreign `message's are allowed to occupy the echo area for their
-full duration before Shaoline repaints."
-  :type 'boolean
-  :group 'shaoline)
-
-(defcustom shaoline-enable-hooks t
-  "If non-nil, enable all update hooks (post-command, etc.) for Shaoline.
-When disabled, Shaoline will not automatically update on events — you must
-call `shaoline--update' manually for changes to appear.
-
-Set to nil for a pure, hook-free mode (manual refreshes only)."
-  :type 'boolean
-  :group 'shaoline)
-
-(defcustom shaoline-attach-advices t
-  "If non-nil, attach advices (message interception, display-warning, etc.).
-Set to nil to completely avoid adding/removing any Shaoline advices.
-For ultimate purity or troubleshooting only."
-  :type 'boolean
-  :group 'shaoline)
-
-(defcustom shaoline-attach-hooks t
-  "If non-nil, attach Shaoline update hooks; if nil, hooks will NOT be added/removed,
-even if `shaoline-enable-hooks' is t. Useful for advanced users."
-  :type 'boolean
-  :group 'shaoline)
-
-(defvar shaoline--log-buffer "*shaoline-logs*"
-  "Debug buffer for logs. Quiet scroll, if you wish to listen.")
-
-;; ---------------------------------------------------------------------------
-;; Debounced, coalescing logger
-;;
-;;  • Consecutive identical messages are collapsed into one line with a
-;;    trailing  [xN] repetition counter.
-;;  • Output is flushed to `shaoline--log-buffer' in batches every
-;;    `shaoline-log-debounce-interval' seconds, keeping the UI responsive.
-;; ---------------------------------------------------------------------------
-
-(defcustom shaoline-log-debounce-interval 0.4
-  "Seconds to debounce debug log output.
-Lower values yield more immediate logs; higher values reduce UI churn."
-  :type 'number
-  :group 'shaoline)
-
-(defvar shaoline--log-pending nil
-  "List of log lines waiting to be written to `shaoline--log-buffer'.")
-
-(defvar shaoline--log-last-message nil
-  "Last message passed to `shaoline--log' (for repeat coalescing).")
-
-(defvar shaoline--log-repeat-count 1
-  "Repeat counter for `shaoline--log-last-message'.")
-
-(defvar shaoline--log-timer nil
-  "Internal timer object for debounced log flushing.")
-
-(defun shaoline--log--enqueue (msg)
-  "Queue MSG for later flush, coalescing consecutive duplicates."
-  (if (equal msg shaoline--log-last-message)
-      (cl-incf shaoline--log-repeat-count)
-    ;; Commit previous run before starting a new one
-    (when shaoline--log-last-message
-      (push (if (> shaoline--log-repeat-count 1)
-                (format "%s [x%d]" shaoline--log-last-message shaoline--log-repeat-count)
-              shaoline--log-last-message)
-            shaoline--log-pending))
-    (setq shaoline--log-last-message msg
-          shaoline--log-repeat-count 1)))
-
-(defun shaoline--log--commit ()
-  "Flush pending log lines to `shaoline--log-buffer'."
-  ;; Add the still-unflushed last message.
-  (when shaoline--log-last-message
-    (push (if (> shaoline--log-repeat-count 1)
-              (format "%s [x%d]" shaoline--log-last-message shaoline--log-repeat-count)
-            shaoline--log-last-message)
-          shaoline--log-pending)
-    (setq shaoline--log-last-message nil
-          shaoline--log-repeat-count 1))
-  ;; Write batch, if any.
-  (when shaoline--log-pending
-    (with-current-buffer (get-buffer-create shaoline--log-buffer)
-      (goto-char (point-max))
-      (dolist (line (nreverse shaoline--log-pending))
-        (insert line "\n")))
-    (setq shaoline--log-pending nil)))
-
-(defun shaoline--log--timer-fn ()
-  "Timer callback flushing the queued log messages."
-  (shaoline--log--commit)
-  (setq shaoline--log-timer nil))
-
-(defun shaoline--log (fmt &rest args)
-  "Format FMT ARGS and enqueue into Shaoline debug log.
-Messages are debounced and consecutive duplicates are coalesced.
-Does nothing unless `shaoline-debug' is non-nil."
-  (when shaoline-debug
-    (let ((msg (apply #'format fmt args)))
-      (shaoline--log--enqueue msg)
-      (unless shaoline--log-timer
-        (setq shaoline--log-timer
-              (run-with-timer shaoline-log-debounce-interval
-                              nil
-                              #'shaoline--log--timer-fn))))))
-
-(defcustom shaoline-available-segments
-  '((shaoline-segment-buffer-name     . "Buffer name only")
-    (shaoline-segment-major-mode-icon . "Major-mode icon only")
-    (shaoline-segment-project-name    . "Project name (if any)")
-    (shaoline-segment-git-branch      . "Git branch")
-    (shaoline-segment-battery         . "Battery state")
-    (shaoline-segment-digital-clock   . "Digital clock (only time, e.g. 21:43)")
-    (shaoline-segment-moon-phase      . "Moon phase icon")
-    (shaoline-segment-echo-message    . "Recent noticed message")
-    (shaoline-segment-position        . "Line and column position")
-    (shaoline-segment-modified        . "Buffer modified status")
-    (shaoline-segment-major-mode      . "Major mode with optional icon")
-    (shaoline-segment-encoding        . "File encoding and EOL type")
-    (shaoline-segment-minor-modes     . "Compact enabled minor modes")
-    (shaoline-segment-flycheck        . "Flycheck/Flymake errors/warnings")
-    (shaoline-segment-vcs-state       . "Git/VCS state indicator"))
-  "Plenum of segments that may be included in shaoline. For drag/drop in customize."
-  :type '(alist :key-type symbol :value-type string)
+;; Core behavior flags
+(defcustom shaoline-mode-strategy 'adaptive
+  "Strategy for Shaoline behavior adaptation.
+- adaptive: Automatically choose between yin/yang based on context
+- yin: Passive mode (pure, manual updates only, no hooks/advice)
+- yang: Active mode (always visible, hooks, advice)"
+  :type '(choice (const adaptive) (const yin) (const yang))
   :group 'shaoline)
 
 (defcustom shaoline-segments
-  '((:left
-     shaoline-segment-major-mode-icon
-     shaoline-segment-buffer-name
-     shaoline-segment-modified
-     shaoline-segment-minor-modes)
-
+  '((:left shaoline-segment-major-mode  shaoline-segment-buffer-name shaoline-segment-modified)
     (:center shaoline-segment-echo-message)
-
-    (:right
-     shaoline-segment-position
-     shaoline-segment-project-name
-     shaoline-segment-git-branch
-     shaoline-segment-battery
-     shaoline-segment-input-method
-     shaoline-segment-digital-clock
-     (shaoline-segment-day-date :with-year nil)
-     shaoline-segment-moon-phase))
-
-  "Alist describing segments for :left, :center and :right.
-Each entry is a list of segment function symbols for that side.
-May be configured in Custom (see shaoline-available-segments)."
-  :type '(alist
-          :key-type (choice (const :left) (const :center) (const :right))
-          :value-type (set (choice
-                            (const shaoline-segment-project-name)
-                            (const shaoline-segment-git-branch)
-                            (const shaoline-segment-battery)
-                            (const shaoline-segment-digital-clock)
-                            (const shaoline-segment-moon-phase)
-                            (const shaoline-segment-echo-message)
-                            (const shaoline-segment-modified)
-                            (const shaoline-segment-major-mode)
-                            (const shaoline-segment-encoding)
-                            (const shaoline-segment-minor-modes)
-                            (const shaoline-segment-flycheck)
-                            (const shaoline-segment-vcs-state)
-                            (const shaoline-segment-position))))
+    (:right  shaoline-segment-position shaoline-segment-time))
+  "Segment configuration following the Three Treasures pattern. Warning: Alist syntax, not plist!
+If you want the old plist support, ensure your code passes & uses
+the plist syntax–but SHAOLINE now treats shaoline-segments as
+an alist: ((:left seg ...) (:center seg ...) (:right seg ...))."
+  :type 'sexp
   :group 'shaoline)
 
-(defcustom shaoline-update-hooks
-  '(post-command-hook find-file-hook after-save-hook)
-  "Hooks that tell Shaoline to recompute and display the modeline."
-  :type '(repeat symbol)
+;; Performance wisdom
+(defcustom shaoline-update-debounce 0.1
+  "Seconds to wait between updates. Like breathing — natural rhythm."
+  :type 'float
   :group 'shaoline)
 
-(defcustom shaoline-autohide-modeline t
-  "When non-nil, the traditional mode-line is hidden while `shaoline-mode' is active.
+(defcustom shaoline-cache-ttl 2.0
+  "Default TTL for segment caches. Impermanence with purpose."
+  :type 'float
+  :group 'shaoline)
 
-You can exclude certain major-modes from hiding using `shaoline-exclude-modes`."
+;; Feature toggles (consolidated from legacy)
+(defcustom shaoline-enable-dynamic-segments t
+  "Enable dynamic segments like time and battery that update automatically."
   :type 'boolean
   :group 'shaoline)
 
-(defcustom shaoline-exclude-modes
-  '(magit-status-mode org-agenda-mode gnus-summary-mode compilation-mode dired-mode)
-  "List of major modes in which classic mode-line should *not* be hidden by shaoline-mode."
-  :type '(repeat symbol)
+(defcustom shaoline-debug nil
+  "Enable debug logging for troubleshooting."
+  :type 'boolean
   :group 'shaoline)
 
-(defcustom shaoline-right-padding 0
-  "Extra spaces appended to the right edge of the shaoline. Sometimes, a little emptiness is all you need."
+(defcustom shaoline-right-margin 2
+  "Fixed right margin in characters for right-aligned segments."
   :type 'integer
   :group 'shaoline)
 
 ;; ----------------------------------------------------------------------------
-;; Timer, Message Customization (moved from infra)
-;;
-;; All user-facing options should be here for discoverability.
+;; 二 State Container — The Still Water
+;; ----------------------------------------------------------------------------
 
-(defcustom shaoline-timer-interval 1
-  "Interval (seconds) for Shaoline’s optional periodic refresh.
-Only used when dynamic segments such as time/battery are present."
-  :type 'number
-  :group 'shaoline)
+(defvar shaoline--state
+  (list :last-content ""
+        :cache (make-hash-table :test 'equal)
+        :timers '()
+        :hooks '()
+        :strategy nil
+        :last-left-width 0
+        :last-right-width 0)
+  "Central state container. All flows through here.")
 
-(defcustom shaoline-message-timeout 10
-  "How many seconds a normal `message' remains before Shaoline redraws.
-If non-positive, Shaoline repaints immediately after the `message'."
-  :type 'number
-  :group 'shaoline)
+(defun shaoline--state-get (key)
+  "Retrieve KEY from central state."
+  (plist-get shaoline--state key))
 
-(defcustom shaoline-guard-delay 0.15
-  "Idle seconds after which Shaoline re-checks that it is still visible.
-With `shaoline-always-visible' non-nil, this tiny watchdog brings the
-modeline back if another package has silently erased the echo area.
-Set to a small positive value (≈0.1–0.3) or 0 to disable."
-  :type 'number
-  :group 'shaoline)
+(defun shaoline--state-put (key value)
+  "Store VALUE at KEY in central state."
+  (setq shaoline--state (plist-put shaoline--state key value)))
 
 ;; ----------------------------------------------------------------------------
-;; Faces
-;;
-;; Outward form: all faces dwell here.
+;; 三 Message Engine — Capturing User Intent
+;; ----------------------------------------------------------------------------
 
-(defface shaoline-base-face
-  '((t :inherit default
-       :height 1.0
-       :box nil
-       :underline nil
-       :overline nil
-       :inverse-video nil
-       :extend t))
-  "Base face for shaoline. The foundation for all modeline elements."
+(defvar shaoline--last-message nil)
+(defvar shaoline--last-message-time 0)
+
+(defun shaoline-msg-save (content)
+  "Capture message CONTENT like dew on morning leaves."
+  (when (and content (not (string-empty-p content)))
+    (setq shaoline--last-message (copy-sequence content)
+          shaoline--last-message-time (float-time))))
+
+(defun shaoline-msg-current ()
+  "Return current captured message, or nil."
+  shaoline--last-message)
+
+(defun shaoline-msg-age ()
+  "Return age of current message in seconds."
+  (- (float-time) shaoline--last-message-time))
+
+(defun shaoline-msg-clear ()
+  "Clear captured message."
+  (setq shaoline--last-message nil
+        shaoline--last-message-time 0))
+
+;; ----------------------------------------------------------------------------
+;; 四 Faces — Outer Appearance Following Inner Nature
+;; ----------------------------------------------------------------------------
+
+(defface shaoline-base
+  '((t :inherit default :height 1.0))
+  "Base face — foundation like earth."
   :group 'shaoline)
 
-(defface shaoline-echo-face
-  '((t :inherit (font-lock-string-face shaoline-base-face) :height 1.0))
-  "Face for the echo message segment (slightly smaller)."
+(defface shaoline-yin
+  '((t :inherit shaoline-base :foreground "gray70"))
+  "Yin face — passive, receptive."
   :group 'shaoline)
 
-(defface shaoline-time-face
-  `((t :inherit default  ;; Inherit from default to adapt to themes
-       :height 1.0
-       :bold nil
-       :family "Digital Display"
-       :foreground ,(or (face-foreground 'success nil t) "#00aa00")  ;; Foreground, computed at load time
-       :background ,(or (face-background 'shadow nil t) "#002200")))  ;; Background, computed at load time
-  "Face for the time segment, adapting to the current theme at load time.
-For full dynamic adaptation, reload after theme changes."
+(defface shaoline-yang
+  '((t :inherit shaoline-base :foreground "white" :weight bold))
+  "Yang face — active, projecting."
   :group 'shaoline)
 
-(defface shaoline-date-face
-  '((t :inherit default  ;; Inherit from default to adapt to themes
-       :height 1.0
-       :bold nil))
-  "Face for the date segment, adapting to the current theme at load time.
-For full dynamic adaptation, reload after theme changes."
+(defface shaoline-echo
+  '((t :inherit font-lock-string-face))
+  "Face for echo messages — the voice of the system."
   :group 'shaoline)
 
-(defface shaoline-moon-face
-  `((t :inherit default
-       :height 1.0
-       :bold nil
-       :foreground ,(or (face-foreground 'warning nil t) "yellow")))  ;; Foreground, computed at load time
-  "Face for the moon phase, adapting to the theme at load time.
-For full dynamic adaptation, reload after theme changes."
-  :group 'shaoline)
-
-(defface shaoline-battery-face
-  '((t :inherit (shaoline-base-face)))
-  "Face for battery level segment."
-  :group 'shaoline)
-
+;; Segment-specific faces (moved from compatibility layer)
 (defface shaoline-buffer-face
-  '((t :inherit (shaoline-base-face) :height 1.0))
-  "Face for the buffer name segment."
-  :group 'shaoline)
-
-(defface shaoline-project-face
-  '((t :inherit (font-lock-keyword-face shaoline-base-face) :height 1.0))
-  "Face for the project name segment."
-  :group 'shaoline)
-
-(defface shaoline-modified-face
-  '((t :inherit (warning shaoline-base-face) :height 1.0))
-  "Face for the modified indicator segment."
-  :group 'shaoline)
-
-(defface shaoline-git-face
-  '((t :inherit (font-lock-type-face shaoline-base-face) :height 1.0))
-  "Face for the git branch segment."
+  '((t :inherit shaoline-yang))
+  "Face for buffer name display."
   :group 'shaoline)
 
 (defface shaoline-mode-face
-  '((t :inherit (font-lock-type-face shaoline-base-face) :height 1.0))
-  "Face for the major mode segment."
+  '((t :inherit shaoline-yin))
+  "Face for mode information display."
+  :group 'shaoline)
+
+(defface shaoline-modified-face
+  '((t :inherit warning))
+  "Face for modification indicators."
+  :group 'shaoline)
+
+(defface shaoline-git-face
+  '((t :inherit font-lock-variable-name-face))
+  "Face for git information."
+  :group 'shaoline)
+
+(defface shaoline-project-face
+  '((t :inherit font-lock-function-name-face))
+  "Face for project name."
+  :group 'shaoline)
+
+(defface shaoline-time-face
+  '((t :inherit shaoline-yin))
+  "Face for time display."
+  :group 'shaoline)
+
+(defface shaoline-date-face
+  '((t :inherit shaoline-yin))
+  "Face for date display."
+  :group 'shaoline)
+
+(defface shaoline-battery-face
+  '((t :inherit shaoline-yin))
+  "Face for battery information."
   :group 'shaoline)
 
 ;; ----------------------------------------------------------------------------
-;; Internal State
-;;
-;; All inner workings, global state, and persistence dwell here.
+;; 五 Segment Registry — Garden of Pure Functions
+;; ----------------------------------------------------------------------------
 
-(defvar shaoline--segment-table (make-hash-table :test 'eq)
-  "Hash-table storing registered segment functions.")
+(defvar shaoline--segment-registry (make-hash-table)
+  "Registry of available segments.")
 
-(defvar shaoline--last-str ""
-  "Last rendered string, used to avoid unnecessary redisplay. Repetition is not enlightenment.")
+;; Compatibility table for old segment system
+(defvar shaoline--segment-table (make-hash-table)
+  "Segment table for compatibility with old macro system.")
 
-;; Message state handled separately (already required above).
+(defmacro shaoline-define-segment (name args docstring &rest body)
+  "Register segment NAME as pure function."
+  (declare (indent defun))
+  `(progn
+     (defun ,name ,args ,docstring ,@body)
+     (puthash ',name #',name shaoline--segment-registry)
+     (puthash ',name #',name shaoline--segment-table) ; Compatibility
+     ',name))
 
-;; Load segments after variables are defined.
-(require 'shaoline-segments)
-
-(defvar shaoline--default-mode-line-format-backup nil
-  "Backup of `default-mode-line-format' when the modeline is hidden (restored when Shaoline is disabled).")
-
-(defvar shaoline--resize-mini-windows-backup nil
-  "Backup of `resize-mini-windows' when `shaoline-mode` toggles. Settings are always restored on exit.")
-
-(defvar-local shaoline--saved-mode-line-format nil
-  "Buffer-local backup of `mode-line-format` for use while `shaoline-mode` is hiding the classic modeline.
-Restored exactly as it was when the mode is toggled off.")
+(defun shaoline--call-segment (segment-spec)
+  "Call SEGMENT-SPEC safely, returning string or empty."
+  (condition-case err
+      (let* ((spec (if (consp segment-spec) segment-spec (list segment-spec)))
+             (fn (car spec))
+             (args (cdr spec)))
+        (if (functionp fn)
+            (let ((result (apply fn args)))
+              (if (stringp result) result ""))
+          ""))
+    (error "")))
 
 ;; ----------------------------------------------------------------------------
-;; Infrastructure (UI, advice, minor mode) — lazy-loaded via minor mode.
-;; Users require 'shaoline, then toggle shaoline-mode to load infra.
+;; 六 Core Composition — Wu Wei in Action
+;; ----------------------------------------------------------------------------
 
-;; React to new color theme: recalculate faces.
-(defun shaoline-update-faces (&rest _)
-  "Update Shaoline faces to match current theme."
-  (custom-set-faces
-   `(shaoline-time-face
-     ((t :height 1.0
-         :bold nil
-         :family "Digital Display"
-         :foreground "#00aa00"
-         :background ,(or (face-background 'shadow nil t) "#002200"))))
-   `(shaoline-moon-face
-     ((t :inherit default
-         :height 1.0
-         :bold nil
-         :foreground ,(or (face-foreground 'warning nil t) "yellow"))))))
+(defun shaoline--collect-side (side)
+  "Collect all segments for SIDE (:left, :center, :right)."
+  (let* ((segments (cdr (assoc side shaoline-segments))) ;; Ensure correct extraction for both plist & alist
+         (results (mapcar #'shaoline--call-segment
+                          (or segments
+                              (plist-get shaoline-segments side) ; fallback for plist-style
+                              '()))))
+    (shaoline--log "shaoline--collect-side %s in buffer: %s: %S" side (buffer-name) results)
+    results))
 
-;; Enable harmony after theme changes.
-(add-hook 'enable-theme-functions #'shaoline-update-faces)
-(add-hook 'disable-theme-functions #'shaoline-update-faces)
+(defun shaoline--calculate-layout (left center right width)
+  "Calculate optimal layout for segments given total WIDTH.
+Returns (left-str center-str right-str) as pure function."
+  (let* ((left-str (string-join (remove "" left) " "))
+         (right-str (string-join (remove "" right) " "))
+         (center-str (string-join (remove "" center) " "))
+         (left-w (string-width left-str))
+         (right-w (string-width right-str))
+         (available (max 0 (- width left-w right-w 2))) ; 2 for spacing
+         (truncated-center
+          (if (> (string-width center-str) available)
+              (truncate-string-to-width center-str available nil nil "…")
+            center-str)))
+    (list left-str truncated-center right-str)))
+
+(defun shaoline--compose-line (left center right width)
+  "Compose final modeline string with perfect right alignment."
+  (let* ((layout (shaoline--calculate-layout left center right width))
+         (left-str (nth 0 layout))
+         (center-str (nth 1 layout))
+         (right-str (nth 2 layout))
+         (left-w (string-width left-str))
+         (right-w (string-width right-str))
+         (gap-left (if (string-empty-p left-str) "" " "))
+         (gap-right (if (string-empty-p right-str) "" " "))
+         (result
+          (concat
+           left-str
+           gap-left
+           center-str
+           (when (not (string-empty-p right-str))
+             (propertize " " 'display
+                         `(space :align-to (- right ,(+ right-w shaoline-right-margin)))))
+           right-str)))
+    ;; Store rendered segment widths for shaoline-available-center-width
+    (shaoline--state-put :last-left-width left-w)
+    (shaoline--state-put :last-right-width right-w)
+    (shaoline--log "shaoline--compose-line result in buffer: %s: %S" (buffer-name) result)
+    result))
+
+(defun shaoline-compose (&optional width)
+  "纯 Pure composition function — the heart of Shaoline.
+Takes no global state, produces modeline string."
+  (let* ((target-width (or width (frame-width) 80))
+         (left (shaoline--collect-side :left))
+         (center (shaoline--collect-side :center))
+         (right (shaoline--collect-side :right)))
+    (shaoline--compose-line left center right target-width)))
 
 ;; ----------------------------------------------------------------------------
-;; Segment Helper Functions
-;;
-;; Helpers: arranging segments, unseen.
+;; 七 Basic Segments — Essential Building Blocks
+;; ----------------------------------------------------------------------------
 
-(defun shaoline--apply-segment (fn buffer)
-  "Call segment FN with BUFFER (or with no args if not needed) and return its string.
-Errors or missing segment yield an empty string (quiet fail), diagnostics go to log if `shaoline-debug`."
-  (let* ((fn-call (if (consp fn) fn (list fn))))
-    (let ((fun (car fn-call))
-          (args (cdr fn-call)))
-      (if (fboundp fun)
-          (condition-case err
-              (let* ((arity (help-function-arglist fun t))
-                     (res (cond
-                           ;; If ARGS are present — call with ARGS,
-                           ;; else try to call with BUFFER if arity allows, else with no args.
-                           ((not (null args))
-                            (apply fun args))
-                           (arity
-                            (funcall fun buffer))
-                           (t
-                            (funcall fun)))))
-                (if (stringp res) res ""))
-            (error
-             (let ((msg (format "[SEGMENT ERROR: %s in %s]" err fun)))
-               (when shaoline-debug
-                 (shaoline--log "%s" msg)
-                 (shaoline--log "Traceback: %s" (with-output-to-string (backtrace))))
-               "")))
-        (when shaoline-debug
-          (shaoline--log "[VOID SEGMENT: %s (not defined)]" fun))
-        ""))))
+(shaoline-define-segment shaoline-segment-buffer-name ()
+  "Buffer name with natural coloring."
+  (let ((name (buffer-name)))
+    (shaoline--log "shaoline-segment-buffer-name called in buffer: %s, value: %s" name name)
+    (propertize name 'face 'shaoline-buffer-face)))
 
-(defun shaoline--collect-segments (side buffer)
-  "Render all segments for SIDE (:left, :center, :right) within BUFFER.
-Supports both symbol and (fn . args) cons-style segments.
-Only non-empty and valid string results are included."
-  (cl-loop for fn in (cdr (assq side shaoline-segments))
-           for str = (shaoline--apply-segment fn buffer)
-           when (and (stringp str)
-                     (not (string-empty-p str)))
-           collect str))
+(shaoline-define-segment shaoline-segment-modified ()
+  "Modified indicator — simple asterisk."
+  (when (and (buffer-modified-p) (buffer-file-name))
+    (propertize "*" 'face 'shaoline-modified-face)))
+
+(shaoline-define-segment shaoline-segment-position ()
+  "Current position as line:column."
+  (propertize (format "%d:%d" (line-number-at-pos) (current-column))
+              'face 'shaoline-mode-face))
+
+(shaoline-define-segment shaoline-segment-echo-message ()
+  "Current captured message, если это не строка Shaoline."
+  (when-let ((msg (shaoline-msg-current)))
+    (unless (get-text-property 0 'shaoline-origin msg)
+      (propertize msg 'face 'shaoline-echo))))
+
+(shaoline-define-segment shaoline-segment-time ()
+  "Simple time display."
+  (when shaoline-enable-dynamic-segments
+    (propertize (format-time-string "%H:%M") 'face 'shaoline-time-face)))
 
 ;; ----------------------------------------------------------------------------
-;; Core: Center Width Calculation (Pure)
-;;
-;; As much as needed, nothing more.
+;; 八 Cache System — Intelligent Non-Action
+;; ----------------------------------------------------------------------------
 
-(defun shaoline-available-center-width (&optional buffer window width)
-  "Return the maximum width available for the center segment (excluding right-padding).
-Calculates based on the length of left and right segments, including any necessary spacing."
-  (let* ((window (or (and (windowp window) window)
-                     (selected-window)))
-         (buffer (or buffer (window-buffer window)))
-         (raw-width
-          (let ((w (or width
-                       (let* ((mini (minibuffer-window))
-                              (mini-width (and (window-live-p mini)
-                                               (window-width mini))))
-                         (or mini-width (frame-width))))))
-            (or (and (numberp w) w) 80)))
-         (left   (mapconcat #'identity (shaoline--collect-segments :left buffer) " "))
-         (right  (mapconcat #'identity (shaoline--collect-segments :right buffer) " "))
-         (left-w (string-width left))
-         (right-w (string-width right))
-         (space-left  (if (and (not (string-empty-p left))
-                               (not (string-empty-p right)))
-                          1 0))
-         (space-center-left (if (and (not (string-empty-p left)))
-                                1 0))
-         (space-center-right (if (not (string-empty-p right))
-                                 1 0)))
-    (max 0 (- raw-width
-              left-w
-              right-w
-              (if (not (string-empty-p left)) 1 0)
-              (if (not (string-empty-p right)) 1 0)
-              shaoline-right-padding))))
+(defun shaoline--cache-key (&rest elements)
+  "Generate cache key from ELEMENTS."
+  (mapconcat (lambda (e) (format "%s" e)) elements "|"))
+
+(defun shaoline--cached-call (key ttl-seconds thunk)
+  "Call THUNK with caching — avoid unnecessary work."
+  (let* ((cache (shaoline--state-get :cache))
+         (entry (gethash key cache))
+         (now (float-time)))
+    (if (and entry (< (- now (cdr entry)) ttl-seconds))
+        (car entry)  ; Return cached
+      (let ((result (funcall thunk)))
+        (puthash key (cons result now) cache)
+        result))))
 
 ;; ----------------------------------------------------------------------------
-;; Core: Compose Modeline (Pure, No Side Effects)
-;;
-;; Pure computation. No action, no world. Suitable everywhere.
-(defun shaoline-compose-modeline (&optional buffer window width)
-  "Return the Shaoline string for the echo area.
-The right segment is *always* visually pressed to the right edge (with right-padding),
-no matter how many icons/emoji it contains.
-If its contents get shorter, the gap appears *to the left* of the rightmost character, not to the right edge."
-  (let* ((buffer (or buffer (current-buffer)))
-         (window (or window (selected-window)))
-         (echo-width
-          (let ((w (or width
-                       (let* ((mini (minibuffer-window))
-                              (mini-w (and (window-live-p mini)
-                                           (window-width mini))))
-                         (or mini-w (frame-width))))))
-            (or w 80)))
-         (left   (mapconcat #'identity (shaoline--collect-segments :left buffer) " "))
-         (center0 (mapconcat #'identity (shaoline--collect-segments :center buffer) " "))
-         (right  (mapconcat #'identity (shaoline--collect-segments :right buffer) " "))
-         (gap-left (if (string-empty-p left) "" " "))
-         (right-width (string-width right))
-         ;; Куда прижимаем правый сегмент:
-         (right-edge (- echo-width shaoline-right-padding))
-         ;; Левая граница right: столько, чтобы правый край был чётко на границе.
-         (align-to (- right-edge right-width))
-         ;; сколько осталось для центра?
-         (avail (max 0 (- align-to
-                          (string-width left)
-                          (length gap-left))))
-         (center (if (and (stringp center0) (> (string-width center0) avail))
-                     (truncate-string-to-width center0 avail 0 ?\s "...")
-                   center0)))
-    (concat
-     left
-     gap-left
-     center
-     (propertize " " 'display
-                 `(space :align-to (- right ,(+ shaoline-right-padding
-                                                right-width))))
-     right
-     (make-string shaoline-right-padding ?\s))))
+;; 九 Content Deduplication — Avoiding Unnecessary Display
+;; ----------------------------------------------------------------------------
 
+(defun shaoline--content-changed-p (new-content)
+  "Check if NEW-CONTENT actually differs from last display."
+  (let ((last (shaoline--state-get :last-content)))
+    (not (string-equal new-content last))))
+
+(defun shaoline--should-display-p (content)
+  "Return non-nil when Shaoline should (re)display CONTENT.
+
+Особый случай: если включён флаг `always-visible`, мы обязаны
+перебивать чужие сообщения даже тогда, когда CONTENT не изменился."
+  (and content
+       (stringp content)
+       (not (string-empty-p content))
+       (or (shaoline--content-changed-p content)
+           ;; В «yang»/always-visible режиме — если текущее сообщение
+           ;; не наше, требуется немедленное восстановление.
+           (and (shaoline--resolve-setting 'always-visible)
+                (let ((cur (current-message)))
+                  (or (null cur)
+                      (not (get-text-property 0 'shaoline-origin cur))))))
+       (not (shaoline--echo-area-busy-p))))
 
 ;; ----------------------------------------------------------------------------
-;; Segments are elsewhere.
+;; 十 Strategy Protocol — Adaptation Without Force
+;; ----------------------------------------------------------------------------
 
-;; User-defined segments: stones in your garden
-(let ((user-file
-       (or
-        (expand-file-name "shaoline-user-segments.el" user-emacs-directory)
-        (and load-file-name
-             (expand-file-name "shaoline-user-segments.el" (file-name-directory load-file-name))))))
-  (when (and user-file (file-exists-p user-file))
-    (condition-case err
-        (load user-file nil t)
-      (error (shaoline--log "Could not load user segments: %s" err)))))
+(defvar shaoline--strategies
+  '((yin    . ((update-method . manual)
+               (use-hooks     . nil)
+               (use-advice    . nil)
+               (use-timers    . nil)
+               (always-visible . nil)))
+    (yang   . ((update-method . automatic)
+               (use-hooks     . t)
+               (use-advice    . t)
+               (use-timers    . t)
+               (always-visible . t)))
+    (adaptive . ((update-method . context)
+                 (use-hooks     . adaptive)
+                 (use-advice    . adaptive)
+                 (use-timers    . adaptive)
+                 (always-visible . adaptive))))
+  "Strategy definitions for different operational modes.")
 
-;; Lazy require for async (used in battery)
-(eval-when-compile (require 'async nil t))
+(defun shaoline--get-strategy-setting (setting)
+  "Get SETTING from current strategy."
+  (let* ((strategy (or (shaoline--state-get :strategy)
+                       shaoline-mode-strategy))
+         (config (cdr (assq strategy shaoline--strategies))))
+    (cdr (assq setting config))))
 
-;; (require 'shaoline-impure)  ;; Removed to break require cycle; users can require 'shaoline-impure separately for the minor mode
+(defun shaoline--adaptive-decision (setting)
+  "Make adaptive decision for SETTING based on context."
+  (pcase setting
+    ('use-hooks (not (file-remote-p default-directory))) ; No hooks for remote files
+    ('use-advice (display-graphic-p))          ; Advice in GUI only
+    ('use-timers (< (buffer-size) 100000))     ; Timers for small buffers
+    ('always-visible nil)                               ; In adaptive mode we stay
+                                        ; unobtrusive by default.
+    (_ nil)))
 
-;; IMPORTANT: To make the global minor mode and event system available,
-;; you must also load shaoline-impure.el.
-;; Either add `(require 'shaoline-impure)` to your config after shaoline load,
-;; or, for automatic infra loading on `shaoline-mode' call:
+(defun shaoline--resolve-setting (setting)
+  "Resolve SETTING value, handling adaptive mode."
+  (let ((value (shaoline--get-strategy-setting setting)))
+    (if (eq value 'adaptive)
+        (shaoline--adaptive-decision setting)
+      value)))
+
+;; ----------------------------------------------------------------------------
+;; 十一 Utility Functions — Helper Wisdom
+;; ----------------------------------------------------------------------------
+
+;; Echo-area utilisation -------------------------------------------------------
+
+(defun shaoline--echo-area-busy-p ()
+  "Return non-nil when the echo area is currently reserved for
+user input.
+
+This covers both real minibuffer interaction and incremental
+search (`isearch-mode'), the latter of which uses the echo area
+without activating a minibuffer window."
+  (or (minibufferp)
+      (active-minibuffer-window)
+      (and (boundp 'isearch-mode) isearch-mode)))
+
+(defun shaoline-available-center-width ()
+  "Calculate available width for center segment based on previously rendered segments.
+If no rendering has happened yet, returns frame-width/3 as default."
+  (let* ((frame-w (frame-width))
+         (last-left-w (or (shaoline--state-get :last-left-width) 0))
+         (last-right-w (or (shaoline--state-get :last-right-width) 0))
+         (spacing 4) ; accounting for gaps and margins
+         (available (- frame-w last-left-w last-right-w spacing shaoline-right-margin - 20)))
+    ;; If we haven't rendered yet, or if calculation gives unreasonable result
+    (if (or (zerop last-left-w)
+            (zerop last-right-w)
+            (< available 20))
+        (max 20 (/ frame-w 3))
+      (max 20 available))))
+
+;; Legacy function bridge (useful for transitions)
+(defun shaoline--update ()
+  "Legacy update function bridge."
+  (when (fboundp 'shaoline-update)
+    (shaoline-update)))
+
+;; Public initialization function (useful feature from legacy)
+;;;###autoload
+(defun shaoline-initialize ()
+  "Initialize Shaoline mode — convenience function."
+  (interactive)
+  (shaoline-mode 1))
+
+(defvar shaoline--log-max-lines 1000
+  "Maximum number of lines kept in *shaoline-logs* buffer.")
+
+(defun shaoline--log (fmt &rest args)
+  "If `shaoline-debug' is non-nil, log a debug message to *shaoline-logs* buffer."
+  (when shaoline-debug
+    (let* ((buf (get-buffer-create "*shaoline-logs*"))
+           (ts (format-time-string "[%Y-%m-%d %H:%M:%S] "))
+           (msg (apply #'format fmt args)))
+      (with-current-buffer buf
+        (let ((inhibit-read-only t))
+          (goto-char (point-max))
+          (insert ts msg "\n")
+          ;; Trim old lines if too long:
+          (when (> (count-lines (point-min) (point-max)) shaoline--log-max-lines)
+            (goto-char (point-min))
+            (forward-line (- (count-lines (point-min) (point-max)) shaoline--log-max-lines))
+            (delete-region (point-min) (point))))))))
+
+;;;###autoload
+(defun shaoline-show-logs ()
+  "Display the Shaoline debug log buffer."
+  (interactive)
+  (let ((buf (get-buffer-create "*shaoline-logs*")))
+    (with-current-buffer buf
+      (read-only-mode 1)
+      (goto-char (point-max)))
+    (pop-to-buffer buf)))
 
 (provide 'shaoline)
-
 ;;; shaoline.el ends here

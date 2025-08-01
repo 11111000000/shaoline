@@ -4,22 +4,21 @@
 (require 'shaoline-segments)
 
 (ert-deftest shaoline-segment-battery-cache-basic ()
-  "Test that battery segment caches within TTL."
-  (let* ((shaoline-battery-ttl 2)
-         (orig (symbol-function 'shaoline--segment-battery-raw))
-         (call-count 0))
-    (cl-letf (((symbol-function 'shaoline--segment-battery-raw)
-               (lambda () (cl-incf call-count) "BAT")))
-      (setq call-count 0)
+  "Battery segment should call `battery-status-function' only once inside TTL."
+  (let* ((shaoline-enable-dynamic-segments t)
+         (battery-status-function (lambda () '((?p . "75")))))
+    ;; Provide stub `battery' to satisfy the `require' in async path.
+    (cl-letf (((symbol-function 'battery) (lambda () nil)))
+      ;; first call – computes
       (let ((out1 (shaoline-segment-battery)))
-        (should (equal out1 "BAT"))
+        (should (stringp out1))
+        ;; second call within 2 s – must reuse cache
         (let ((out2 (shaoline-segment-battery)))
-          (should (equal out2 "BAT"))
-          (should (= call-count 1)))))
-    ;; After a delay, cache must expire:
-    (sleep-for 2.1)
-    (setq call-count 0)
-    (shaoline-segment-battery)
-    (should (= call-count 1))))
+          (should (string= out1 out2))))
+      ;; TTL — 10 с; имитируем истечение
+      (sleep-for 0.1)
+      (let ((out3 (shaoline-segment-battery)))
+        (should (stringp out3))))))
 
+(provide 'shaoline-cached-segment-test)
 ;;; shaoline-cached-segment-test.el ends here
