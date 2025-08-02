@@ -16,6 +16,18 @@
 
 (require 'shaoline)
 
+;; Failsafe: ensure the counter variable exists even
+;; if shaoline.el hasn’t been (re)loaded yet.
+(defvar shaoline--echo-area-input-depth 0)
+
+;; Dynamic gate-keeper: when non-nil, Shaoline temporarily *allows*
+;; `(message nil)' / "" to pass through untouched.  Use it via
+;;
+;;   (let ((shaoline--allow-empty-message t)) (message nil))
+;;
+;; so that legitimate, intentional clears do not get blocked.
+(defvar shaoline--allow-empty-message nil)
+
 ;; ----------------------------------------------------------------------------
 ;; Effect Registry and Variables — All World Changes Flow Here
 ;; ----------------------------------------------------------------------------
@@ -61,10 +73,11 @@ Uses weak references so buffers can be garbage collected normally.")
       (push 'display shaoline--active-effects))))
 
 (shaoline-defeffect shaoline--clear-echo-area ()
-  "Clear echo area if it contains Shaoline content."
+  "Clear echo area if it currently displays Shaoline content."
   (when (and (current-message)
              (get-text-property 0 'shaoline-origin (current-message)))
-    (message nil)
+    (let ((shaoline--allow-empty-message t)) ; conscious, whitelisted clear
+      (message nil))
     (shaoline--state-put :last-content "")
     (push 'clear shaoline--active-effects)))
 
@@ -136,19 +149,48 @@ Uses weak references so buffers can be garbage collected normally.")
   (push `(advice . ,function) shaoline--active-effects))
 
 ;; ────────────────────────────────────────────────────────────
-;;  新 advice: не отдаём echo-area на (message nil) в Yang-режиме
+;;  新 advice: расширяем систему advice
 ;; ────────────────────────────────────────────────────────────
-(defun shaoline--advice-preserve-empty-message (orig &rest args)
-  "Не даёт пустому `message' стереть текущее содержимое echo-area.
 
-Блокируем как вызовы `(message nil)', так и `(message \"\")`
-(или эквивалентный формат-строкой пустой текст)."
-  (if (or (equal args '(nil))
-          (and (= (length args) 1)
-               (stringp (car args))
-               (string-empty-p (car args))))
-      (current-message)                 ; оставляем прежний текст
+(defun shaoline--advice-read-event (orig &rest args)
+  "Around-advice on `read-event'.
+
+Если `cursor-in-echo-area' установлена, увеличиваем
+`shaoline--echo-area-input-depth' перед чтением события и
+уменьшаем после, тем самым отмечая период реального ввода в
+echo-area."
+  (if cursor-in-echo-area
+      (progn
+        (cl-incf shaoline--echo-area-input-depth)
+        (unwind-protect
+            (apply orig args)
+          (cl-decf shaoline--echo-area-input-depth)))
     (apply orig args)))
+
+;; Существующее advice, блокирующее (message nil)
+;; ────────────────────────────────────────────────────────────
+
+(defun shaoline--advice-preserve-empty-message (orig &rest args)
+  "Guard echo-area against flicker.
+
+Intercepts `(message nil)' and `(message \"\")'.  Such empty
+messages are *blocked* when:
+
+  • The echo-area currently shows Shaoline content (property
+    `shaoline-origin'), and
+  • `shaoline--allow-empty-message' is *not* bound non-nil.
+
+Otherwise the original `message' is executed unchanged."
+  (let* ((empty? (or (equal args '(nil))
+                     (and (= (length args) 1)
+                          (stringp (car args))
+                          (string-empty-p (car args)))))
+         (shaoline-visible?
+          (let ((cur (current-message)))
+            (and cur (get-text-property 0 'shaoline-origin cur)))))
+    (if (and empty? shaoline-visible? (not shaoline--allow-empty-message))
+        (current-message)          ; keep our line – no blink
+      (apply orig args))))
 
 (shaoline-defeffect shaoline--detach-advice (function advice-fn)
   "Detach ADVICE-FN from FUNCTION."
@@ -251,36 +293,66 @@ Uses weak references so buffers can be garbage collected normally.")
   "Apply STRATEGY by orchestrating appropriate effects."
   (shaoline--cleanup-all-effects) ; Clean slate
 
+  ;; ------------------------------------------------------------------
+  ;; Yang re-assertion: keep Shaoline permanently visible.
+  ;; A very early post-command hook plus a light timer are installed
+  ;; only when STRATEGY is 'yang.
+  ;; ------------------------------------------------------------------
+  (when (eq strategy 'yang)
+    (add-hook 'post-command-hook #'shaoline--reassert-yang-visibility -100)
+    (unless (boundp 'shaoline--yang-timer)
+      (defvar shaoline--yang-timer nil))
+    (setq shaoline--yang-timer
+          (run-with-timer 0.11 0.13 #'shaoline--maybe-reassert-yang-after-timer)))
+  (unless (eq strategy 'yang)
+    (remove-hook 'post-command-hook #'shaoline--reassert-yang-visibility)
+    (when (bound-and-true-p shaoline--yang-timer)
+      (cancel-timer shaoline--yang-timer)
+      (setq shaoline--yang-timer nil)))
+
+  ;; ------------------------------------------------------------------
+  ;; Install the *inner-most* advice that blocks spurious (message nil)
+  ;; BEFORE any other Shaoline or third-party advice appears.
+  ;; depth 100 ⇒ executed last ⇒ closest to the original `message'.
+  ;; ------------------------------------------------------------------
+  (unless (advice-member-p #'shaoline--advice-preserve-empty-message #'message)
+    (advice-add #'message :around
+                #'shaoline--advice-preserve-empty-message
+                '((depth . 100))))
+
   (when (shaoline--resolve-setting 'use-hooks)
     (shaoline--attach-hook 'post-command-hook #'shaoline--smart-post-command-update)
     (shaoline--attach-hook 'after-save-hook #'shaoline--debounced-update)
     (shaoline--attach-hook 'window-configuration-change-hook #'shaoline--debounced-update)
 
-    ;; Yang mode: proactive echo area reclaim
+    ;; Yang mode: gentle echo area reclaim
     (when (shaoline--resolve-setting 'always-visible)
+      (shaoline--attach-hook 'post-command-hook #'shaoline--post-command-restore)
       (shaoline--attach-hook 'window-selection-change-functions
-                             (lambda (&rest _) (run-with-timer 0.01 nil #'shaoline--display-cached)))
+                             (lambda (&rest _)
+                               (unless (shaoline--should-yield-echo-area-p)
+                                 (run-with-timer 0.1 nil #'shaoline--display-cached))))
       (shaoline--attach-hook 'focus-in-hook
-                             (lambda () (run-with-timer 0.01 nil #'shaoline--display-cached))))
+                             (lambda ()
+                               (unless (shaoline--should-yield-echo-area-p)
+                                 (run-with-timer 0.1 nil #'shaoline--display-cached)))))
 
-    ;; Key/visibility hooks
-    (shaoline--attach-hook 'pre-command-hook  #'shaoline--preserve-visibility-pre)
-    ;; Key capture hooks - only post-command to avoid conflicts
+    ;; Key capture hooks - уменьшенное вмешательство
     (shaoline--attach-hook 'post-command-hook #'shaoline--capture-prefix-keys-post)
     (shaoline--attach-hook 'pre-command-hook #'shaoline--capture-prefix-keys-pre))
 
   (when (shaoline--resolve-setting 'use-advice)
-    (shaoline--attach-advice #'message :around #'shaoline--advice-capture-message))
+    (shaoline--attach-advice #'message :around #'shaoline--advice-capture-message)
+    (shaoline--attach-advice #'read-event :around #'shaoline--advice-read-event))
 
-  (shaoline--attach-advice #'message :around
-                           #'shaoline--advice-preserve-empty-message)
+  ;; `shaoline--advice-preserve-empty-message' is already installed above with proper depth.
 
   (when (shaoline--resolve-setting 'use-timers)
     (shaoline--start-timer 'update 1.0 t #'shaoline-update)
-    ;; Adaptive guard frequency based on strategy
+    ;; More conservative guard timing
     (let ((guard-interval (if (shaoline--resolve-setting 'always-visible)
-                              0.25          ; реже — хватит, чтобы не мигать
-                            0.3)))
+                              0.5          ; Реже — меньше конфликтов
+                            0.7)))
       (shaoline--start-timer 'guard guard-interval t #'shaoline--guard-visibility)))
 
   (when (shaoline--resolve-setting 'hide-modelines)
@@ -294,7 +366,9 @@ Uses weak references so buffers can be garbage collected normally.")
   (shaoline--cleanup-all-hooks)
   (shaoline--cleanup-all-advice)
   (shaoline--cleanup-all-modelines)
-  (shaoline--clear-echo-area)
+  ;; Do *not* clear while always-visible – prevents one-frame blink.
+  (unless (shaoline--resolve-setting 'always-visible)
+    (shaoline--clear-echo-area))
   (setq shaoline--active-effects nil))
 
 ;; ----------------------------------------------------------------------------
@@ -318,22 +392,55 @@ stubs that incorrectly call `(format fmt args)`."
 ;; ----------------------------------------------------------------------------
 ;; Persistent visibility ------------------------------------------------------
 
-(defun shaoline--preserve-visibility-pre ()
-  "Восстанавливать Shaoline сразу после того, как Emacs стёр echo-area.
+(defvar shaoline--yang-timer nil
+  "Internal timer supporting continuous echo-area presence in yang mode.")
 
-Запускается в `pre-command-hook` (следом за внутренним очистителем
-сообщений), поэтому ‘пустой кадр’ не успевает проявиться
-на экране даже при авто-повторе клавиш."
-  (let* ((our (shaoline--state-get :last-content))
-         (cur (current-message)))
-    (when (and shaoline-mode
-               (shaoline--resolve-setting 'always-visible)
-               our (not (string-empty-p our))
-               ;; echo-area либо пуста, либо в ней чужой текст
-               (or (null cur)
-                   (not (get-text-property 0 'shaoline-origin cur))))
-      (let ((message-log-max nil))
-        (message "%s" (propertize our 'shaoline-origin t))))))
+(defun shaoline--reassert-yang-visibility ()
+  "Forcefully re-display last Shaoline line if echo area lost it."
+  (when (and shaoline-mode
+             (shaoline--resolve-setting 'always-visible)
+             (not (shaoline--should-yield-echo-area-p))
+             (shaoline--echo-area-stable-p))
+    (let* ((content (shaoline--state-get :last-content))
+           (cur (current-message)))
+      (when (and content
+                 (not (string-empty-p content))
+                 (or (null cur)
+                     (not (get-text-property 0 'shaoline-origin cur))))
+        (let ((tagged (propertize content 'shaoline-origin t))
+              (message-log-max nil))
+          (message "%s" tagged))))))
+
+(defun shaoline--maybe-reassert-yang-after-timer ()
+  "Backup timer to restore Shaoline if some other code cleared it."
+  (when (and shaoline-mode
+             (shaoline--resolve-setting 'always-visible))
+    (shaoline--reassert-yang-visibility)))
+
+(defun shaoline--preserve-visibility-pre ()
+  "Восстанавливать Shaoline только когда безопасно.
+
+Уважает пользовательское взаимодействие и не вмешивается
+во время ввода или ожидания команд."
+  ;; В новой реализации не восстанавливаем в pre-command-hook
+  ;; Вместо этого полагаемся на post-command-hook с задержкой
+  nil)
+
+(defun shaoline--post-command-restore ()
+  "Delayed restoration after command completion."
+  (shaoline--log "post-command-restore: yield=%s" (shaoline--should-yield-echo-area-p))
+  (unless (shaoline--should-yield-echo-area-p)
+    (run-with-timer 0.15 nil #'shaoline--smart-restore-visibility)))
+
+(defun shaoline--smart-restore-visibility ()
+  "Restore visibility only when truly safe."
+  (when (and shaoline-mode
+             (shaoline--resolve-setting 'always-visible)
+             (not (shaoline--echo-area-busy-p))
+             (shaoline--echo-area-stable-p))
+    (let ((our-content (shaoline--state-get :last-content)))
+      (when (and our-content (not (string-empty-p our-content)))
+        (shaoline--display-cached)))))
 
 ;; ----------------------------------------------------------------------------
 ;; Prefix Key Capture — Yang Mode Enhancement
@@ -502,19 +609,23 @@ Reduced list focusing on major state changes.")
   "Return non-nil when Shaoline should run an *update* after COMMAND.
 
 Логика:
-1. Команды из `shaoline--commands-requiring-update` — всегда.
-2. «Движение» (`shaoline--movement-commands`) — не чаще, чем раз в
+1. НЕ обновляем если echo-area занята или нестабильна
+2. Команды из `shaoline--commands-requiring-update` — всегда.
+3. «Движение» (`shaoline--movement-commands`) — не чаще, чем раз в
    `shaoline-update-debounce` секунд.
-3. В остальных случаях полагаемся на `shaoline--significant-change-p`."
-  (cond
-   ;; Явно важные события
-   ((memq command shaoline--commands-requiring-update) t)
-   ;; Частые перемещения курсора — тротлим
-   ((memq command shaoline--movement-commands)
-    (> (- (float-time) shaoline--last-movement-update)
-       shaoline-update-debounce))
-   ;; Всё остальное — по изменению значимого состояния
-   (t (shaoline--significant-change-p))))
+4. В остальных случаях полагаемся на `shaoline--significant-change-p`."
+  (and
+   ;; Основное правило: НЕ обновляем если echo-area должна быть свободной
+   (not (shaoline--should-yield-echo-area-p))
+   (cond
+    ;; Явно важные события
+    ((memq command shaoline--commands-requiring-update) t)
+    ;; Частые перемещения курсора — тротлим
+    ((memq command shaoline--movement-commands)
+     (> (- (float-time) shaoline--last-movement-update)
+        shaoline-update-debounce))
+    ;; Всё остальное — по изменению значимого состояния
+    (t (shaoline--significant-change-p)))))
 
 (defvar shaoline--last-movement-update 0
   "Time of last movement-triggered update.")
@@ -523,6 +634,12 @@ Reduced list focusing on major state changes.")
 
 (defun shaoline--smart-post-command-update ()
   "Smart post-command update that reduces unnecessary updates."
+  ;; Логируем для отладки
+  (shaoline--log "post-command: %s, busy: %s, yield: %s"
+                 this-command
+                 (shaoline--echo-area-busy-p)
+                 (shaoline--should-yield-echo-area-p))
+
   (when (shaoline--should-update-after-command-p this-command)
     ;; Record command and time for rate limiting
     (shaoline--state-put :last-command this-command)
@@ -532,38 +649,35 @@ Reduced list focusing on major state changes.")
     (when (memq this-command shaoline--movement-commands)
       (setq shaoline--last-movement-update (float-time)))
 
-    (shaoline--debounced-update)))
+    ;; repaint right here – no extra 0.1 s gap
+    (shaoline-update)))
 
 ;; ----------------------------------------------------------------------------
 ;; Guard Timer — Gentle Persistence
 ;; ----------------------------------------------------------------------------
 
 (defun shaoline--guard-visibility ()
-  "Persistent guardian — the Dao of continuous presence.
-Вызывается таймером; возвращает Shaoline-строку, если она пропала
-из echo-area, но делает это бережно, чтобы не вызвать мерцание."
+  "Gentle guardian that respects user interaction.
+Вызывается таймером; возвращает Shaoline-строку только когда это безопасно."
   (when (and shaoline-mode
-             (not (shaoline--echo-area-busy-p)))
-    (let* ((current-msg    (current-message))
-           (since-last     (- (float-time) shaoline--last-display-time))
-           (our-content    (shaoline--state-get :last-content))
-           (foreign-message
-            (and current-msg
-                 (not (get-text-property 0 'shaoline-origin current-msg)))))
-      ;; Показываем заново, если:
-      ;;  – echo-area пуста ИЛИ в ней чужое сообщение ИЛИ она показывает
-      ;;    неактуальную нашу строку;       И
-      ;;  – прошло хотя бы 0.25 с после последнего показа.
-      (when (and (> since-last 0.25)
+             (not (shaoline--echo-area-busy-p))
+             (shaoline--echo-area-stable-p))
+    (let* ((current-msg (current-message))
+           (since-last (- (float-time) shaoline--last-display-time))
+           (our-content (shaoline--state-get :last-content))
+           (should-restore
+            (and our-content
+                 (not (string-empty-p our-content))
+                 (> since-last 0.3) ; Увеличенная задержка для стабильности
                  (or (null current-msg)
-                     foreign-message
-                     (and our-content
-                          (not (string-empty-p our-content))
-                          (not (equal current-msg our-content)))))
-        (shaoline--log "Guard reclaiming echo area: current=%S foreign=%s our=%S"
-                       current-msg foreign-message our-content)
-        ;; Тихо пересчитываем и отображаем заново
-        (shaoline-update)))))
+                     (and (not (get-text-property 0 'shaoline-origin current-msg))
+                          ;; Не восстанавливаем поверх системных сообщений
+                          (not (string-match-p "\\(?:Saving\\|Loading\\|Auto-saving\\|Mark set\\)"
+                                               current-msg)))))))
+      (when should-restore
+        (shaoline--log "Guard gently reclaiming echo area after %.2fs: current=%S our=%S"
+                       since-last current-msg our-content)
+        (shaoline--smart-restore-visibility)))))
 
 (defun shaoline--display-cached ()
   "Display last cached content immediately without recomputation."

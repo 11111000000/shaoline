@@ -53,10 +53,10 @@
   '((:left
      shaoline-segment-major-mode-icon
      shaoline-segment-buffer-name
+     shaoline-segment-current-keys
      shaoline-segment-modified)
     (:center shaoline-segment-echo-message)
     (:right
-     shaoline-segment-current-keys
      shaoline-segment-position
      shaoline-segment-project-name
      shaoline-segment-git-branch
@@ -369,17 +369,26 @@ Takes no global state, produces modeline string."
 (defun shaoline--should-display-p (content)
   "Return non-nil when Shaoline should (re)display CONTENT.
 
-In always-visible mode, overrides foreign messages even when content unchanged."
+• Respects echo-area busy / yield rules.
+• In yang (always-visible) mode we *force* re-display whenever the echo
+  area has lost our line, even if CONTENT itself has not changed."
   (and content
        (stringp content)
        (not (string-empty-p content))
-       (or (shaoline--content-changed-p content)
-           (null (current-message))                    ; echo-area пуста → показать
-           (and (shaoline--resolve-setting 'always-visible)
-                (let ((cur (current-message)))
-                  (and cur
-                       (not (get-text-property 0 'shaoline-origin cur))))))
-       (not (shaoline--echo-area-busy-p))))
+       ;; 1.  Never interfere while echo-area must be yielded
+       (not (shaoline--should-yield-echo-area-p))
+       ;; 2.  Decide whether to display
+       (let* ((always (shaoline--resolve-setting 'always-visible))
+              (echo  (current-message)))
+         (or
+          ;; 2a. Usual triggers – new or empty echo-area
+          (shaoline--content-changed-p content)
+          (null echo)
+          ;; 2b. Yang re-assertion – echo-area lost our property
+          (and always
+               (shaoline--echo-area-stable-p)
+               (or (null echo)
+                   (not (get-text-property 0 'shaoline-origin echo))))))))
 
 ;; ----------------------------------------------------------------------------
 ;; 十 Strategy Protocol — Adaptation Without Force
@@ -437,15 +446,75 @@ In always-visible mode, overrides foreign messages even when content unchanged."
 ;; Echo-area utilisation -------------------------------------------------------
 
 (defun shaoline--echo-area-busy-p ()
-  "Return non-nil when the echo area is currently reserved for
-user input.
+  "Return non-nil when echo-area сейчас занята пользовательским вводом.
 
-This covers both real minibuffer interaction and incremental
-search (`isearch-mode'), the latter of which uses the echo area
-without activating a minibuffer window."
+Без перечисления команд и regex; полагаемся на универсальные
+системные индикаторы:
+
+  • active minibuffer               → mini-buffer владеет областью
+  • cursor-in-echo-area             → курсор мигает в echo-area
+  • shaoline--echo-area-input-depth → мы внутри `read-event', запущенного
+                                       из echo-area (см. advice)
+  • isearch-mode                    → инкрементальный поиск занимает echo-area"
   (or (minibufferp)
       (active-minibuffer-window)
+      cursor-in-echo-area
+      (> shaoline--echo-area-input-depth 0)
       (and (boundp 'isearch-mode) isearch-mode)))
+
+
+;; Input-sensitive command detection
+(defvar shaoline--input-sensitive-commands
+  '(eval-expression shell-command save-buffers-kill-emacs
+                    find-file-read-only find-alternate-file
+                    delete-file rename-file copy-file
+                    compile grep occur
+                    query-replace-regexp query-replace
+                    read-regexp read-string
+                    dired-do-rename dired-do-copy dired-do-delete
+                    bookmark-jump bookmark-set
+                    kill-buffer kill-this-buffer kill-terminal
+                    delete-window delete-other-windows
+                    quit-window bury-buffer
+                    server-edit server-done
+                    magit-commit magit-push magit-pull)
+  "Commands that might prompt for user input.")
+
+(defvar shaoline--last-busy-time 0
+  "Time when echo-area was last detected as busy.")
+
+(defvar shaoline--echo-area-input-depth 0
+  "Depth counter: >0 while `read-event' waits in echo-area.
+
+Incremented by an around-advice on `read-event' whenever
+`cursor-in-echo-area' is non-nil, and decremented afterwards.  A
+universal, future-proof indicator that Emacs действительно ждёт
+ввод в echo-area (y-or-n-p, read-char, query-replace, и т. д.).")
+
+(defvar shaoline--echo-area-stable-delay 0.3
+  "Seconds to wait after echo-area becomes free before reclaiming.")
+
+(defun shaoline--echo-area-stable-p ()
+  "Check if echo-area has been stable (not busy) for enough time."
+  (let ((now (float-time)))
+    (if (shaoline--echo-area-busy-p)
+        (progn
+          (setq shaoline--last-busy-time now)
+          nil)
+      ;; Стабильна достаточно долго
+      (> (- now shaoline--last-busy-time) shaoline--echo-area-stable-delay))))
+
+(defun shaoline--should-yield-echo-area-p ()
+  "Comprehensive logic for when Shaoline should yield echo-area."
+  (or
+   ;; Базовые состояния ввода
+   (shaoline--echo-area-busy-p)
+
+   ;; Команды, которые могут запросить ввод
+   (memq this-command shaoline--input-sensitive-commands)
+
+   ;; Следующая команда может быть интерактивной
+   (memq last-command shaoline--input-sensitive-commands)))
 
 ;; Legacy function bridge
 (defun shaoline--update ()
