@@ -197,26 +197,37 @@
     (cancel-timer shaoline--bucket-timer)
     (setq shaoline--bucket-timer nil)))
 
-(defun shaoline--consume-update-token ()
-  "Consume update token if available."
-  (when (> shaoline--update-bucket 0)
-    (cl-decf shaoline--update-bucket)
-    t))
+(defun shaoline--consume-update-token (&optional mode)
+  "Consume update token based on MODE (:light, :normal)."
+  (pcase mode
+    ;; Light mode: always allow if any tokens available, minimal cost
+    ('light (when (> shaoline--update-bucket 0)
+              (cl-decf shaoline--update-bucket 0.2) ; Minimal token cost
+              t))
+    ;; Normal mode: standard token consumption
+    (_ (when (> shaoline--update-bucket 0)
+         (cl-decf shaoline--update-bucket)
+         t))))
 
 ;; ----------------------------------------------------------------------------
 ;; Intelligent Update Decision — The Central Wisdom
 ;; ----------------------------------------------------------------------------
 
 (defun shaoline--should-update-p ()
-  "Central intelligence for deciding whether to run `shaoline-update'."
+  "Central intelligence — Wu Wei decision making."
   (and shaoline-mode
-       ;; Don't update when echo area is busy
+       ;; Suppress automatic updates while the echo area is busy
        (not (shaoline--echo-area-busy-p))
-       ;; More permissive rate limiting
-       (or (shaoline--consume-update-token)
-           (shaoline--resolve-setting 'always-visible)
-           ;; Allow immediate updates for significant changes
-           (shaoline--significant-change-p))))
+       ;; Three-tier permission system
+       (or
+        ;; Tier 1: Yang mode — always allowed (with light rate limiting)
+        (and (shaoline--resolve-setting 'always-visible)
+             (shaoline--consume-update-token 'light))
+        ;; Tier 2: Significant changes — still need a (cheap) token
+        (and (shaoline--significant-change-p)
+             (shaoline--consume-update-token 'light))
+        ;; Tier 3: Normal updates — standard rate limiting
+        (shaoline--consume-update-token 'normal))))
 
 ;; ----------------------------------------------------------------------------
 ;; Strategy API — External Interface

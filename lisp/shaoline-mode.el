@@ -42,8 +42,8 @@
           (start-time (float-time)))
       (when (or force (shaoline--should-update-p))
         (let ((content (shaoline-compose)))
-          ;; Only display if content actually changed or forced
-          (when (or force (shaoline--content-changed-p content))
+          ;; Решение «показывать всегда, когда нужно»
+          (when (or force (shaoline--should-display-p content))
             (shaoline--display content))
           (shaoline--record-performance start-time))))))
 

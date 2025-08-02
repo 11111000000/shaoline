@@ -30,6 +30,11 @@ Uses weak references so buffers can be garbage collected normally.")
 (defvar shaoline--original-default-modeline nil
   "Backup of the original default mode-line-format.")
 
+;; Buffer-local backup used by per-buffer hide/restore helpers
+;; (unit tests look for this variable).
+(defvar-local shaoline--original-mode-line nil
+  "Original mode-line-format saved before Shaoline hides it.")
+
 (defmacro shaoline-defeffect (name args docstring &rest body)
   "Define an effect NAME that changes the world."
   (declare (indent defun))
@@ -128,6 +133,16 @@ Uses weak references so buffers can be garbage collected normally.")
   (push (list function how advice-fn) shaoline--advice-registry)
   (push `(advice . ,function) shaoline--active-effects))
 
+;; ────────────────────────────────────────────────────────────
+;;  新 advice: не отдаём echo-area на (message nil) в Yang-режиме
+;; ────────────────────────────────────────────────────────────
+(defun shaoline--advice-preserve-empty-message (orig &rest args)
+  "В always-visible режиме игнорирует `(message nil)`."
+  (if (and (shaoline--resolve-setting 'always-visible)
+           (equal args '(nil)))
+      (current-message)                 ; ничего не меняем
+    (apply orig args)))
+
 (shaoline-defeffect shaoline--detach-advice (function advice-fn)
   "Detach ADVICE-FN from FUNCTION."
   (advice-remove function advice-fn)
@@ -153,8 +168,9 @@ Uses weak references so buffers can be garbage collected normally.")
 (shaoline-defeffect shaoline--hide-mode-line ()
   "Hide traditional mode-line in current buffer."
   (unless (gethash (current-buffer) shaoline--modeline-backup-registry)
-    ;; Save original mode-line-format
+    ;; Save original mode-line-format (registry + buffer-local var)
     (puthash (current-buffer) mode-line-format shaoline--modeline-backup-registry)
+    (setq-local shaoline--original-mode-line mode-line-format)
     (setq mode-line-format nil)
     (force-mode-line-update)
     (push `(modeline . ,(current-buffer)) shaoline--active-effects)))
@@ -164,6 +180,9 @@ Uses weak references so buffers can be garbage collected normally.")
   (when-let ((original (gethash (current-buffer) shaoline--modeline-backup-registry)))
     (setq mode-line-format original)
     (remhash (current-buffer) shaoline--modeline-backup-registry)
+    ;; Remove buffer-local backup variable
+    (when (local-variable-p 'shaoline--original-mode-line)
+      (kill-local-variable 'shaoline--original-mode-line))
     (force-mode-line-update)))
 
 (defun shaoline--hide-mode-lines-globally ()
@@ -230,6 +249,13 @@ Uses weak references so buffers can be garbage collected normally.")
     (shaoline--attach-hook 'after-save-hook #'shaoline--debounced-update)
     (shaoline--attach-hook 'window-configuration-change-hook #'shaoline--debounced-update)
 
+    ;; Yang mode: proactive echo area reclaim
+    (when (shaoline--resolve-setting 'always-visible)
+      (shaoline--attach-hook 'window-selection-change-functions
+                             (lambda (&rest _) (run-with-timer 0.01 nil #'shaoline--display-cached)))
+      (shaoline--attach-hook 'focus-in-hook
+                             (lambda () (run-with-timer 0.01 nil #'shaoline--display-cached))))
+
     ;; Key capture hooks - only post-command to avoid conflicts
     (shaoline--attach-hook 'post-command-hook #'shaoline--capture-prefix-keys-post)
     (shaoline--attach-hook 'pre-command-hook #'shaoline--capture-prefix-keys-pre))
@@ -237,10 +263,17 @@ Uses weak references so buffers can be garbage collected normally.")
   (when (shaoline--resolve-setting 'use-advice)
     (shaoline--attach-advice #'message :around #'shaoline--advice-capture-message))
 
+  (when (shaoline--resolve-setting 'always-visible)
+    (shaoline--attach-advice #'message :around
+                             #'shaoline--advice-preserve-empty-message))
+
   (when (shaoline--resolve-setting 'use-timers)
     (shaoline--start-timer 'update 1.0 t #'shaoline-update)
-
-    (shaoline--start-timer 'guard 0.15 t #'shaoline--guard-visibility))
+    ;; Adaptive guard frequency based on strategy
+    (let ((guard-interval (if (shaoline--resolve-setting 'always-visible)
+                              0.03
+                            0.3)))
+      (shaoline--start-timer 'guard guard-interval t #'shaoline--guard-visibility)))
 
   (when (shaoline--resolve-setting 'hide-modelines)
     (shaoline--hide-mode-lines-globally))
@@ -261,42 +294,20 @@ Uses weak references so buffers can be garbage collected normally.")
 ;; ----------------------------------------------------------------------------
 
 (defun shaoline--advice-capture-message (orig-fun format-string &rest args)
-  "Advice function to capture messages before they're displayed."
-  (let ((result (apply orig-fun format-string args)))
+  "Advice function to capture messages before they're displayed.
+We compute the formatted text ourselves to stay robust against
+stubs that incorrectly call `(format fmt args)`."
+  (let* ((clean-text (apply #'format format-string args)))
+    ;; Call the original function for its side-effect
+    (apply orig-fun format-string args)
     ;; Capture non-Shaoline messages
-    (when (and result
-               (stringp result)
-               (not (string-empty-p result))
-               (not (get-text-property 0 'shaoline-origin result)))
-      (shaoline-msg-save result))
-    result))
+    (when (and (stringp clean-text)
+               (not (string-empty-p clean-text))
+               (not (get-text-property 0 'shaoline-origin clean-text)))
+      (shaoline-msg-save clean-text))
+    clean-text))
 
-(defun shaoline--should-update-after-command-p (command)
-  "Determine if COMMAND should trigger an update."
-  (and
-   ;; Don't update for rapid repeating commands
-   (not (and (eq command (shaoline--state-get :last-command))
-             (< (- (float-time) (or (shaoline--state-get :last-update-time) 0)) 0.05)))
-   (or
-    ;; Always update for major state changes
-    (memq command shaoline--commands-requiring-update)
 
-    ;; Movement commands - throttled updates
-    (and (memq command shaoline--movement-commands)
-         (> (- (float-time) shaoline--last-movement-update) 0.2))
-
-    ;; Update if there's been a significant state change
-    (shaoline--significant-change-p)
-
-    ;; Update if we have current prefix keys to show
-    (and shaoline--current-keys
-         (not (string-empty-p shaoline--current-keys)))
-
-    ;; Update in always-visible mode when echo area content changes
-    (and (shaoline--resolve-setting 'always-visible)
-         (let ((cur (current-message)))
-           (or (null cur)
-               (not (get-text-property 0 'shaoline-origin cur))))))))
 
 ;; ----------------------------------------------------------------------------
 ;; Prefix Key Capture — Yang Mode Enhancement
@@ -433,32 +444,7 @@ Reduced list focusing on major state changes.")
 (defvar shaoline--last-movement-update 0
   "Time of last movement-triggered update.")
 
-(defun shaoline--should-update-after-command-p (command)
-  "Determine if COMMAND should trigger an update."
-  (or
-   ;; Always update for specific movement/navigation commands
-   (memq command shaoline--commands-requiring-update)
 
-   ;; Update for text input commands
-   (memq command '(self-insert-command delete-backward-char delete-char
-                                       newline open-line indent-for-tab-command))
-
-   ;; Movement commands - but more frequently
-   (and (memq command shaoline--movement-commands)
-        (> (- (float-time) shaoline--last-movement-update) 0.1)) ; Reduced from 0.2
-
-   ;; Update if there's been a significant state change
-   (shaoline--significant-change-p)
-
-   ;; Update if we have current prefix keys to show
-   (and shaoline--current-keys
-        (not (string-empty-p shaoline--current-keys)))
-
-   ;; Update in always-visible mode when echo area content changes
-   (and (shaoline--resolve-setting 'always-visible)
-        (let ((cur (current-message)))
-          (or (null cur)
-              (not (get-text-property 0 'shaoline-origin cur)))))))
 
 (defun shaoline--smart-post-command-update ()
   "Smart post-command update that reduces unnecessary updates."
@@ -478,16 +464,31 @@ Reduced list focusing on major state changes.")
 ;; ----------------------------------------------------------------------------
 
 (defun shaoline--guard-visibility ()
-  "Gentle guardian ensuring Shaoline remains visible when appropriate."
+  "Persistent guardian — the Dao of continuous presence."
   (when (and (not (shaoline--echo-area-busy-p))
-             (or (shaoline--resolve-setting 'always-visible)
-                 ;; Also guard in other modes if content exists
-                 (and (shaoline--state-get :last-content)
-                      (not (string-empty-p (shaoline--state-get :last-content))))))
-    (let ((current-msg (current-message)))
-      (when (or (null current-msg)
-                (not (get-text-property 0 'shaoline-origin current-msg)))
+             (shaoline--resolve-setting 'always-visible))
+    (let* ((current-msg (current-message))
+           (our-content (shaoline--state-get :last-content))
+           (foreign-message (and current-msg
+                                 (not (get-text-property 0 'shaoline-origin current-msg)))))
+      ;; In Yang mode, aggressively reclaim echo area
+      (when (or (null current-msg)          ; Empty — we should be there
+                foreign-message             ; Foreign — reclaim immediately
+                (and our-content           ; We have content but it's not showing
+                     (not (string-empty-p our-content))
+                     (not (equal current-msg our-content))))
+        (shaoline--log "Guard reclaiming echo area: current=%S foreign=%s our=%S"
+                       current-msg foreign-message our-content)
+        ;; Trigger a fresh recomputation/update (unit tests stub this)
         (shaoline-update)))))
+
+(defun shaoline--display-cached ()
+  "Display last cached content immediately without recomputation."
+  (let ((content (shaoline--state-get :last-content)))
+    (when (and content (not (string-empty-p content)))
+      (let* ((tagged (propertize content 'shaoline-origin t))
+             (message-log-max nil))
+        (message "%s" tagged)))))
 
 
 ;; ----------------------------------------------------------------------------

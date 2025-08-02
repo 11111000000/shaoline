@@ -53,10 +53,10 @@
     (propertize "*" 'face 'shaoline-modified-face)))
 
 (shaoline-define-segment shaoline-segment-major-mode ()
-  "Major mode with optional icon."
-  (shaoline--cached-call
-   (shaoline--cache-key "major-mode" major-mode (display-graphic-p))
-   shaoline-cache-ttl
+  "Major mode with stable caching — changes only on mode switch."
+  (shaoline--stable-cached-call
+   "major-mode"
+   (list major-mode (display-graphic-p) shaoline-enable-dynamic-segments)
    (lambda ()
      (let ((icon (when (and shaoline-enable-dynamic-segments
                             (display-graphic-p)
@@ -113,10 +113,10 @@
 ;; ----------------------------------------------------------------------------
 
 (shaoline-define-segment shaoline-segment-project-name ()
-  "Project name using project.el or Projectile."
-  (shaoline--cached-call
-   (shaoline--cache-key "project" default-directory)
-   5.0 ; Cache for 5 seconds
+  "Project name — ultra-stable caching until directory change."
+  (shaoline--stable-cached-call
+   "project"
+   default-directory  ; Only changes when we switch directories
    (lambda ()
      (when-let ((name (cond
                        ((fboundp 'project-current)

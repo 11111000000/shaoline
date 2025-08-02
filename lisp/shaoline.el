@@ -37,7 +37,7 @@
   :prefix "shaoline-")
 
 ;; Core behavior flags
-(defcustom shaoline-mode-strategy 'adaptive
+(defcustom shaoline-mode-strategy 'yang
   "Strategy for Shaoline behavior adaptation.
 - adaptive: Automatically choose between yin/yang based on context
 - yin: Passive mode (pure, manual updates only, no hooks/advice)
@@ -336,17 +336,40 @@ Takes no global state, produces modeline string."
   (mapconcat (lambda (e) (format "%s" e)) elements "|"))
 
 (defun shaoline--cached-call (key ttl-seconds thunk)
-  "Call THUNK with caching — avoid unnecessary work."
+  "智能缓存 Intelligent caching with adaptive TTL."
   (let* ((cache (shaoline--state-get :cache))
          (entry (gethash key cache))
          (now (float-time)))
     (if (and entry (< (- now (cdr entry)) ttl-seconds))
-        (car entry)  ; Return cached
+        ;; Cache hit — extend TTL for frequently used entries
+        (progn
+          (when (> (- now (cdr entry)) (/ ttl-seconds 2))
+            (puthash key (cons (car entry) now) cache))
+          (car entry))
+      ;; Cache miss — compute and store
       (let ((result (funcall thunk)))
-        ;; Only cache non-empty results
         (when (and result (not (and (stringp result) (string-empty-p result))))
           (puthash key (cons result now) cache))
         result))))
+
+(defvar shaoline--stable-segment-cache (make-hash-table :test 'equal)
+  "Cache for segments that change rarely (mode, project, etc).")
+
+(defun shaoline--stable-cached-call (key dependencies thunk)
+  "Cache stable segments until DEPENDENCIES change."
+  (let* ((cache-key (format "%s:%s" key (sxhash dependencies)))
+         (entry (gethash cache-key shaoline--stable-segment-cache)))
+    (or entry
+        (let ((result (funcall thunk)))
+          (when result
+            ;; Clear old entries for this key
+            (maphash (lambda (k v)
+                       (when (string-prefix-p (format "%s:" key) k)
+                         (remhash k shaoline--stable-segment-cache)))
+                     shaoline--stable-segment-cache)
+            ;; Store new result
+            (puthash cache-key result shaoline--stable-segment-cache))
+          result))))
 
 ;; ----------------------------------------------------------------------------
 ;; 九 Content Deduplication — Avoiding Unnecessary Display
@@ -367,8 +390,8 @@ In always-visible mode, overrides foreign messages even when content unchanged."
        (or (shaoline--content-changed-p content)
            (and (shaoline--resolve-setting 'always-visible)
                 (let ((cur (current-message)))
-                  (or (null cur)
-                      (not (get-text-property 0 'shaoline-origin cur))))))
+                  (and cur
+                       (not (get-text-property 0 'shaoline-origin cur))))))
        (not (shaoline--echo-area-busy-p))))
 
 ;; ----------------------------------------------------------------------------
