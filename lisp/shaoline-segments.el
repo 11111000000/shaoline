@@ -45,7 +45,8 @@
 
 (shaoline-define-segment shaoline-segment-buffer-name ()
   "Buffer name with yang energy."
-  (propertize (buffer-name) 'face 'shaoline-buffer-face))
+  (let ((name (buffer-name)))
+    (propertize name 'face 'shaoline-buffer-face)))
 
 (shaoline-define-segment shaoline-segment-modified ()
   "Modified indicator — the asterisk of change."

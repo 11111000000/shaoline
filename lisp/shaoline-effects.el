@@ -350,24 +350,24 @@ stubs that incorrectly call `(format fmt args)`."
 
 (defun shaoline--capture-prefix-keys-pre ()
   "Pre-command hook for capturing prefix keys."
-  (when (and (this-command-keys)
-             (vectorp (this-command-keys))
-             (> (length (this-command-keys)) 0))
-    (let* ((keys (this-command-keys))
+  ;; Capture any prefix arguments or partial key sequences
+  (when (and (vectorp (this-command-keys-vector))
+             (> (length (this-command-keys-vector)) 0))
+    (let* ((keys (this-command-keys-vector))
            (key-desc (key-description keys))
            (command this-command))
       (shaoline--log "shaoline--capture-prefix-keys-pre: keys=%s, desc=%s, command=%s"
                      keys key-desc command)
-      ;; Capture prefix keys or argument commands
+
+      ;; Store keys if they look like prefix sequences
       (when (or
-             ;; Standard prefix keys
-             (string-match-p "^C-[0-9]\\|^M-[0-9]\\|^C-u" key-desc)
+             ;; Explicit prefix keys like C-x, C-c, etc.
+             (string-match-p "^\\(C-[xc]\\|M-[a-z]\\|C-u\\)" key-desc)
              ;; Universal argument commands
              (and (symbolp command)
                   (commandp command)
                   (string-match-p "\\(universal-argument\\|digit-argument\\|negative-argument\\)"
                                   (symbol-name command))))
-        ;; Store current keys
         (setq shaoline--current-keys key-desc
               shaoline--current-keys-time (float-time))
         (shaoline--log "shaoline--capture-prefix-keys-pre: captured keys=%s" key-desc)))))
@@ -377,51 +377,78 @@ stubs that incorrectly call `(format fmt args)`."
   (let ((command this-command))
     (shaoline--log "shaoline--capture-prefix-keys-post: command=%s, current-keys=%s"
                    command shaoline--current-keys)
-    ;; Clear keys after non-prefix commands complete
+
+    ;; Update keys with current sequence if it's a prefix command
+    (when (and command (symbolp command) (commandp command))
+      (let* ((keys (this-command-keys-vector))
+             (desc (when keys (key-description keys))))
+        (when (and desc
+                   ;; Command is a prefix command
+                   (or (get command 'prefix)
+                       (keymapp (key-binding keys))
+                       ;; Or sequence looks like a prefix
+                       (string-match-p "^\\(C-[xc]\\|M-[a-z]\\|C-h\\)" desc)))
+          (setq shaoline--current-keys desc
+                shaoline--current-keys-time (float-time))
+          (shaoline--log "shaoline--capture-prefix-keys-post: updated keys=%s" desc))))
+
+    ;; Clear keys after completed (non-prefix) commands
     (when (and shaoline--current-keys
                (not (minibufferp))
+               (not (and (boundp 'prefix-arg) prefix-arg))
                (not (and (symbolp command)
                          (commandp command)
-                         (string-match-p "\\(universal-argument\\|digit-argument\\|negative-argument\\)"
-                                         (symbol-name command)))))
+                         (or (string-match-p "\\(universal-argument\\|digit-argument\\|negative-argument\\)"
+                                             (symbol-name command))
+                             (get command 'prefix)
+                             (keymapp (key-binding (this-command-keys-vector)))))))
       ;; Cancel existing timer
       (when shaoline--clear-keys-timer
         (cancel-timer shaoline--clear-keys-timer)
         (setq shaoline--clear-keys-timer nil))
       ;; Set new timer to clear keys
       (setq shaoline--clear-keys-timer
-            (run-with-timer 0.5 nil #'shaoline--clear-current-keys)))))
+            (run-with-timer 1.0 nil #'shaoline--clear-current-keys)))))
 
 (defun shaoline--get-current-keys ()
   "Get current prefix keys if recent enough."
   (let ((now (float-time)))
     (cond
-     ;; Return current keys if they're recent
-     ((and shaoline--current-keys
-           (not (string-empty-p shaoline--current-keys))
-           (< (- now shaoline--current-keys-time) 2.0))
-      (shaoline--log "shaoline--get-current-keys: returning keys=%s" shaoline--current-keys)
-      shaoline--current-keys)
-     ;; Check for active prefix argument
+     ;; Check for active prefix-arg first (C-u combinations)
      ((and (boundp 'prefix-arg) prefix-arg)
-      (let ((prefix-desc (format "C-u %s" prefix-arg)))
+      (let ((prefix-desc (cond
+                          ((numberp prefix-arg) (format "C-u %d" prefix-arg))
+                          ((eq prefix-arg '-) "C-u -")
+                          ((consp prefix-arg) (format "C-u %d" (car prefix-arg)))
+                          (t "C-u"))))
         (shaoline--log "shaoline--get-current-keys: prefix-arg active=%s" prefix-desc)
         prefix-desc))
-     ;; Check current command keys for in-progress sequences
-     ((let ((keys (this-command-keys)))
-        (when (and keys
-                   (vectorp keys)
-                   (> (length keys) 0))
-          (let ((desc (key-description keys)))
-            (when (string-match-p "^C-\\|^M-\\|^s-\\|^H-" desc)
-              (shaoline--log "shaoline--get-current-keys: current sequence=%s" desc)
-              desc))))
-      ;; Clear stale keys and return nil
-      (t
-       (when shaoline--current-keys
-         (setq shaoline--current-keys ""
-               shaoline--current-keys-time 0))
-       nil)))))
+
+     ;; Check for multi-key sequences in progress
+     ((let* ((keys (this-command-keys-vector))
+             (desc (when (and keys (vectorp keys) (> (length keys) 0))
+                     (key-description keys))))
+        (when (and desc
+                   ;; Look for incomplete sequences (common prefixes)
+                   (string-match-p "^\\(C-[xc]\\|M-[a-z]\\|C-h\\|C-z\\)" desc)
+                   ;; But not if it's a complete command
+                   (not (commandp (key-binding keys))))
+          (shaoline--log "shaoline--get-current-keys: incomplete sequence=%s" desc)
+          desc)))
+
+     ;; Return cached keys if they're recent
+     ((and shaoline--current-keys
+           (not (string-empty-p shaoline--current-keys))
+           (< (- now shaoline--current-keys-time) 3.0))
+      (shaoline--log "shaoline--get-current-keys: returning cached=%s" shaoline--current-keys)
+      shaoline--current-keys)
+
+     ;; Clear stale keys
+     (t
+      (when shaoline--current-keys
+        (setq shaoline--current-keys ""
+              shaoline--current-keys-time 0))
+      nil))))
 
 (defun shaoline--clear-current-keys ()
   "Clear current prefix keys."

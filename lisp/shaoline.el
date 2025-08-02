@@ -50,9 +50,18 @@
   :group 'shaoline)
 
 (defcustom shaoline-segments
-  '((:left shaoline-segment-major-mode  shaoline-segment-buffer-name shaoline-segment-modified)
+  '((:left
+     shaoline-segment-major-mode-icon
+     shaoline-segment-buffer-name
+     shaoline-segment-modified)
     (:center shaoline-segment-echo-message)
-    (:right  shaoline-segment-battery shaoline-segment-current-keys shaoline-segment-time))
+    (:right
+     shaoline-segment-current-keys
+     shaoline-segment-position
+     shaoline-segment-project-name
+     shaoline-segment-git-branch
+     shaoline-segment-battery
+     shaoline-segment-time))
   "Segment configuration following the Three Treasures pattern.
 Structure: ((:left segment ...) (:center segment ...) (:right segment ...))"
   :type 'sexp
@@ -303,37 +312,6 @@ Takes no global state, produces modeline string."
          (center (shaoline--collect-side :center))
          (right (shaoline--collect-side :right)))
     (shaoline--compose-line left center right target-width)))
-
-;; ----------------------------------------------------------------------------
-;; 七 Basic Segments — Essential Building Blocks
-;; ----------------------------------------------------------------------------
-
-(shaoline-define-segment shaoline-segment-buffer-name ()
-  "Buffer name with natural coloring."
-  (let ((name (buffer-name)))
-    (shaoline--log "shaoline-segment-buffer-name called in buffer: %s, value: %s" name name)
-    (propertize name 'face 'shaoline-buffer-face)))
-
-(shaoline-define-segment shaoline-segment-modified ()
-  "Modified indicator — simple asterisk."
-  (when (and (buffer-modified-p) (buffer-file-name))
-    (propertize "*" 'face 'shaoline-modified-face)))
-
-(shaoline-define-segment shaoline-segment-position ()
-  "Current position as line:column."
-  (propertize (format "%d:%d" (line-number-at-pos) (current-column))
-              'face 'shaoline-mode-face))
-
-(shaoline-define-segment shaoline-segment-echo-message ()
-  "Current captured message, excluding Shaoline's own content."
-  (when-let ((msg (shaoline-msg-current)))
-    (unless (get-text-property 0 'shaoline-origin msg)
-      (propertize msg 'face 'shaoline-echo))))
-
-(shaoline-define-segment shaoline-segment-time ()
-  "Simple time display."
-  (when shaoline-enable-dynamic-segments
-    (propertize (format-time-string "%H:%M") 'face 'shaoline-time-face)))
 
 ;; ----------------------------------------------------------------------------
 ;; 八 Cache System — Intelligent Non-Action
