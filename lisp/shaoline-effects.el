@@ -48,10 +48,12 @@ Uses weak references so buffers can be garbage collected normally.")
 ;; ----------------------------------------------------------------------------
 
 (shaoline-defeffect shaoline--display (content)
-  "Display CONTENT in echo area with Shaoline tagging."
+  "Display CONTENT in echo area with Shaoline tagging, избегая лишних перерисовок."
   (shaoline--log "shaoline--display called in buffer: %s, content: %s" (buffer-name) content)
-  (when (shaoline--should-display-p content)
+  (when (and (shaoline--should-display-p content)
+             (not (equal content (current-message))))   ; уже показываем? не трогаем.
     (shaoline--state-put :last-content content)
+    (setq shaoline--last-display-time (float-time))
     (let* ((tagged (propertize content 'shaoline-origin t))
            (message-log-max nil))
       (shaoline--log "shaoline--display actually displaying: %s" tagged)
@@ -137,10 +139,15 @@ Uses weak references so buffers can be garbage collected normally.")
 ;;  新 advice: не отдаём echo-area на (message nil) в Yang-режиме
 ;; ────────────────────────────────────────────────────────────
 (defun shaoline--advice-preserve-empty-message (orig &rest args)
-  "В always-visible режиме игнорирует `(message nil)`."
-  (if (and (shaoline--resolve-setting 'always-visible)
-           (equal args '(nil)))
-      (current-message)                 ; ничего не меняем
+  "Не даёт пустому `message' стереть текущее содержимое echo-area.
+
+Блокируем как вызовы `(message nil)', так и `(message \"\")`
+(или эквивалентный формат-строкой пустой текст)."
+  (if (or (equal args '(nil))
+          (and (= (length args) 1)
+               (stringp (car args))
+               (string-empty-p (car args))))
+      (current-message)                 ; оставляем прежний текст
     (apply orig args)))
 
 (shaoline-defeffect shaoline--detach-advice (function advice-fn)
@@ -256,6 +263,8 @@ Uses weak references so buffers can be garbage collected normally.")
       (shaoline--attach-hook 'focus-in-hook
                              (lambda () (run-with-timer 0.01 nil #'shaoline--display-cached))))
 
+    ;; Key/visibility hooks
+    (shaoline--attach-hook 'pre-command-hook  #'shaoline--preserve-visibility-pre)
     ;; Key capture hooks - only post-command to avoid conflicts
     (shaoline--attach-hook 'post-command-hook #'shaoline--capture-prefix-keys-post)
     (shaoline--attach-hook 'pre-command-hook #'shaoline--capture-prefix-keys-pre))
@@ -263,15 +272,14 @@ Uses weak references so buffers can be garbage collected normally.")
   (when (shaoline--resolve-setting 'use-advice)
     (shaoline--attach-advice #'message :around #'shaoline--advice-capture-message))
 
-  (when (shaoline--resolve-setting 'always-visible)
-    (shaoline--attach-advice #'message :around
-                             #'shaoline--advice-preserve-empty-message))
+  (shaoline--attach-advice #'message :around
+                           #'shaoline--advice-preserve-empty-message)
 
   (when (shaoline--resolve-setting 'use-timers)
     (shaoline--start-timer 'update 1.0 t #'shaoline-update)
     ;; Adaptive guard frequency based on strategy
     (let ((guard-interval (if (shaoline--resolve-setting 'always-visible)
-                              0.03
+                              0.25          ; реже — хватит, чтобы не мигать
                             0.3)))
       (shaoline--start-timer 'guard guard-interval t #'shaoline--guard-visibility)))
 
@@ -307,7 +315,25 @@ stubs that incorrectly call `(format fmt args)`."
       (shaoline-msg-save clean-text))
     clean-text))
 
+;; ----------------------------------------------------------------------------
+;; Persistent visibility ------------------------------------------------------
 
+(defun shaoline--preserve-visibility-pre ()
+  "Восстанавливать Shaoline сразу после того, как Emacs стёр echo-area.
+
+Запускается в `pre-command-hook` (следом за внутренним очистителем
+сообщений), поэтому ‘пустой кадр’ не успевает проявиться
+на экране даже при авто-повторе клавиш."
+  (let* ((our (shaoline--state-get :last-content))
+         (cur (current-message)))
+    (when (and shaoline-mode
+               (shaoline--resolve-setting 'always-visible)
+               our (not (string-empty-p our))
+               ;; echo-area либо пуста, либо в ней чужой текст
+               (or (null cur)
+                   (not (get-text-property 0 'shaoline-origin cur))))
+      (let ((message-log-max nil))
+        (message "%s" (propertize our 'shaoline-origin t))))))
 
 ;; ----------------------------------------------------------------------------
 ;; Prefix Key Capture — Yang Mode Enhancement
@@ -441,6 +467,28 @@ Reduced list focusing on major state changes.")
               dired-next-line dired-previous-line)
   "Movement commands that should update regularly.")
 
+;; ---------------------------------------------------------------------------
+;; Update–decision helper — основной фильтр мерцания
+;; ---------------------------------------------------------------------------
+
+(defun shaoline--should-update-after-command-p (command)
+  "Return non-nil when Shaoline should run an *update* after COMMAND.
+
+Логика:
+1. Команды из `shaoline--commands-requiring-update` — всегда.
+2. «Движение» (`shaoline--movement-commands`) — не чаще, чем раз в
+   `shaoline-update-debounce` секунд.
+3. В остальных случаях полагаемся на `shaoline--significant-change-p`."
+  (cond
+   ;; Явно важные события
+   ((memq command shaoline--commands-requiring-update) t)
+   ;; Частые перемещения курсора — тротлим
+   ((memq command shaoline--movement-commands)
+    (> (- (float-time) shaoline--last-movement-update)
+       shaoline-update-debounce))
+   ;; Всё остальное — по изменению значимого состояния
+   (t (shaoline--significant-change-p))))
+
 (defvar shaoline--last-movement-update 0
   "Time of last movement-triggered update.")
 
@@ -464,22 +512,30 @@ Reduced list focusing on major state changes.")
 ;; ----------------------------------------------------------------------------
 
 (defun shaoline--guard-visibility ()
-  "Persistent guardian — the Dao of continuous presence."
-  (when (and (not (shaoline--echo-area-busy-p))
-             (shaoline--resolve-setting 'always-visible))
-    (let* ((current-msg (current-message))
-           (our-content (shaoline--state-get :last-content))
-           (foreign-message (and current-msg
-                                 (not (get-text-property 0 'shaoline-origin current-msg)))))
-      ;; In Yang mode, aggressively reclaim echo area
-      (when (or (null current-msg)          ; Empty — we should be there
-                foreign-message             ; Foreign — reclaim immediately
-                (and our-content           ; We have content but it's not showing
-                     (not (string-empty-p our-content))
-                     (not (equal current-msg our-content))))
+  "Persistent guardian — the Dao of continuous presence.
+Вызывается таймером; возвращает Shaoline-строку, если она пропала
+из echo-area, но делает это бережно, чтобы не вызвать мерцание."
+  (when (and shaoline-mode
+             (not (shaoline--echo-area-busy-p)))
+    (let* ((current-msg    (current-message))
+           (since-last     (- (float-time) shaoline--last-display-time))
+           (our-content    (shaoline--state-get :last-content))
+           (foreign-message
+            (and current-msg
+                 (not (get-text-property 0 'shaoline-origin current-msg)))))
+      ;; Показываем заново, если:
+      ;;  – echo-area пуста ИЛИ в ней чужое сообщение ИЛИ она показывает
+      ;;    неактуальную нашу строку;       И
+      ;;  – прошло хотя бы 0.25 с после последнего показа.
+      (when (and (> since-last 0.25)
+                 (or (null current-msg)
+                     foreign-message
+                     (and our-content
+                          (not (string-empty-p our-content))
+                          (not (equal current-msg our-content)))))
         (shaoline--log "Guard reclaiming echo area: current=%S foreign=%s our=%S"
                        current-msg foreign-message our-content)
-        ;; Trigger a fresh recomputation/update (unit tests stub this)
+        ;; Тихо пересчитываем и отображаем заново
         (shaoline-update)))))
 
 (defun shaoline--display-cached ()
@@ -494,6 +550,9 @@ Reduced list focusing on major state changes.")
 ;; ----------------------------------------------------------------------------
 ;; Effect Logging — Observing Changes
 ;; ----------------------------------------------------------------------------
+
+(defvar shaoline--last-display-time 0
+  "Time (float) когда Shaoline в последний раз вызвала `message'.")
 
 (defvar shaoline--effect-log nil
   "Log of all effects applied.")

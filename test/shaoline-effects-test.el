@@ -180,12 +180,14 @@
 (ert-deftest shaoline-guard-visibility ()
   "Test guard timer behavior."
   (let ((update-called nil))
+    ;; Set up state to trigger guard update
+    (setq shaoline-mode t)
+    (shaoline--state-put :last-content "test content")
+    (setq shaoline--last-display-time 0) ; Force stale timestamp
+
     ;; Mock functions
-    (cl-letf (((symbol-function 'shaoline--resolve-setting)
-               (lambda (setting) (eq setting 'always-visible)))
+    (cl-letf (((symbol-function 'shaoline--echo-area-busy-p) (lambda () nil))
               ((symbol-function 'current-message) (lambda () nil))
-              ((symbol-function 'minibufferp) (lambda () nil))
-              ((symbol-function 'active-minibuffer-window) (lambda () nil))
               ((symbol-function 'shaoline-update) (lambda () (setq update-called t))))
 
       (shaoline--guard-visibility)

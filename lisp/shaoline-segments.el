@@ -91,10 +91,14 @@
 ;; 三 Position and Navigation — Where We Are
 ;; ----------------------------------------------------------------------------
 
-(shaoline-define-segment shaoline-segment-position ()
-  "Current position as line:column."
-  (propertize (format "%d:%d" (line-number-at-pos) (current-column))
-              'face 'shaoline-mode-face))
+(shaoline-define-segment shaoline-segment-position (&optional &key with-column)
+  "Current position.  По умолчанию только строка; колонку добавляем,
+когда WITH-COLUMN ненулев."
+  (propertize
+   (if with-column
+       (format "%d:%d" (line-number-at-pos) (current-column))
+     (number-to-string (line-number-at-pos)))
+   'face 'shaoline-mode-face))
 
 (shaoline-define-segment shaoline-segment-encoding ()
   "File encoding and EOL type."
@@ -255,19 +259,27 @@
 (defun shaoline--format-battery (data fallback)
   "Format battery DATA into display string."
   (cond
+   ;; Alist data from battery-status-function
    ((and (listp data) (cl-every #'consp data))
-    (let* ((percent (or (cdr (assoc 112 data))   ; ?p
-                        (cdr (assoc "percentage" data))))
+    (let* ((raw-percent (or (cdr (assoc 112 data))   ; ?p
+                            (cdr (assoc "percentage" data))))
+           ;; Нормализуем процент в строку
+           (percent (cond
+                     ((numberp raw-percent) (number-to-string raw-percent))
+                     ((stringp raw-percent) raw-percent)
+                     (t nil)))
            (status (or (cdr (assoc 66 data))     ; ?b
                        (cdr (assoc "status" data))))
+           ;; Выбираем иконку по проценту
            (icon (when (and (featurep 'all-the-icons) percent (display-graphic-p))
                    (let ((n (string-to-number (replace-regexp-in-string "[^0-9]" "" percent))))
                      (cond
-                      ((>= n 90) (all-the-icons-faicon "battery-full" :height 0.75))
-                      ((>= n 70) (all-the-icons-faicon "battery-three-quarters" :height 0.75))
-                      ((>= n 40) (all-the-icons-faicon "battery-half" :height 0.75))
-                      ((>= n 10) (all-the-icons-faicon "battery-quarter" :height 0.75))
-                      (t (all-the-icons-faicon "battery-empty" :height 0.75)))))))
+                      ((>= n 90) (all-the-icons-faicon "battery-full" :height 0.75 :v-adjust 0))
+                      ((>= n 70) (all-the-icons-faicon "battery-three-quarters" :height 0.75 :v-adjust 0))
+                      ((>= n 40) (all-the-icons-faicon "battery-half" :height 0.75 :v-adjust 0))
+                      ((>= n 10) (all-the-icons-faicon "battery-quarter" :height 0.75 :v-adjust 0))
+                      (t (all-the-icons-faicon "battery-empty" :height 0.75 :v-adjust 0)))))))
+      ;; Форматируем вывод
       (if percent
           (concat
            (when (and icon (stringp icon) (not (string-empty-p icon)))
@@ -275,7 +287,10 @@
            (propertize (format "%s%%" (replace-regexp-in-string "[^0-9]" "" percent))
                        'face 'shaoline-battery-face))
         fallback)))
-   ((stringp data) (propertize data 'face 'shaoline-battery-face))
+   ;; Строка от функции battery()
+   ((stringp data)
+    (propertize data 'face 'shaoline-battery-face))
+   ;; Неизвестный формат
    (t fallback)))
 
 (shaoline-define-segment shaoline-segment-battery ()
@@ -290,24 +305,25 @@
          (if (and (fboundp 'battery)
                   (boundp 'battery-status-function)
                   battery-status-function)
-             ;; Use async if available, otherwise sync
-             (if (fboundp 'async-start)
-                 (progn
-                   (async-start
-                    (lambda ()
-                      (require 'battery)
-                      (funcall ',battery-status-function))
-                    (lambda (data)
-                      (let ((formatted (shaoline--format-battery data fallback)))
-                        (setq shaoline--segment-battery-cache formatted)
-                        (when (fboundp 'shaoline--update)
-                          (shaoline--update)))))
-                   ;; Return cached or placeholder while loading
-                   (if (string-empty-p shaoline--segment-battery-cache)
-                       (propertize "Batt..." 'face 'shaoline-battery-face)
-                     shaoline--segment-battery-cache))
-               ;; Synchronous fallback
-               (shaoline--format-battery (funcall battery-status-function) fallback))
+             ;; Всегда сперва считаем синхронно, чтобы сразу показать результат,
+             ;; а затем — обновляем асинхронно, если возможно.
+             (let* ((data (funcall battery-status-function))
+                    (formatted (shaoline--format-battery data fallback)))
+               ;; Кешируем моментальный результат
+               (setq shaoline--segment-battery-cache formatted)
+               ;; Запускаем фоновое обновление (не блокирует UI)
+               (when (fboundp 'async-start)
+                 (async-start
+                  (lambda ()
+                    (require 'battery)
+                    (funcall battery-status-function))
+                  (lambda (data)
+                    (setq shaoline--segment-battery-cache
+                          (shaoline--format-battery data fallback))
+                    (when (fboundp 'shaoline--update)
+                      (shaoline--update)))))
+               ;; Возвращаем либо свежий, либо уже закешированный результат
+               shaoline--segment-battery-cache)
            fallback))))))
 
 ;; ----------------------------------------------------------------------------

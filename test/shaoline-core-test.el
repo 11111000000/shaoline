@@ -128,16 +128,38 @@
   "Should-display logic works correctly."
   (shaoline--state-put :last-content "")
 
-  ;; Valid content should display
+  ;; Valid content should display when content changed
   (should (shaoline--should-display-p "valid content"))
 
   ;; Empty content should not display
   (should-not (shaoline--should-display-p ""))
   (should-not (shaoline--should-display-p nil))
 
-  ;; Same content should not display again
+  ;; Same content should not display again when echo area is busy
   (shaoline--state-put :last-content "same content")
-  (should-not (shaoline--should-display-p "same content")))
+  (cl-letf (((symbol-function 'current-message) (lambda () "some message"))
+            ((symbol-function 'shaoline--echo-area-busy-p) (lambda () t)))
+    ;; Echo area is busy, so should not display
+    (should-not (shaoline--should-display-p "same content")))
+
+  ;; Test the actual logic: empty echo area allows redisplay even of same content
+  (cl-letf (((symbol-function 'current-message) (lambda () nil))
+            ((symbol-function 'shaoline--echo-area-busy-p) (lambda () nil))
+            ((symbol-function 'shaoline--resolve-setting)
+             (lambda (setting) nil))) ; always-visible = nil
+    ;; Echo area is empty, so should display even same content
+    (should (shaoline--should-display-p "same content"))
+
+    ;; Different content should also display
+    (should (shaoline--should-display-p "different content")))
+
+  ;; Test case where echo area has foreign message but not busy
+  (cl-letf (((symbol-function 'current-message) (lambda () "foreign message"))
+            ((symbol-function 'shaoline--echo-area-busy-p) (lambda () nil))
+            ((symbol-function 'shaoline--resolve-setting)
+             (lambda (setting) nil))) ; always-visible = nil
+    ;; Foreign message present, same content should not display
+    (should-not (shaoline--should-display-p "same content"))))
 
 ;; ----------------------------------------------------------------------------
 ;; Test: Strategy system

@@ -36,6 +36,10 @@
   :group 'convenience
   :prefix "shaoline-")
 
+;; Global mode variable
+(defvar shaoline-mode nil
+  "Non-nil when Shaoline mode is active.")
+
 ;; Core behavior flags
 (defcustom shaoline-mode-strategy 'yang
   "Strategy for Shaoline behavior adaptation.
@@ -48,7 +52,7 @@
 (defcustom shaoline-segments
   '((:left shaoline-segment-major-mode  shaoline-segment-buffer-name shaoline-segment-modified)
     (:center shaoline-segment-echo-message)
-    (:right  shaoline-segment-current-keys shaoline-segment-position shaoline-segment-time))
+    (:right  shaoline-segment-battery shaoline-segment-current-keys shaoline-segment-time))
   "Segment configuration following the Three Treasures pattern.
 Structure: ((:left segment ...) (:center segment ...) (:right segment ...))"
   :type 'sexp
@@ -255,7 +259,11 @@ Returns (left-str center-str right-str) as pure function."
          (center-str (string-join (remove "" center) " "))
          (left-w (string-width left-str))
          (right-w (string-width right-str))
-         (available (max 0 (- width left-w right-w 2))) ; 2 for spacing
+         ;; Account for gaps and right margin more precisely
+         (left-gap (if (string-empty-p left-str) 0 1))
+         (right-gap (if (string-empty-p right-str) 0 1))
+         (reserved-space (+ left-w right-w left-gap right-gap shaoline-right-margin))
+         (available (max 0 (- width reserved-space)))
          (truncated-center
           (if (> (string-width center-str) available)
               (truncate-string-to-width center-str available nil nil "…")
@@ -388,6 +396,7 @@ In always-visible mode, overrides foreign messages even when content unchanged."
        (stringp content)
        (not (string-empty-p content))
        (or (shaoline--content-changed-p content)
+           (null (current-message))                    ; echo-area пуста → показать
            (and (shaoline--resolve-setting 'always-visible)
                 (let ((cur (current-message)))
                   (and cur
