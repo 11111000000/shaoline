@@ -55,8 +55,8 @@ Structure: ((:left segment ...) (:center segment ...) (:right segment ...))"
   :group 'shaoline)
 
 ;; Performance wisdom
-(defcustom shaoline-update-debounce 0.1
-  "Seconds to wait between updates. Like breathing — natural rhythm."
+(defcustom shaoline-update-debounce 0.15
+  "Seconds to wait between updates. Increased for better performance."
   :type 'float
   :group 'shaoline)
 
@@ -343,7 +343,9 @@ Takes no global state, produces modeline string."
     (if (and entry (< (- now (cdr entry)) ttl-seconds))
         (car entry)  ; Return cached
       (let ((result (funcall thunk)))
-        (puthash key (cons result now) cache)
+        ;; Only cache non-empty results
+        (when (and result (not (and (stringp result) (string-empty-p result))))
+          (puthash key (cons result now) cache))
         result))))
 
 ;; ----------------------------------------------------------------------------

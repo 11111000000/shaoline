@@ -210,20 +210,13 @@
 (defun shaoline--should-update-p ()
   "Central intelligence for deciding whether to run `shaoline-update'."
   (and shaoline-mode
-       ;; Rate limiting - consume token or allow in always-visible mode
-       (or (shaoline--consume-update-token)
-           (shaoline--resolve-setting 'always-visible))
        ;; Don't update when echo area is busy
        (not (shaoline--echo-area-busy-p))
-       ;; Check if update is actually needed
-       (or
-        ;; Content has actually changed
-        (shaoline--content-changed-p (shaoline-compose))
-        ;; Always-visible mode needs to reclaim echo area
-        (and (shaoline--resolve-setting 'always-visible)
-             (let ((cur (current-message)))
-               (or (null cur)
-                   (not (get-text-property 0 'shaoline-origin cur))))))))
+       ;; More permissive rate limiting
+       (or (shaoline--consume-update-token)
+           (shaoline--resolve-setting 'always-visible)
+           ;; Allow immediate updates for significant changes
+           (shaoline--significant-change-p))))
 
 ;; ----------------------------------------------------------------------------
 ;; Strategy API — External Interface

@@ -43,40 +43,23 @@ Uses weak references so buffers can be garbage collected normally.")
 ;; ----------------------------------------------------------------------------
 
 (shaoline-defeffect shaoline--display (content)
-  "Display CONTENT in echo area with Shaoline tagging.
-
-If already displayed, do not call (message) redundantly."
+  "Display CONTENT in echo area with Shaoline tagging."
   (shaoline--log "shaoline--display called in buffer: %s, content: %s" (buffer-name) content)
   (when (shaoline--should-display-p content)
-    ;; Avoid echo-area rewrite if content and shaoline-origin are unchanged
+    (shaoline--state-put :last-content content)
     (let* ((tagged (propertize content 'shaoline-origin t))
-           (current (current-message))
            (message-log-max nil))
-      (unless (and current
-                   (string= current tagged)
-                   (get-text-property 0 'shaoline-origin current))
-        (shaoline--log "shaoline--display actually displaying: %s" tagged)
-        (message "%s" tagged)
-        (push 'display shaoline--active-effects)))
-    (shaoline--state-put :last-content content)))
+      (shaoline--log "shaoline--display actually displaying: %s" tagged)
+      (message "%s" tagged)
+      (push 'display shaoline--active-effects))))
 
 (shaoline-defeffect shaoline--clear-echo-area ()
-  "Clear echo area if it contains Shaoline content.
-
-If in always-visible mode, do *not* clear echo area with (message nil) to avoid flicker."
-  (let ((msg (current-message)))
-    (cond
-     ;; In always-visible mode: do not clear, only update our state
-     ((and (shaoline--resolve-setting 'always-visible)
-           msg
-           (get-text-property 0 'shaoline-origin msg))
-      (shaoline--state-put :last-content "")
-      (push 'clear shaoline--active-effects))
-     ;; Standard case
-     ((and msg (get-text-property 0 'shaoline-origin msg))
-      (message nil)
-      (shaoline--state-put :last-content "")
-      (push 'clear shaoline--active-effects)))))
+  "Clear echo area if it contains Shaoline content."
+  (when (and (current-message)
+             (get-text-property 0 'shaoline-origin (current-message)))
+    (message nil)
+    (shaoline--state-put :last-content "")
+    (push 'clear shaoline--active-effects)))
 
 ;; ----------------------------------------------------------------------------
 ;; Timer Effects — Temporal Manifestations
@@ -277,33 +260,43 @@ If in always-visible mode, do *not* clear echo area with (message nil) to avoid 
 ;; Message Capture Advice
 ;; ----------------------------------------------------------------------------
 
-(defun shaoline--advice-capture-message (orig-fn format-string &rest args)
-  "Capture message content before display, excluding Shaoline's own messages.
+(defun shaoline--advice-capture-message (orig-fun format-string &rest args)
+  "Advice function to capture messages before they're displayed."
+  (let ((result (apply orig-fun format-string args)))
+    ;; Capture non-Shaoline messages
+    (when (and result
+               (stringp result)
+               (not (string-empty-p result))
+               (not (get-text-property 0 'shaoline-origin result)))
+      (shaoline-msg-save result))
+    result))
 
-  In always-visible/yang mode: blocks (message nil) to prevent echo-area flicker."
-  ;; 1. Ignore (message nil) in always-visible mode (do *not* clear Shaoline!)
-  (when (and (shaoline--resolve-setting 'always-visible)
-             (null format-string))
-    ;; Block echo-area clearing!
-    (cl-return-from shaoline--advice-capture-message))
+(defun shaoline--should-update-after-command-p (command)
+  "Determine if COMMAND should trigger an update."
+  (and
+   ;; Don't update for rapid repeating commands
+   (not (and (eq command (shaoline--state-get :last-command))
+             (< (- (float-time) (or (shaoline--state-get :last-update-time) 0)) 0.05)))
+   (or
+    ;; Always update for major state changes
+    (memq command shaoline--commands-requiring-update)
 
-  (let ((content (when format-string
-                   (apply #'format format-string args))))
-    (unless (and content
-                 (stringp content)
-                 (get-text-property 0 'shaoline-origin content))
-      (when (and content
-                 ;; Filter out key press notifications and other noise
-                 (not (string-match-p "^Key:" content))
-                 (not (string-match-p "^Mark set" content))
-                 (not (string-match-p "^Quit" content))
-                 (not (string-empty-p (string-trim content))))
-        (shaoline-msg-save content)
-        (when (and (shaoline--resolve-setting 'always-visible)
-                   (not (minibufferp))
-                   (not (active-minibuffer-window)))
-          (run-with-timer 0.05 nil #'shaoline-update))))
-    (apply orig-fn format-string args)))
+    ;; Movement commands - throttled updates
+    (and (memq command shaoline--movement-commands)
+         (> (- (float-time) shaoline--last-movement-update) 0.2))
+
+    ;; Update if there's been a significant state change
+    (shaoline--significant-change-p)
+
+    ;; Update if we have current prefix keys to show
+    (and shaoline--current-keys
+         (not (string-empty-p shaoline--current-keys)))
+
+    ;; Update in always-visible mode when echo area content changes
+    (and (shaoline--resolve-setting 'always-visible)
+         (let ((cur (current-message)))
+           (or (null cur)
+               (not (get-text-property 0 'shaoline-origin cur))))))))
 
 ;; ----------------------------------------------------------------------------
 ;; Prefix Key Capture — Yang Mode Enhancement
@@ -411,11 +404,12 @@ If in always-visible mode, do *not* clear echo area with (message nil) to avoid 
   "Get current significant state for change detection."
   (list
    :buffer-name (buffer-name)
-   :position (cons (line-number-at-pos) (current-column))
+   :position (cons (line-number-at-pos) (current-column)) ; Always track position
    :modified-p (buffer-modified-p)
    :current-keys shaoline--current-keys
    :major-mode major-mode
-   :message (shaoline-msg-current)))
+   :message (shaoline-msg-current)
+   :window-width (window-width)))
 
 (defun shaoline--significant-change-p ()
   "Check if there's been a significant change requiring update."
@@ -424,23 +418,42 @@ If in always-visible mode, do *not* clear echo area with (message nil) to avoid 
       (setq shaoline--last-significant-state current-state))))
 
 (defvar shaoline--commands-requiring-update
+  '(switch-to-buffer find-file save-buffer
+                     windmove-up windmove-down windmove-left windmove-right
+                     other-window beginning-of-buffer end-of-buffer)
+  "Commands that should always trigger an update.
+Reduced list focusing on major state changes.")
+
+(defvar shaoline--movement-commands
   '(next-line previous-line forward-char backward-char
-              beginning-of-line end-of-line beginning-of-buffer end-of-buffer
-              switch-to-buffer find-file save-buffer
-              windmove-up windmove-down windmove-left windmove-right
-              other-window)
-  "Commands that should always trigger an update.")
+              beginning-of-line end-of-line scroll-up-command scroll-down-command
+              dired-next-line dired-previous-line)
+  "Movement commands that should update regularly.")
+
+(defvar shaoline--last-movement-update 0
+  "Time of last movement-triggered update.")
 
 (defun shaoline--should-update-after-command-p (command)
   "Determine if COMMAND should trigger an update."
   (or
    ;; Always update for specific movement/navigation commands
    (memq command shaoline--commands-requiring-update)
+
+   ;; Update for text input commands
+   (memq command '(self-insert-command delete-backward-char delete-char
+                                       newline open-line indent-for-tab-command))
+
+   ;; Movement commands - but more frequently
+   (and (memq command shaoline--movement-commands)
+        (> (- (float-time) shaoline--last-movement-update) 0.1)) ; Reduced from 0.2
+
    ;; Update if there's been a significant state change
    (shaoline--significant-change-p)
+
    ;; Update if we have current prefix keys to show
    (and shaoline--current-keys
         (not (string-empty-p shaoline--current-keys)))
+
    ;; Update in always-visible mode when echo area content changes
    (and (shaoline--resolve-setting 'always-visible)
         (let ((cur (current-message)))
@@ -450,6 +463,14 @@ If in always-visible mode, do *not* clear echo area with (message nil) to avoid 
 (defun shaoline--smart-post-command-update ()
   "Smart post-command update that reduces unnecessary updates."
   (when (shaoline--should-update-after-command-p this-command)
+    ;; Record command and time for rate limiting
+    (shaoline--state-put :last-command this-command)
+    (shaoline--state-put :last-update-time (float-time))
+
+    ;; Update movement timestamp if needed
+    (when (memq this-command shaoline--movement-commands)
+      (setq shaoline--last-movement-update (float-time)))
+
     (shaoline--debounced-update)))
 
 ;; ----------------------------------------------------------------------------
@@ -458,9 +479,15 @@ If in always-visible mode, do *not* clear echo area with (message nil) to avoid 
 
 (defun shaoline--guard-visibility ()
   "Gentle guardian ensuring Shaoline remains visible when appropriate."
-  (when (and (shaoline--resolve-setting 'always-visible)
-             (not (shaoline--echo-area-busy-p)))
-    (shaoline-update)))
+  (when (and (not (shaoline--echo-area-busy-p))
+             (or (shaoline--resolve-setting 'always-visible)
+                 ;; Also guard in other modes if content exists
+                 (and (shaoline--state-get :last-content)
+                      (not (string-empty-p (shaoline--state-get :last-content))))))
+    (let ((current-msg (current-message)))
+      (when (or (null current-msg)
+                (not (get-text-property 0 'shaoline-origin current-msg)))
+        (shaoline-update)))))
 
 
 ;; ----------------------------------------------------------------------------

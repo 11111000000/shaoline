@@ -37,14 +37,15 @@
 (defun shaoline-update (&optional force)
   "Update Shaoline display with optional FORCE override."
   (interactive "P")
-  (shaoline--log "shaoline-update called (force=%s in-update=%s)" force shaoline--update-in-progress)
   (unless shaoline--update-in-progress
     (let ((shaoline--update-in-progress t)
           (start-time (float-time)))
       (when (or force (shaoline--should-update-p))
         (let ((content (shaoline-compose)))
-          (shaoline--display content))
-        (shaoline--record-performance start-time)))))
+          ;; Only display if content actually changed or forced
+          (when (or force (shaoline--content-changed-p content))
+            (shaoline--display content))
+          (shaoline--record-performance start-time))))))
 
 ;; ----------------------------------------------------------------------------
 ;; Manual Control Functions — User Agency
