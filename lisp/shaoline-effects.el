@@ -376,18 +376,19 @@ Otherwise the original `message' is executed unchanged."
 ;; ----------------------------------------------------------------------------
 
 (defun shaoline--advice-capture-message (orig-fun format-string &rest args)
-  "Advice function to capture messages before they're displayed.
-We compute the formatted text ourselves to stay robust against
-stubs that incorrectly call `(format fmt args)`."
-  (let* ((clean-text (apply #'format format-string args)))
-    ;; Call the original function for its side-effect
-    (apply orig-fun format-string args)
-    ;; Capture non-Shaoline messages
+  "Around-advice on `message' that stores user messages for Shaoline,
+but gracefully ignores echo-area clears such as (message nil)."
+  ;; Execute the original `message' first, preserving all side effects.
+  (let* ((result (apply orig-fun format-string args))
+         ;; Only try to format when the first arg is really a string.
+         (clean-text (when (stringp format-string)
+                       (apply #'format format-string args))))
+    ;; Save non-empty, non-Shaoline messages.
     (when (and (stringp clean-text)
                (not (string-empty-p clean-text))
                (not (get-text-property 0 'shaoline-origin clean-text)))
       (shaoline-msg-save clean-text))
-    clean-text))
+    result))
 
 ;; ----------------------------------------------------------------------------
 ;; Persistent visibility ------------------------------------------------------
