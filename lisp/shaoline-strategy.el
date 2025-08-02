@@ -210,18 +210,20 @@
 (defun shaoline--should-update-p ()
   "Central intelligence for deciding whether to run `shaoline-update'."
   (and shaoline-mode
-       ;; In always-visible (yang) mode we must restore Shaoline
-       ;; immediately, even if the token bucket is empty.  Therefore we
-       ;; bypass the bucket when that setting is active.
+       ;; Rate limiting - consume token or allow in always-visible mode
        (or (shaoline--consume-update-token)
            (shaoline--resolve-setting 'always-visible))
+       ;; Don't update when echo area is busy
        (not (shaoline--echo-area-busy-p))
-       (or (shaoline--context-changed-p)
-           (shaoline--content-changed-p (shaoline-compose))
-           (and (shaoline--resolve-setting 'always-visible)
-                (let ((cur (current-message)))
-                  (or (null cur)
-                      (not (get-text-property 0 'shaoline-origin cur))))))))
+       ;; Check if update is actually needed
+       (or
+        ;; Content has actually changed
+        (shaoline--content-changed-p (shaoline-compose))
+        ;; Always-visible mode needs to reclaim echo area
+        (and (shaoline--resolve-setting 'always-visible)
+             (let ((cur (current-message)))
+               (or (null cur)
+                   (not (get-text-property 0 'shaoline-origin cur))))))))
 
 ;; ----------------------------------------------------------------------------
 ;; Strategy API — External Interface

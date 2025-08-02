@@ -71,7 +71,7 @@ Structure: ((:left segment ...) (:center segment ...) (:right segment ...))"
   :type 'boolean
   :group 'shaoline)
 
-(defcustom shaoline-debug niloo
+(defcustom shaoline-debug nil
   "Enable debug logging for troubleshooting."
   :type 'boolean
   :group 'shaoline)

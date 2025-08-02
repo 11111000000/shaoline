@@ -43,23 +43,40 @@ Uses weak references so buffers can be garbage collected normally.")
 ;; ----------------------------------------------------------------------------
 
 (shaoline-defeffect shaoline--display (content)
-  "Display CONTENT in echo area with Shaoline tagging."
+  "Display CONTENT in echo area with Shaoline tagging.
+
+If already displayed, do not call (message) redundantly."
   (shaoline--log "shaoline--display called in buffer: %s, content: %s" (buffer-name) content)
   (when (shaoline--should-display-p content)
-    (shaoline--state-put :last-content content)
+    ;; Avoid echo-area rewrite if content and shaoline-origin are unchanged
     (let* ((tagged (propertize content 'shaoline-origin t))
+           (current (current-message))
            (message-log-max nil))
-      (shaoline--log "shaoline--display actually displaying: %s" tagged)
-      (message "%s" tagged)
-      (push 'display shaoline--active-effects))))
+      (unless (and current
+                   (string= current tagged)
+                   (get-text-property 0 'shaoline-origin current))
+        (shaoline--log "shaoline--display actually displaying: %s" tagged)
+        (message "%s" tagged)
+        (push 'display shaoline--active-effects)))
+    (shaoline--state-put :last-content content)))
 
 (shaoline-defeffect shaoline--clear-echo-area ()
-  "Clear echo area if it contains Shaoline content."
-  (when (and (current-message)
-             (get-text-property 0 'shaoline-origin (current-message)))
-    (message nil)
-    (shaoline--state-put :last-content "")
-    (push 'clear shaoline--active-effects)))
+  "Clear echo area if it contains Shaoline content.
+
+If in always-visible mode, do *not* clear echo area with (message nil) to avoid flicker."
+  (let ((msg (current-message)))
+    (cond
+     ;; In always-visible mode: do not clear, only update our state
+     ((and (shaoline--resolve-setting 'always-visible)
+           msg
+           (get-text-property 0 'shaoline-origin msg))
+      (shaoline--state-put :last-content "")
+      (push 'clear shaoline--active-effects))
+     ;; Standard case
+     ((and msg (get-text-property 0 'shaoline-origin msg))
+      (message nil)
+      (shaoline--state-put :last-content "")
+      (push 'clear shaoline--active-effects)))))
 
 ;; ----------------------------------------------------------------------------
 ;; Timer Effects — Temporal Manifestations
@@ -226,20 +243,13 @@ Uses weak references so buffers can be garbage collected normally.")
   (shaoline--cleanup-all-effects) ; Clean slate
 
   (when (shaoline--resolve-setting 'use-hooks)
-    (shaoline--attach-hook 'post-command-hook #'shaoline-update)
-    (shaoline--attach-hook 'after-save-hook #'shaoline-update)
-    (shaoline--attach-hook 'window-configuration-change-hook #'shaoline-update)
+    (shaoline--attach-hook 'post-command-hook #'shaoline--smart-post-command-update)
+    (shaoline--attach-hook 'after-save-hook #'shaoline--debounced-update)
+    (shaoline--attach-hook 'window-configuration-change-hook #'shaoline--debounced-update)
 
-    ;; Key capture hooks
-    (shaoline--attach-hook 'pre-command-hook #'shaoline--capture-prefix-keys)
-    (shaoline--attach-hook 'post-command-hook #'shaoline--capture-prefix-keys)
-    ;; Also hook into prefix-command-echo-keystrokes-functions for better detection
-    (when (boundp 'prefix-command-echo-keystrokes-functions)
-      (shaoline--attach-hook 'prefix-command-echo-keystrokes-functions
-                             (lambda ()
-                               (when-let ((keys (this-command-keys)))
-                                 (setq shaoline--current-keys (key-description keys)
-                                       shaoline--current-keys-time (float-time)))))))
+    ;; Key capture hooks - only post-command to avoid conflicts
+    (shaoline--attach-hook 'post-command-hook #'shaoline--capture-prefix-keys-post)
+    (shaoline--attach-hook 'pre-command-hook #'shaoline--capture-prefix-keys-pre))
 
   (when (shaoline--resolve-setting 'use-advice)
     (shaoline--attach-advice #'message :around #'shaoline--advice-capture-message))
@@ -268,7 +278,15 @@ Uses weak references so buffers can be garbage collected normally.")
 ;; ----------------------------------------------------------------------------
 
 (defun shaoline--advice-capture-message (orig-fn format-string &rest args)
-  "Capture message content before display, excluding Shaoline's own messages."
+  "Capture message content before display, excluding Shaoline's own messages.
+
+  In always-visible/yang mode: blocks (message nil) to prevent echo-area flicker."
+  ;; 1. Ignore (message nil) in always-visible mode (do *not* clear Shaoline!)
+  (when (and (shaoline--resolve-setting 'always-visible)
+             (null format-string))
+    ;; Block echo-area clearing!
+    (cl-return-from shaoline--advice-capture-message))
+
   (let ((content (when format-string
                    (apply #'format format-string args))))
     (unless (and content
@@ -297,41 +315,52 @@ Uses weak references so buffers can be garbage collected normally.")
 (defvar shaoline--current-keys-time 0
   "Time when current keys were captured.")
 
-(defun shaoline--capture-prefix-keys ()
-  "Capture prefix keys for display in yang mode."
-  ;; Clear keys after command completion, but delay enough for Shaoline to update
-  (when (and (not (minibufferp))
-             (not (string-match-p "\\(universal-argument\\|digit-argument\\|negative-argument\\)"
-                                  (symbol-name (or this-command 'unknown)))))
-    (run-with-timer 0.3 nil #'shaoline--clear-current-keys))
+(defvar shaoline--clear-keys-timer nil
+  "Timer for clearing current keys.")
 
+(defun shaoline--capture-prefix-keys-pre ()
+  "Pre-command hook for capturing prefix keys."
   (when (and (this-command-keys)
              (vectorp (this-command-keys))
              (> (length (this-command-keys)) 0))
     (let* ((keys (this-command-keys))
            (key-desc (key-description keys))
            (command this-command))
-      ;; Debug logging
-      (shaoline--log "shaoline--capture-prefix-keys: keys=%s, desc=%s, command=%s"
+      (shaoline--log "shaoline--capture-prefix-keys-pre: keys=%s, desc=%s, command=%s"
                      keys key-desc command)
-      ;; Capture prefix keys or key sequences
+      ;; Capture prefix keys or argument commands
       (when (or
              ;; Standard prefix keys
-             (string-match-p "^C-\\|^M-\\|^s-\\|^H-" key-desc)
+             (string-match-p "^C-[0-9]\\|^M-[0-9]\\|^C-u" key-desc)
              ;; Universal argument commands
              (and (symbolp command)
                   (commandp command)
                   (string-match-p "\\(universal-argument\\|digit-argument\\|negative-argument\\)"
-                                  (symbol-name command)))
-             ;; Multi-key sequences
-             (> (length keys) 1)
-             ;; Incomplete key sequences
-             (and (eq command nil)
-                  (> (length keys) 0)))
+                                  (symbol-name command))))
         ;; Store current keys
         (setq shaoline--current-keys key-desc
               shaoline--current-keys-time (float-time))
-        (shaoline--log "shaoline--capture-prefix-keys: captured keys=%s" key-desc)))))
+        (shaoline--log "shaoline--capture-prefix-keys-pre: captured keys=%s" key-desc)))))
+
+(defun shaoline--capture-prefix-keys-post ()
+  "Post-command hook for managing prefix keys lifecycle."
+  (let ((command this-command))
+    (shaoline--log "shaoline--capture-prefix-keys-post: command=%s, current-keys=%s"
+                   command shaoline--current-keys)
+    ;; Clear keys after non-prefix commands complete
+    (when (and shaoline--current-keys
+               (not (minibufferp))
+               (not (and (symbolp command)
+                         (commandp command)
+                         (string-match-p "\\(universal-argument\\|digit-argument\\|negative-argument\\)"
+                                         (symbol-name command)))))
+      ;; Cancel existing timer
+      (when shaoline--clear-keys-timer
+        (cancel-timer shaoline--clear-keys-timer)
+        (setq shaoline--clear-keys-timer nil))
+      ;; Set new timer to clear keys
+      (setq shaoline--clear-keys-timer
+            (run-with-timer 0.5 nil #'shaoline--clear-current-keys)))))
 
 (defun shaoline--get-current-keys ()
   "Get current prefix keys if recent enough."
@@ -367,7 +396,61 @@ Uses weak references so buffers can be garbage collected normally.")
 (defun shaoline--clear-current-keys ()
   "Clear current prefix keys."
   (setq shaoline--current-keys ""
-        shaoline--current-keys-time 0))
+        shaoline--current-keys-time 0
+        shaoline--clear-keys-timer nil)
+  (shaoline--log "shaoline--clear-current-keys: keys cleared"))
+
+;; ----------------------------------------------------------------------------
+;; Optimized Update Logic — Reduce Unnecessary Updates
+;; ----------------------------------------------------------------------------
+
+(defvar shaoline--last-significant-state nil
+  "Last significant state that would require a display update.")
+
+(defun shaoline--get-current-significant-state ()
+  "Get current significant state for change detection."
+  (list
+   :buffer-name (buffer-name)
+   :position (cons (line-number-at-pos) (current-column))
+   :modified-p (buffer-modified-p)
+   :current-keys shaoline--current-keys
+   :major-mode major-mode
+   :message (shaoline-msg-current)))
+
+(defun shaoline--significant-change-p ()
+  "Check if there's been a significant change requiring update."
+  (let ((current-state (shaoline--get-current-significant-state)))
+    (prog1 (not (equal current-state shaoline--last-significant-state))
+      (setq shaoline--last-significant-state current-state))))
+
+(defvar shaoline--commands-requiring-update
+  '(next-line previous-line forward-char backward-char
+              beginning-of-line end-of-line beginning-of-buffer end-of-buffer
+              switch-to-buffer find-file save-buffer
+              windmove-up windmove-down windmove-left windmove-right
+              other-window)
+  "Commands that should always trigger an update.")
+
+(defun shaoline--should-update-after-command-p (command)
+  "Determine if COMMAND should trigger an update."
+  (or
+   ;; Always update for specific movement/navigation commands
+   (memq command shaoline--commands-requiring-update)
+   ;; Update if there's been a significant state change
+   (shaoline--significant-change-p)
+   ;; Update if we have current prefix keys to show
+   (and shaoline--current-keys
+        (not (string-empty-p shaoline--current-keys)))
+   ;; Update in always-visible mode when echo area content changes
+   (and (shaoline--resolve-setting 'always-visible)
+        (let ((cur (current-message)))
+          (or (null cur)
+              (not (get-text-property 0 'shaoline-origin cur)))))))
+
+(defun shaoline--smart-post-command-update ()
+  "Smart post-command update that reduces unnecessary updates."
+  (when (shaoline--should-update-after-command-p this-command)
+    (shaoline--debounced-update)))
 
 ;; ----------------------------------------------------------------------------
 ;; Guard Timer — Gentle Persistence
