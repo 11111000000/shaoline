@@ -302,6 +302,8 @@
      "battery-status"
      5.0 ; Cache for 5 seconds
      (lambda ()
+       ;; Lazy load battery
+       (require 'battery nil t)
        (let ((fallback (propertize "N/A" 'face 'shaoline-battery-face)))
          (if (and (fboundp 'battery)
                   (boundp 'battery-status-function)
