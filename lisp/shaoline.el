@@ -26,6 +26,7 @@
 
 (require 'cl-lib)
 (eval-when-compile (require 'rx))
+(require 'exwm nil :noerror)            ; Optional, only when EXWM is present
 
 ;; ----------------------------------------------------------------------------
 ;; 一 Fundamental Variables — The Unchanging Essence
@@ -89,10 +90,66 @@ Structure: ((:left segment ...) (:center segment ...) (:right segment ...))"
   :type 'boolean
   :group 'shaoline)
 
-(defcustom shaoline-right-margin 2
-  "Fixed right margin in characters for right-aligned segments."
+(defcustom shaoline-right-margin 1
+  "Fixed right margin in characters for right-aligned segments.
+When `shaoline-with-tray' is non-nil this value is overridden
+dynamically so you normally do not need to change it by hand."
   :type 'integer
   :group 'shaoline)
+
+(defcustom shaoline-with-tray t
+  "Non-nil means automatically align Shaoline with the EXWM system tray.
+
+When enabled Shaoline measures the tray frame’s pixel width,
+converts it to character cells for the current frame and
+temporarily sets `shaoline-right-margin' to that value each time
+the line is composed."
+  :type 'boolean
+  :group 'shaoline)
+
+(defun shaoline--exwm-tray-char-width ()
+  "Return EXWM system-tray width in *character cells* for the current frame.
+
+Algorithm order (first that yields a sensible number wins):
+1.  Look for a frame with the parameter `exwm-tray`.
+2.  Use `exwm-systemtray-width` (pixels) maintained by EXWM.
+3.  Otherwise return nil.
+
+When `shaoline-debug` is non-nil every step is logged to *shaoline-logs*."
+  (when (and shaoline-with-tray (featurep 'exwm))
+    (let ((charw (frame-char-width))
+          pixels)
+      ;; 1. Try dedicated tray frame
+      (when-let ((tray-frame
+                  (cl-find-if (lambda (f) (frame-parameter f 'exwm-tray))
+                              (frame-list))))
+        (setq pixels (frame-pixel-width tray-frame))
+        (shaoline--log "tray-dbg: found tray-frame %S, width=%s px" tray-frame pixels))
+      ;; 2. Fall back to variable set by exwm-systemtray.el
+      (when (and (not pixels)
+                 (boundp 'exwm-systemtray-width)
+                 (numberp exwm-systemtray-width)
+                 (> exwm-systemtray-width 0))
+        (setq pixels exwm-systemtray-width)
+        (shaoline--log "tray-dbg: using exwm-systemtray-width=%s px" pixels))
+      ;; 3. Convert to characters
+      (when (and pixels charw (> charw 0))
+        (let ((chars (ceiling (/ pixels (float charw)))))
+          (shaoline--log "tray-dbg: %s px ≈ %s chars (char-width=%s)"
+                         pixels chars charw)
+          chars)))))
+
+(defun shaoline--refresh-right-margin ()
+  "Recompute `shaoline-right-margin' when `shaoline-with-tray' is enabled.
+
+Adds verbose logging when `shaoline-debug' is non-nil."
+  (when shaoline-with-tray
+    (let ((old shaoline-right-margin)
+          (w   (shaoline--exwm-tray-char-width)))
+      (when (and w (> w 0))
+        (setq shaoline-right-margin w)
+        (shaoline--log "tray-dbg: right-margin changed %s → %s"
+                       old shaoline-right-margin)))))
 
 (defcustom shaoline-hide-modeline t
   "When non-nil, hide traditional modelines in all buffers.
@@ -318,6 +375,8 @@ Returns (left-str center-str right-str) as pure function."
 (defun shaoline-compose (&optional width)
   "纯 Pure composition function — the heart of Shaoline.
 Takes no global state, produces modeline string."
+  ;; Re-calculate tray width if needed
+  (shaoline--refresh-right-margin)
   (let* ((target-width (or width (frame-width) 80))
          (left (shaoline--collect-side :left))
          (center (shaoline--collect-side :center))
