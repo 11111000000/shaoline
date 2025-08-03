@@ -200,8 +200,14 @@ when Shaoline is disabled or this option is turned off."
   :group 'shaoline)
 
 (defface shaoline-time-face
-  '((t :inherit shaoline-yin))
-  "Face for time display."
+  `((t :inherit default
+       :height 1.0
+       :bold nil
+       :family "Digital Display"
+       :foreground "#00aa00"
+       :background "#002200"))
+  "Face for the time segment, adapting to the current theme at load time.
+For full dynamic adaptation, reload after theme changes."
   :group 'shaoline)
 
 (defface shaoline-date-face
@@ -212,6 +218,11 @@ when Shaoline is disabled or this option is turned off."
 (defface shaoline-battery-face
   '((t :inherit shaoline-yin))
   "Face for battery information."
+  :group 'shaoline)
+
+(defface shaoline-current-keys-face
+  '((t :inherit font-lock-function-name-face))
+  "Face for project name."
   :group 'shaoline)
 
 ;; ----------------------------------------------------------------------------
@@ -515,12 +526,6 @@ universal, future-proof indicator that Emacs действительно ждёт
 
    ;; Следующая команда может быть интерактивной
    (memq last-command shaoline--input-sensitive-commands)))
-
-;; Legacy function bridge
-(defun shaoline--update ()
-  "Legacy update function bridge."
-  (when (fboundp 'shaoline-update)
-    (shaoline-update)))
 
 ;; Public initialization function (useful feature from legacy)
 ;;;###autoload

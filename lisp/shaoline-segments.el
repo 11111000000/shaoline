@@ -189,7 +189,7 @@
     (shaoline--log "shaoline-segment-current-keys: after shaoline--get-current-keys, keys=%S" keys)
     (when (and keys (not (string-empty-p keys)))
       (shaoline--log "shaoline-segment-current-keys: will return [%s]" keys)
-      (propertize (format "[%s]" keys) 'face 'shaoline-yang))))
+      (propertize (format "[%s]" keys) 'face 'shaoline-current-keys-face))))
 
 ;; ----------------------------------------------------------------------------
 ;; 六 Time and Cosmic Elements — Dynamic Universe
@@ -300,7 +300,7 @@
       ""
     (shaoline--cached-call
      "battery-status"
-     10.0 ; Cache for 10 seconds
+     5.0 ; Cache for 5 seconds
      (lambda ()
        (let ((fallback (propertize "N/A" 'face 'shaoline-battery-face)))
          (if (and (fboundp 'battery)
@@ -321,8 +321,9 @@
                   (lambda (data)
                     (setq shaoline--segment-battery-cache
                           (shaoline--format-battery data fallback))
-                    (when (fboundp 'shaoline--update)
-                      (shaoline--update)))))
+                    ;; Принудительно перерисовываем Shaoline с новыми данными
+                    (when (fboundp 'shaoline-update)
+                      (shaoline-update t)))))
                ;; Возвращаем либо свежий, либо уже закешированный результат
                shaoline--segment-battery-cache)
            fallback))))))
