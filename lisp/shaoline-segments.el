@@ -39,6 +39,25 @@
 (declare-function project-roots "project")
 (declare-function vc-git--symbolic-ref "vc-git")
 
+;; ---------------------------------------------------------------------------
+;; Icon helper – local to Shaoline
+;; ---------------------------------------------------------------------------
+(defun shaoline--icon (generator icon &rest args)
+  "Render ICON via GENERATOR with unified metrics (height 0.9, no v-adjust)
+and raise the baseline by −0.15 em.
+
+GENERATOR is any `all-the-icons-*' function.
+ICON      is its first argument.
+ARGS      are forwarded, but any :height / :v-adjust supplied by the caller
+are ignored to guarantee consistent box size."
+  (when (featurep 'all-the-icons)
+    (let* ((str (apply generator icon
+                       ;; force metrics
+                       :height 0.9 :v-adjust 0
+                       args)))
+      (when (stringp str)
+        (propertize str 'display '(raise -0.15))))))
+
 ;; ----------------------------------------------------------------------------
 ;; 二 Buffer Information — Identity and State
 ;; ----------------------------------------------------------------------------
@@ -63,7 +82,7 @@
                             (display-graphic-p)
                             (featurep 'all-the-icons)
                             major-mode)
-                   (all-the-icons-icon-for-mode major-mode :height 0.9))))
+                   (shaoline--icon #'all-the-icons-icon-for-mode major-mode))))
        (concat
         (when (and icon (stringp icon) (not (string-empty-p icon)))
           (concat icon " "))
@@ -82,7 +101,7 @@
             shaoline-enable-dynamic-segments
             (featurep 'all-the-icons)
             major-mode)
-       (all-the-icons-icon-for-mode major-mode :height 0.8))
+       (shaoline--icon #'all-the-icons-icon-for-mode major-mode))
       ;; TTY fallback
       (major-mode
        (propertize (format-mode-line mode-name) 'face 'shaoline-mode-face))
@@ -147,8 +166,7 @@
           (when (and shaoline-enable-dynamic-segments
                      (display-graphic-p)
                      (featurep 'all-the-icons))
-            (concat (all-the-icons-octicon "git-branch" :v-adjust 0 :height 1.0
-                                           :face 'shaoline-git-face) " "))
+            (concat (shaoline--icon #'all-the-icons-octicon "git-branch" :face 'shaoline-git-face) " "))
           (propertize branch 'face 'shaoline-git-face)))))))
 
 (shaoline-define-segment shaoline-segment-vcs-state ()
@@ -300,7 +318,7 @@ FALLBACK."
                                        ((>= n 40) "battery-half")
                                        ((>= n 10) "battery-quarter")
                                        (t          "battery-empty"))))
-                     (all-the-icons-faicon glyph :height 0.75 :v-adjust 0 :face face)))))
+                     (shaoline--icon #'all-the-icons-faicon glyph :face face)))))
       (if pct-str
           (concat
            (when (and icon (not (string-empty-p icon))) (concat icon " "))
