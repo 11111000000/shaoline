@@ -199,12 +199,21 @@ are ignored to guarantee consistent box size."
           (propertize cleaned-msg 'face 'shaoline-echo))))))
 
 (shaoline-define-segment shaoline-segment-current-keys ()
-  "Display current prefix key combination being typed."
+  "Display current prefix key combination being typed.
+
+If the user is entering an extended command via \\[execute-extended-command],
+collapse the ongoing literal input so that instead of
+\"M-x s h a o l i n e - m o d e RET\" we simply show \"M-x …\"."
   (shaoline--log "shaoline-segment-current-keys: called")
-  (let* ((keys (progn
-                 (shaoline--log "shaoline-segment-current-keys: about to call shaoline--get-current-keys")
-                 (shaoline--get-current-keys))))
-    (shaoline--log "shaoline-segment-current-keys: after shaoline--get-current-keys, keys=%S" keys)
+  (let* ((raw (progn
+                (shaoline--log "shaoline-segment-current-keys: about to call shaoline--get-current-keys")
+                (shaoline--get-current-keys)))
+         ;; Collapse long M-x sequences     ────────────────────────────────
+         (keys (cond
+                ((and raw (string-match-p "\\`M-x [[:graph:]]" raw))
+                 "M-x …")
+                (t raw))))
+    (shaoline--log "shaoline-segment-current-keys: after processing, keys=%S" keys)
     (when (and keys (not (string-empty-p keys)))
       (shaoline--log "shaoline-segment-current-keys: will return [%s]" keys)
       (propertize (format "[%s]" keys) 'face 'shaoline-current-keys-face))))

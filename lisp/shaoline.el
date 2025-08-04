@@ -54,10 +54,10 @@
   '((:left
      shaoline-segment-major-mode-icon
      shaoline-segment-buffer-name
-     shaoline-segment-current-keys
      shaoline-segment-modified)
     (:center shaoline-segment-echo-message)
     (:right
+     shaoline-segment-current-keys
      shaoline-segment-position
      shaoline-segment-project-name
      shaoline-segment-git-branch
