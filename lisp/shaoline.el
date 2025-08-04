@@ -282,18 +282,18 @@ For full dynamic adaptation, reload after theme changes."
 ;; --------------------------------------------------------------------------
 
 (defface shaoline-current-keys-face
-  '((t :inherit font-lock-function-name-face))
+  '((t :inherit font-lock-type-face))
   "Face for project name."
   :group 'shaoline)
 
 (defface shaoline-battery-critical-face
   '((t :inherit shaoline-yin :foreground "#f28b82"))
-  "Battery critically low (soft red)."
+  "Battery critically low face."
   :group 'shaoline)
 
 (defface shaoline-battery-charging-face
   '((t :inherit shaoline-yin :foreground "#81c784"))
-  "Battery charging / AC-connected (soft green)."
+  "Battery charging / AC-connected face."
   :group 'shaoline)
 
 ;; ----------------------------------------------------------------------------

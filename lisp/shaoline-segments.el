@@ -97,8 +97,8 @@
 когда WITH-COLUMN ненулев."
   (propertize
    (if with-column
-       (format "%d:%d" (line-number-at-pos) (current-column))
-     (number-to-string (line-number-at-pos)))
+       (format "[%d:%d]" (line-number-at-pos) (current-column))
+     (format "[%d]" (line-number-at-pos)))
    'face 'shaoline-mode-face))
 
 (shaoline-define-segment shaoline-segment-encoding ()
