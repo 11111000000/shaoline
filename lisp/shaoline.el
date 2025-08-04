@@ -277,9 +277,23 @@ For full dynamic adaptation, reload after theme changes."
   "Face for battery information."
   :group 'shaoline)
 
+;; --------------------------------------------------------------------------
+;; Battery faces — traffic-light semantics
+;; --------------------------------------------------------------------------
+
 (defface shaoline-current-keys-face
   '((t :inherit font-lock-function-name-face))
   "Face for project name."
+  :group 'shaoline)
+
+(defface shaoline-battery-critical-face
+  '((t :inherit shaoline-yin :foreground "#f28b82"))
+  "Battery critically low (soft red)."
+  :group 'shaoline)
+
+(defface shaoline-battery-charging-face
+  '((t :inherit shaoline-yin :foreground "#81c784"))
+  "Battery charging / AC-connected (soft green)."
   :group 'shaoline)
 
 ;; ----------------------------------------------------------------------------

@@ -34,18 +34,38 @@
 (defvar shaoline--update-in-progress nil
   "Guard against recursive updates.")
 
+;; ---------------------------------------------------------------------------
+;; Helper: run in the *visible* buffer to avoid timer-context flicker
+;; ---------------------------------------------------------------------------
+(defun shaoline--with-visible-buffer (fn)
+  "Execute FN in the buffer shown in the selected window.
+
+Some Shaoline timers are created while another buffer is current,
+so when they later fire `current-buffer' may be that old one
+(e.g. *emacs*).  Wrapping the update logic in this helper makes
+sure we first switch to the buffer actually displayed, preventing
+the brief echo-area flash."
+  (let ((buf (window-buffer (selected-window))))
+    (if (eq buf (current-buffer))
+        (funcall fn)
+      (with-current-buffer buf
+        (funcall fn)))))
+
 (defun shaoline-update (&optional force)
   "Update Shaoline display with optional FORCE override."
   (interactive "P")
   (unless shaoline--update-in-progress
     (let ((shaoline--update-in-progress t)
           (start-time (float-time)))
-      (when (or force (shaoline--should-update-p))
-        (let ((content (shaoline-compose)))
-          ;; Решение «показывать всегда, когда нужно»
-          (when (or force (shaoline--should-display-p content))
-            (shaoline--display content))
-          (shaoline--record-performance start-time))))))
+      (shaoline--with-visible-buffer
+       (lambda ()
+         (when (or force (shaoline--should-update-p))
+           (let ((content (shaoline-compose)))
+             ;; Решение «показывать всегда, когда нужно»
+             (when (or force (shaoline--should-display-p content))
+               (shaoline--display content))))))
+      ;; Record performance after the visible-buffer work
+      (shaoline--record-performance start-time))))
 
 ;; ----------------------------------------------------------------------------
 ;; Manual Control Functions — User Agency
