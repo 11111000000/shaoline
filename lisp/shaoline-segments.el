@@ -44,19 +44,27 @@
 ;; ---------------------------------------------------------------------------
 (defun shaoline--icon (generator icon &rest args)
   "Render ICON via GENERATOR with unified metrics (height 0.9, no v-adjust)
-and raise the baseline by −0.15 em.
+and raise the baseline by a customizable offset.
 
 GENERATOR is any `all-the-icons-*' function.
 ICON      is its first argument.
-ARGS      are forwarded, but any :height / :v-adjust supplied by the caller
-are ignored to guarantee consistent box size."
+ARGS      are forwarded, but any :height or :v-adjust supplied by the caller
+are overridden to guarantee a consistent box size unless overridden by :raise.
+A :raise keyword argument can be provided to adjust the vertical alignment.
+If :raise is not provided, the default offset of −0.15 em is used."
   (when (featurep 'all-the-icons)
-    (let* ((str (apply generator icon
-                       ;; force metrics
+    (let* ((raise-offset (or (plist-get args :raise) -0.15))
+           ;; Remove :raise from ARGS so it isn't passed to the generator
+           (filtered-args
+            (cl-loop for (k v) on args by #'cddr
+                     unless (eq k :raise)
+                     append (list k v)))
+           (str (apply generator icon
                        :height 0.9 :v-adjust 0
-                       args)))
+                       filtered-args)))
       (when (stringp str)
-        (propertize str 'display '(raise -0.15))))))
+        (propertize str 'display `(raise ,raise-offset))))))
+
 
 ;; ----------------------------------------------------------------------------
 ;; 二 Buffer Information — Identity and State
@@ -327,7 +335,7 @@ FALLBACK."
                                        ((>= n 40) "battery-half")
                                        ((>= n 10) "battery-quarter")
                                        (t          "battery-empty"))))
-                     (shaoline--icon #'all-the-icons-faicon glyph :face face)))))
+                     (shaoline--icon #'all-the-icons-faicon glyph :face face :raise 0)))))
       (if pct-str
           (concat
            (when (and icon (not (string-empty-p icon))) (concat icon " "))
