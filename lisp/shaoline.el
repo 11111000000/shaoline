@@ -257,13 +257,19 @@ when Shaoline is disabled or this option is turned off."
   :group 'shaoline)
 
 (defface shaoline-time-face
-  `((t :inherit default
-       :height 1.0
-       :bold nil
-       :family "Digital Display"
-       :foreground "#00aa00"
-       :background "#002200"))
+  '((((type tty))
+     :inherit default
+     :foreground "#00aa00"
+     :background unspecified)
+    (t
+     :inherit default
+     :height 1.0
+     :bold nil
+     :family "Digital Display"
+     :foreground "#00aa00"
+     :background "#002200"))
   "Face for the time segment, adapting to the current theme at load time.
+TTY uses just green foreground; GUI uses green on dark background.
 For full dynamic adaptation, reload after theme changes."
   :group 'shaoline)
 

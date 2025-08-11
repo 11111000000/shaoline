@@ -337,7 +337,6 @@ Otherwise the original `message' is executed unchanged."
                                (unless (shaoline--should-yield-echo-area-p)
                                  (run-with-timer 0.1 nil #'shaoline--display-cached)))))
 
-    ;; Key capture hooks - уменьшенное вмешательство
     (shaoline--attach-hook 'post-command-hook #'shaoline--capture-prefix-keys-post)
     (shaoline--attach-hook 'pre-command-hook #'shaoline--capture-prefix-keys-pre))
 
@@ -423,8 +422,6 @@ but gracefully ignores echo-area clears such as (message nil)."
 
 Уважает пользовательское взаимодействие и не вмешивается
 во время ввода или ожидания команд."
-  ;; В новой реализации не восстанавливаем в pre-command-hook
-  ;; Вместо этого полагаемся на post-command-hook с задержкой
   nil)
 
 (defun shaoline--post-command-restore ()
