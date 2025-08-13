@@ -365,6 +365,10 @@ Otherwise the original `message' is executed unchanged."
   (shaoline--cleanup-all-hooks)
   (shaoline--cleanup-all-advice)
   (shaoline--cleanup-all-modelines)
+  ;; Cancel pending deferred restore, if any
+  (when (timerp shaoline--restore-timer)
+    (cancel-timer shaoline--restore-timer)
+    (setq shaoline--restore-timer nil))
   ;; Do *not* clear while always-visible – prevents one-frame blink.
   (unless (shaoline--resolve-setting 'always-visible)
     (shaoline--clear-echo-area))
@@ -424,11 +428,22 @@ but gracefully ignores echo-area clears such as (message nil)."
 во время ввода или ожидания команд."
   nil)
 
+(defvar shaoline--restore-timer nil
+  "Idle timer for deferred visibility restore (avoid stacking).")
+
 (defun shaoline--post-command-restore ()
-  "Delayed restoration after command completion."
-  (shaoline--log "post-command-restore: yield=%s" (shaoline--should-yield-echo-area-p))
+  "Delayed restoration after command completion (single pending timer)."
+  (shaoline--log "post-command-restore: yield=%s pending=%S"
+                 (shaoline--should-yield-echo-area-p)
+                 (and (timerp shaoline--restore-timer) shaoline--restore-timer))
   (unless (shaoline--should-yield-echo-area-p)
-    (run-with-timer 0.15 nil #'shaoline--smart-restore-visibility)))
+    (unless (timerp shaoline--restore-timer)
+      (setq shaoline--restore-timer
+            (run-with-idle-timer
+             0.15 nil
+             (lambda ()
+               (setq shaoline--restore-timer nil)
+               (shaoline--smart-restore-visibility)))))))
 
 (defun shaoline--smart-restore-visibility ()
   "Restore visibility only when truly safe."
