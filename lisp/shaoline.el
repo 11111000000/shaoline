@@ -57,6 +57,7 @@
      shaoline-segment-modified)
     (:center shaoline-segment-echo-message)
     (:right
+     shaoline-segment-input-method
      shaoline-segment-current-keys
      shaoline-segment-position
      shaoline-segment-project-name
