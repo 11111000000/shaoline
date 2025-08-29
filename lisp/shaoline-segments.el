@@ -162,20 +162,72 @@ If :raise is not provided, the default offset of −0.15 em is used."
                        (t nil))))
        (propertize name 'face 'shaoline-project-face)))))
 
+;; Robust Git helpers — repo detection and fast invalidation
+(defun shaoline--git-top-level (dir)
+  "Return top-level Git directory for DIR or nil.
+Avoids remote TRAMP paths and gracefully handles errors."
+  (when (and dir (not (file-remote-p dir)) (executable-find "git"))
+    (let ((default-directory dir))
+      (condition-case nil
+          (car (process-lines "git" "rev-parse" "--show-toplevel"))
+        (error nil)))))
+
+(defun shaoline--git-depsig (dir)
+  "Return cache dependency signature for Git HEAD in DIR.
+Signature changes immediately when branch changes or new commit is checked out."
+  (when-let ((toplevel (shaoline--git-top-level dir)))
+    (let* ((default-directory toplevel)
+           (gitdir
+            (condition-case nil
+                (car (process-lines "git" "rev-parse" "--git-dir"))
+              (error ".git")))
+           (gitdir (expand-file-name gitdir toplevel))
+           (head (expand-file-name "HEAD" gitdir))
+           (head-mtime (when (file-exists-p head)
+                         (file-attribute-modification-time
+                          (file-attributes head))))
+           (ref-file
+            (when (and (file-exists-p head)
+                       (with-temp-buffer
+                         (insert-file-contents head)
+                         (goto-char (point-min))
+                         (when (looking-at "ref: \\(.+\\)")
+                           (expand-file-name (match-string 1) gitdir))))))
+           (ref-mtime (when (and ref-file (file-exists-p ref-file))
+                        (file-attribute-modification-time
+                         (file-attributes ref-file)))))
+      (list toplevel head-mtime ref-mtime))))
+
+(defun shaoline--git-current-branch (dir)
+  "Return current branch name for DIR, or detached short SHA if not on a branch."
+  (when-let ((toplevel (shaoline--git-top-level dir)))
+    (let ((default-directory toplevel))
+      (or
+       (condition-case nil
+           (car (process-lines "git" "symbolic-ref" "--quiet" "--short" "HEAD"))
+         (error nil))
+       (condition-case nil
+           (let ((sha (car (process-lines "git" "rev-parse" "--short" "HEAD"))))
+             (format "detached:%s" sha))
+         (error nil))))))
+
 (shaoline-define-segment shaoline-segment-git-branch ()
-  "Current Git branch with icon."
-  (shaoline--cached-call
-   (shaoline--cache-key "git-branch" default-directory (buffer-file-name))
-   3.0
-   (lambda ()
-     (when (and (featurep 'vc-git) (buffer-file-name))
-       (when-let ((branch (vc-git--symbolic-ref (buffer-file-name))))
-         (concat
-          (when (and shaoline-enable-dynamic-segments
-                     (display-graphic-p)
-                     (featurep 'all-the-icons))
-            (concat (shaoline--icon #'all-the-icons-octicon "git-branch" :face 'shaoline-git-face) " "))
-          (propertize branch 'face 'shaoline-git-face)))))))
+  "Current Git branch with icon. Works in non-file buffers (e.g., Dired)."
+  (let* ((dir (or (and (buffer-file-name) (file-name-directory (buffer-file-name)))
+                  default-directory))
+         (deps (shaoline--git-depsig dir)))
+    (when deps
+      (shaoline--stable-cached-call
+       "git-branch"
+       deps
+       (lambda ()
+         (when-let ((branch (shaoline--git-current-branch dir)))
+           (concat
+            (when (and shaoline-enable-dynamic-segments
+                       (display-graphic-p)
+                       (featurep 'all-the-icons))
+              (concat (shaoline--icon #'all-the-icons-octicon "git-branch" :face 'shaoline-git-face) " "))
+            (propertize branch 'face 'shaoline-git-face))))))))
 
 (shaoline-define-segment shaoline-segment-vcs-state ()
   "Git status indicator."
