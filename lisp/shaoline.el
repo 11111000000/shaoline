@@ -63,7 +63,9 @@
      shaoline-segment-project-name
      shaoline-segment-git-branch
      shaoline-segment-battery
-     shaoline-segment-time))
+     shaoline-segment-time
+     shaoline-segment-moon-phase
+     ))
   "Segment configuration following the Three Treasures pattern.
 Structure: ((:left segment ...) (:center segment ...) (:right segment ...))"
   :type 'sexp
