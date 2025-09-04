@@ -352,6 +352,9 @@ percentage:
   below 25 % and discharging → shaoline-battery-critical-face (red)
   otherwise                     → shaoline-battery-face (grey)
 
+Normalises buggy backends that report tenths (e.g. 951 → 95.1),
+clamps to 0..100 and rounds.
+
 If DATA is already a string just colourise it; otherwise return
 FALLBACK."
   (cond
@@ -359,41 +362,41 @@ FALLBACK."
    ;; Alist from `battery-status-function'
    ;; ------------------------------------------------------------------
    ((and (listp data) (cl-every #'consp data))
-    (let* ((raw-pct  (or (cdr (assoc 112 data))      ; ?p
-                         (cdr (assoc "percentage" data))))
-           (pct-str  (cond ((numberp raw-pct)  (number-to-string raw-pct))
-                           ((stringp raw-pct)  raw-pct)
-                           (t nil)))
-           (status   (or (cdr (assoc 66 data))       ; ?b
-                         (cdr (assoc "status" data))))
+    (let* ((status (or (cdr (assq ?B data))             ; uppercase key
+                       (cdr (assq ?b data))             ; lowercase key
+                       (cdr (assq 'status data))        ; symbol
+                       (cdr (assq :status data))        ; keyword
+                       (cdr (assoc "status" data))))    ; string
+           ;; Extract and normalise percentage (share logic with *-safe)
+           (raw   (shaoline--battery-extract-percentage data))
+           (norm  (cond
+                   ((and raw (> raw 1000)) (/ raw 100.0)) ; 944 → 94.4
+                   ((and raw (> raw 100))  (/ raw 10.0))  ; 951 → 95.1
+                   (t raw)))
+           (pct   (and norm (max 0 (min 100 (floor (+ 0.5 norm))))))
+           ;; Normalized status and charging detection --------------------
+           (st (and status (downcase (format "%s" status))))
+           (charging-p (and st (string-match-p "\\`\\(charging\\|ac\\|full\\)" st)))
            ;; Face decision ------------------------------------------------
            (face (cond
-                  ((and status (string-match-p "\\`\\(Charging\\|AC\\|Full\\)" status))
-                   'shaoline-battery-charging-face)
-                  ((and pct-str
-                        (< (string-to-number
-                            (replace-regexp-in-string "[^0-9]" "" pct-str))
-                           25))
+                  (charging-p 'shaoline-battery-charging-face)
+                  ((and pct (< pct 25))
                    'shaoline-battery-critical-face)
                   (t 'shaoline-battery-face)))
            ;; Icon decision ------------------------------------------------
            (icon (when (and (featurep 'all-the-icons)
-                            pct-str
+                            pct
                             (display-graphic-p))
-                   (let* ((n (string-to-number
-                              (replace-regexp-in-string "[^0-9]" "" pct-str)))
-                          (glyph (cond ((>= n 90) "battery-full")
-                                       ((>= n 70) "battery-three-quarters")
-                                       ((>= n 40) "battery-half")
-                                       ((>= n 10) "battery-quarter")
-                                       (t          "battery-empty"))))
+                   (let* ((glyph (cond ((>= pct 90) "battery-full")
+                                       ((>= pct 70) "battery-three-quarters")
+                                       ((>= pct 40) "battery-half")
+                                       ((>= pct 10) "battery-quarter")
+                                       (t           "battery-empty"))))
                      (shaoline--icon #'all-the-icons-faicon glyph :face face :raise 0)))))
-      (if pct-str
+      (if pct
           (concat
            (when (and icon (not (string-empty-p icon))) (concat icon " "))
-           (propertize (format "%s%%"
-                               (replace-regexp-in-string "[^0-9]" "" pct-str))
-                       'face face))
+           (propertize (format "%d%%" pct) 'face face))
         fallback)))
    ;; ------------------------------------------------------------------
    ;; Already formatted string
@@ -414,6 +417,43 @@ FALLBACK."
   "Prefer the fast non-DBus backend when available."
   :type 'boolean
   :group 'shaoline)
+
+;; Robust percentage extraction and formatting for battery backends
+(defun shaoline--battery-extract-percentage (data)
+  "Extract numeric percentage from DATA returned by `battery-*' backends.
+Supports char-key alists like ((?p . \"81\") ...) and keyword-based plists."
+  (cond
+   ;; Standard Emacs battery alist: (?p . \"81\")
+   ((and (listp data)
+         (or (assq ?p data) (assoc ?p data)))
+    (string-to-number (cdr (or (assq ?p data) (assoc ?p data)))))
+   ;; Keyword/word-based maps: (:percentage 81) or ('percentage . \"81\")
+   ((and (listp data)
+         (or (assq 'percentage data) (assoc 'percentage data)))
+    (let ((v (cdr (or (assq 'percentage data) (assoc 'percentage data)))))
+      (cond ((numberp v) v)
+            ((stringp v) (string-to-number v))
+            (t nil))))
+   (t nil)))
+
+(defun shaoline--format-battery-safe (data fallback)
+  "Format battery DATA into a percent string, normalizing out-of-range values.
+If DATA cannot be parsed, return FALLBACK."
+  (condition-case _err
+      (let* ((raw (shaoline--battery-extract-percentage data))
+             ;; Normalize weird scales: 944 -> 94.4, 12345 -> 123.45, etc.
+             (norm (cond
+                    ((and raw (> raw 1000)) (/ raw 100.0))
+                    ((and raw (> raw 100)) (/ raw 10.0))
+                    (t raw)))
+             ;; Clamp to [0..100] and round to int
+             (pct (and norm
+                       (max 0 (min 100 (floor (+ 0.5 norm))))))
+             (txt (and pct (format "%d%%" pct))))
+        (if txt
+            (propertize txt 'face 'shaoline-battery-face)
+          fallback))
+    (error fallback)))
 
 ;; Battery cache variables
 (defvar shaoline--segment-battery-cache ""
@@ -443,6 +483,7 @@ FALLBACK."
                        battery-status-function)
                       (t nil)))
                     (data (when status-fn (funcall status-fn)))
+                    ;; Use the full formatter to restore icon and charging colour
                     (formatted (shaoline--format-battery data fallback)))
                ;; Cache and return
                (setq shaoline--segment-battery-cache formatted)
