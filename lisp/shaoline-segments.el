@@ -405,54 +405,51 @@ FALLBACK."
    ;; ------------------------------------------------------------------
    (t fallback)))
 
+(defcustom shaoline-battery-update-interval 60.0
+  "Seconds to cache battery status between refreshes."
+  :type 'float
+  :group 'shaoline)
+
+(defcustom shaoline-battery-prefer-linux-sysfs t
+  "Prefer the fast non-DBus backend when available."
+  :type 'boolean
+  :group 'shaoline)
+
 ;; Battery cache variables
 (defvar shaoline--segment-battery-cache ""
   "Cached battery segment string.")
 
 (shaoline-define-segment shaoline-segment-battery ()
-  "Battery status with async support."
+  "Battery status without heavy D-Bus polling; cached."
   (if (not shaoline-enable-dynamic-segments)
       ""
     (shaoline--cached-call
      "battery-status"
-     1.0 ; Cache for 5 seconds
+     shaoline-battery-update-interval
      (lambda ()
        ;; Lazy load battery
        (require 'battery nil t)
        (let ((fallback (propertize "N/A" 'face 'shaoline-battery-face)))
          (if (and (fboundp 'battery)
-                  (boundp 'battery-status-function)
-                  battery-status-function)
-             ;; Всегда сперва считаем синхронно, чтобы сразу показать результат,
-             ;; а затем — обновляем асинхронно, если возможно.
-             (let* ((data (funcall battery-status-function))
+                  (or (boundp 'battery-status-function)
+                      (fboundp 'battery-linux-sysfs)))
+             (let* ((status-fn
+                     (cond
+                      ((and shaoline-battery-prefer-linux-sysfs
+                            (fboundp 'battery-linux-sysfs))
+                       #'battery-linux-sysfs)
+                      ((and (boundp 'battery-status-function)
+                            battery-status-function)
+                       battery-status-function)
+                      (t nil)))
+                    (data (when status-fn (funcall status-fn)))
                     (formatted (shaoline--format-battery data fallback)))
-               ;; Кешируем моментальный результат
+               ;; Cache and return
                (setq shaoline--segment-battery-cache formatted)
-               ;; Одновременно обновляем глобальный кэш shaoline--state
                (let ((cache (shaoline--state-get :cache)))
                  (puthash "battery-status"
                           (cons formatted (float-time))
                           cache))
-               ;; Запускаем фоновое обновление (не блокирует UI)
-               (when (fboundp 'async-start)
-                 (async-start
-                  (lambda ()
-                    (require 'battery)
-                    (funcall battery-status-function))
-                  (lambda (data)
-                    (setq shaoline--segment-battery-cache
-                          (shaoline--format-battery data fallback))
-                    ;; Обновляем запись в кэше, чтобы новое значение сразу
-                    ;; использовалось даже до истечения TTL.
-                    (let ((cache (shaoline--state-get :cache)))
-                      (puthash "battery-status"
-                               (cons shaoline--segment-battery-cache (float-time))
-                               cache))
-                    ;; Принудительно перерисовываем Shaoline с новыми данными
-                    (when (fboundp 'shaoline-update)
-                      (shaoline-update t)))))
-               ;; Возвращаем либо свежий, либо уже закешированный результат
                shaoline--segment-battery-cache)
            fallback))))))
 

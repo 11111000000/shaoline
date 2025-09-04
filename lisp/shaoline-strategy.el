@@ -189,7 +189,7 @@
   "Start token bucket rate limiting."
   (unless shaoline--bucket-timer
     (setq shaoline--bucket-timer
-          (run-with-timer 0.1 0.1 #'shaoline--refill-bucket))))
+          (run-with-timer 0.2 0.2 #'shaoline--refill-bucket))))
 
 (defun shaoline--stop-rate-limiting ()
   "Stop rate limiting."

@@ -72,7 +72,7 @@ Structure: ((:left segment ...) (:center segment ...) (:right segment ...))"
   :group 'shaoline)
 
 ;; Performance wisdom
-(defcustom shaoline-update-debounce 0.15
+(defcustom shaoline-update-debounce 0.25
   "Seconds to wait between updates. Increased for better performance."
   :type 'float
   :group 'shaoline)
@@ -336,6 +336,16 @@ For full dynamic adaptation, reload after theme changes."
               (if (stringp result) result ""))
           ""))
     (error "")))
+
+(defun shaoline--segment-enabled-p (segment)
+  "Return non-nil if SEGMENT (symbol) is present in `shaoline-segments` config."
+  (let* ((fetch (lambda (side)
+                  (or (cdr (assoc side shaoline-segments))
+                      (plist-get shaoline-segments side))))
+         (all (append (funcall fetch :left)
+                      (funcall fetch :center)
+                      (funcall fetch :right))))
+    (cl-some (lambda (x) (eq (if (consp x) (car x) x) segment)) all)))
 
 ;; ----------------------------------------------------------------------------
 ;; 六 Core Composition — Wu Wei in Action

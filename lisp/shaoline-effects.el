@@ -337,8 +337,10 @@ Otherwise the original `message' is executed unchanged."
                                (unless (shaoline--should-yield-echo-area-p)
                                  (run-with-timer 0.1 nil #'shaoline--display-cached)))))
 
-    (shaoline--attach-hook 'post-command-hook #'shaoline--capture-prefix-keys-post)
-    (shaoline--attach-hook 'pre-command-hook #'shaoline--capture-prefix-keys-pre))
+    ;; Attach prefix-keys capture hooks only if the segment is enabled
+    (when (shaoline--segment-enabled-p 'shaoline-segment-current-keys)
+      (shaoline--attach-hook 'post-command-hook #'shaoline--capture-prefix-keys-post)
+      (shaoline--attach-hook 'pre-command-hook #'shaoline--capture-prefix-keys-pre)))
 
   (when (shaoline--resolve-setting 'use-advice)
     (shaoline--attach-advice #'message :around #'shaoline--advice-capture-message)
