@@ -425,17 +425,14 @@ Takes no global state, produces modeline string."
   (mapconcat (lambda (e) (format "%s" e)) elements "|"))
 
 (defun shaoline--cached-call (key ttl-seconds thunk)
-  "智能缓存 Intelligent caching with adaptive TTL."
+  "智能缓存 Intelligent caching with strict TTL (no sliding refresh)."
   (let* ((cache (shaoline--state-get :cache))
          (entry (gethash key cache))
          (now (float-time)))
     (if (and entry (< (- now (cdr entry)) ttl-seconds))
-        ;; Cache hit — extend TTL for frequently used entries
-        (progn
-          (when (> (- now (cdr entry)) (/ ttl-seconds 2))
-            (puthash key (cons (car entry) now) cache))
-          (car entry))
-      ;; Cache miss — compute and store
+        ;; Cache hit — do NOT extend TTL; expire naturally
+        (car entry)
+      ;; Cache miss or expired — compute and store
       (let ((result (funcall thunk)))
         (when (and result (not (and (stringp result) (string-empty-p result))))
           (puthash key (cons result now) cache))
