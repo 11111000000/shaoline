@@ -20,6 +20,7 @@
 ;;; Code:
 
 (require 'shaoline)
+(require 'subr-x) ;; string-empty-p, string-trim, etc.
 (require 'async nil :noerror)
 (eval-when-compile
   (require 'calendar nil t)
@@ -595,6 +596,42 @@ If DATA cannot be parsed, return FALLBACK."
               'face 'shaoline-mode-face))
 
 ;; ----------------------------------------------------------------------------
+;; AI / LLM — gptel Integration
+;; ----------------------------------------------------------------------------
+
+(shaoline-define-segment shaoline-segment-gptel-model ()
+  "Display the current gptel model (never empty)."
+  ;; Ensure gptel is loaded if available, but don't error if not in load-path.
+  (unless (featurep 'gptel)
+    (ignore-errors
+      (when-let ((lib (locate-library "gptel")))
+        (load lib nil 'nomessage))))
+  (let* ((model
+          (cond
+           ((and (boundp 'gptel-model) (symbolp gptel-model))
+            (symbol-name gptel-model))
+           ((and (boundp 'gptel-model) (stringp gptel-model))
+            gptel-model)
+           ((and (fboundp 'gptel--model-name) (boundp 'gptel-model))
+            (ignore-errors (gptel--model-name gptel-model)))
+           (t nil))))
+    (shaoline--log "gptel-seg: feature=%s model=%S backend=%s gui=%s"
+                   (featurep 'gptel)
+                   model
+                   (and (boundp 'gptel-backend)
+                        (ignore-errors (gptel-backend-name gptel-backend)))
+                   (display-graphic-p))
+    (let* ((model-str (or (and (stringp model) (not (string-empty-p model)) model)
+                          (and (boundp 'gptel-backend)
+                               (ignore-errors (gptel-backend-name gptel-backend)))
+                          ;; Final fallback so the segment is never empty:
+                          "gptel"))
+           ;; Always prefer a reliable emoji robot in GUI to avoid font issues
+           (icon (and (display-graphic-p) "🤖")))
+      (concat
+       (when (and icon (stringp icon) (not (string-empty-p icon)))
+         (concat icon " "))
+       (propertize model-str 'face 'shaoline-gptel-face)))));; ----------------------------------------------------------------------------
 ;; 九 Utility Segments — Simple Building Blocks
 ;; ----------------------------------------------------------------------------
 

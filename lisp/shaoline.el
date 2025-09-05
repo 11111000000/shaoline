@@ -62,6 +62,7 @@
      shaoline-segment-position
      shaoline-segment-project-name
      shaoline-segment-git-branch
+     shaoline-segment-gptel-model
      shaoline-segment-battery
      shaoline-segment-time
      shaoline-segment-moon-phase
@@ -257,6 +258,11 @@ when Shaoline is disabled or this option is turned off."
 (defface shaoline-project-face
   '((t :inherit font-lock-function-name-face))
   "Face for project name."
+  :group 'shaoline)
+
+(defface shaoline-gptel-face
+  '((t :inherit shaoline-yin))
+  "Face for gptel model indicator."
   :group 'shaoline)
 
 (defface shaoline-time-face
