@@ -30,12 +30,29 @@ Walk its Dao by doing nothing; everything is already done.
 #+end_quote
 
 
-- Quick Start – two lines of Wu-wei
+- Installation — not on MELPA yet
+
 #+begin_src emacs-lisp
-(use-package shaoline          ;; MELPA / GNU ELPA
-  :ensure t
+;; Using straight.el (from GitHub)
+(use-package shaoline
+  :straight (shaoline
+             :type git
+             :host github
+             :repo "11111000000/shaoline")
   :init   (require 'shaoline-mode) ; UI layer
   :config (shaoline-mode 1))       ; enable globally
+#+end_src
+
+Or manual/local checkout:
+h0
+#+begin_src emacs-lisp
+;; Manual installation: clone/download and add to load-path
+;; Example:
+;;   git clone https://github.com/11111000000/shaoline ~/.emacs.d/site-lisp/shaoline
+;; If sources live under a 'lisp/' subdir, add that:
+(add-to-list 'load-path "~/.emacs.d/site-lisp/shaoline/lisp")
+(require 'shaoline-mode)  ;; UI layer
+(shaoline-mode 1)         ;; enable globally
 #+end_src
 
 Ready. Ignore the rest.
