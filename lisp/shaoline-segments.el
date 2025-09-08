@@ -311,37 +311,64 @@ collapse the ongoing literal input so that instead of
            (fmt (if with-year "%d.%m.%Y" "%d.%m")))
       (propertize (format-time-string fmt) 'face 'shaoline-date-face))))
 
-;; Moon phase calculation (simplified for Dao architecture)
+;; Moon phase calculation — improved: use lunar.el when available
 (defconst shaoline--synodic-month 29.530588853
-  "Mean synodic month length in days.")
+  "Mean synodic month length in days (synodic month).")
 
-(defvar shaoline--moon-cache '(nil . 0)
-  "Cached moon phase: (date . phase-index).")
+(defun shaoline--jd-now ()
+  "Return astronomical Julian Day for current local time."
+  (+ (/ (float-time) 86400.0) 2440587.5))
 
-(defun shaoline--moon-phase-idx ()
-  "Calculate current moon phase index 0-7."
-  (let ((today (format-time-string "%F")))
-    (if (equal today (car shaoline--moon-cache))
-        (cdr shaoline--moon-cache)
-      (let* ((days-since-epoch (/ (float-time) 86400.0))
-             (moon-cycles (/ days-since-epoch shaoline--synodic-month))
-             (phase-in-cycle (- moon-cycles (floor moon-cycles)))
-             (phase-idx (floor (* phase-in-cycle 8))))
-        (setq shaoline--moon-cache (cons today phase-idx))
-        phase-idx))))
+(defun shaoline--moon-fraction-using-lunar ()
+  "Return cons (fraction . info) using lunar.el for precise new-moon times.
+fraction is 0..1 (0=new moon), info contains :prev, :next, :span, :age."
+  (when (require 'lunar nil t)
+    (let* ((jd (shaoline--jd-now))
+           (next (lunar-new-moon-on-or-after jd))
+           (prev (lunar-new-moon-on-or-after (- jd shaoline--synodic-month))))
+      (when (> prev jd)
+        (setq prev (lunar-new-moon-on-or-after (- jd (* 2 shaoline--synodic-month)))))
+      (let* ((span (- next prev))
+             (age  (- jd prev))
+             (frac (max 0.0 (min 1.0 (/ age span)))))
+        (cons frac (list :prev prev :next next :span span :age age))))))
+
+(defun shaoline--moon-fraction-fallback ()
+  "Return cons (fraction . nil) using calibrated epoch fallback."
+  (let* ((jd (shaoline--jd-now))
+         (epoch 2451550.1) ; 2000-01-06 18:14 UTC, a known new moon
+         (cycle (mod (/ (- jd epoch) shaoline--synodic-month) 1.0)))
+    (cons cycle nil)))
+
+(defun shaoline--moon-phase8 ()
+  "Return plist (:idx 0..7 :percent 0..100 :info ALIST) for the current moon."
+  (let* ((res (or (shaoline--moon-fraction-using-lunar)
+                  (shaoline--moon-fraction-fallback)))
+         (frac (car res))
+         (info (cdr res))
+         (idx (min 7 (max 0 (floor (* frac 8.0)))))
+         (pct (max 0 (min 100 (floor (+ 0.5 (* frac 100.0)))))))
+    (list :idx idx :percent pct :info info)))
 
 (shaoline-define-segment shaoline-segment-moon-phase ()
-  "Moon phase indicator."
+  "Moon phase indicator (8-step), with lunar.el precision when available."
   (when shaoline-enable-dynamic-segments
     (shaoline--cached-call
-     (shaoline--cache-key "moon" (format-time-string "%F"))
-     86400.0 ; Cache for one day
+     (shaoline--cache-key "moon" (floor (/ (float-time) 3600)))
+     3600.0 ; Cache for one hour
      (lambda ()
-       (let* ((idx (shaoline--moon-phase-idx))
-              (phase (if (display-graphic-p)
-                         (aref ["🌑" "🌒" "🌓" "🌔" "🌕" "🌖" "🌗" "🌘"] idx)
-                       (aref ["N" "FQ" "F" "G" "F" "G" "LQ" "C"] idx))))
-         (propertize phase 'face 'shaoline-yin))))))
+       (let* ((data (shaoline--moon-phase8))
+              (idx (plist-get data :idx))
+              (pct (plist-get data :percent))
+              (glyphs (if (display-graphic-p)
+                          ["🌑" "🌒" "🌓" "🌔" "🌕" "🌖" "🌗" "🌘"]
+                        ["N" "WC" "FQ" "WG" "F" "WG-" "LQ" "WC-"]))
+              (labels ["New" "Waxing crescent" "First quarter" "Waxing gibbous"
+                       "Full" "Waning gibbous" "Last quarter" "Waning crescent"])
+              (txt (aref glyphs idx))
+              (desc (aref labels idx))
+              (hint (format "%s — %d%% illuminated" desc pct)))
+         (propertize txt 'face 'shaoline-yin 'help-echo hint))))))
 
 ;; ----------------------------------------------------------------------------
 ;; 七 System Information — Hardware and Status
