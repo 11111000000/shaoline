@@ -344,7 +344,13 @@ Otherwise the original `message' is executed unchanged."
 
   (when (shaoline--resolve-setting 'use-advice)
     (shaoline--attach-advice #'message :around #'shaoline--advice-capture-message)
-    (shaoline--attach-advice #'read-event :around #'shaoline--advice-read-event))
+    (shaoline--attach-advice #'minibuffer-message :around #'shaoline--advice-capture-minibuffer-message)
+    (shaoline--attach-advice #'read-event :around #'shaoline--advice-read-event)
+    ;; Eval results — capture and pin
+    (shaoline--attach-advice #'eval-last-sexp :around #'shaoline--advice-capture-eval-last-sexp)
+    (shaoline--attach-advice #'eval-expression :around #'shaoline--advice-capture-eval-expression)
+    (when (fboundp 'pp-eval-expression)
+      (shaoline--attach-advice #'pp-eval-expression :around #'shaoline--advice-capture-eval-expression)))
 
   ;; `shaoline--advice-preserve-empty-message' is already installed above with proper depth.
 
@@ -380,20 +386,82 @@ Otherwise the original `message' is executed unchanged."
 ;; Message Capture Advice
 ;; ----------------------------------------------------------------------------
 
+(defvar shaoline--message-pinned-until 0
+  "Timestamp (float-time) until which generic messages must not override a pinned one.
+
+Used to keep the last eval result visible briefly even if other
+packages call `message' immediately afterwards.")
+
 (defun shaoline--advice-capture-message (orig-fun format-string &rest args)
   "Around-advice on `message' that stores user messages for Shaoline,
 but gracefully ignores echo-area clears such as (message nil)."
-  ;; Execute the original `message' first, preserving all side effects.
   (let* ((result (apply orig-fun format-string args))
+         (cmsg (current-message))
          ;; Only try to format when the first arg is really a string.
          (clean-text (when (stringp format-string)
                        (apply #'format format-string args))))
-    ;; Save non-empty, non-Shaoline messages.
+    ;; Save non-empty messages that are NOT produced by Shaoline itself.
     (when (and (stringp clean-text)
                (not (string-empty-p clean-text))
-               (not (get-text-property 0 'shaoline-origin clean-text)))
-      (shaoline-msg-save clean-text))
+               (not (and cmsg (get-text-property 0 'shaoline-origin cmsg))))
+      ;; Respect pinned eval result: do not override for a short TTL,
+      ;; unless it's the same text.
+      (if (and (< (float-time) shaoline--message-pinned-until)
+               (not (equal clean-text (shaoline-msg-current))))
+          nil
+        (shaoline-msg-save clean-text)
+        (when (fboundp 'shaoline--debounced-update)
+          (shaoline--debounced-update))))
     result))
+
+(defun shaoline--advice-capture-minibuffer-message (orig format-string &rest args)
+  "Around-advice on `minibuffer-message' to capture echo-only messages (e.g., eval results)."
+  (let ((res (apply orig format-string args))
+        (cmsg (current-message)))
+    (when (stringp format-string)
+      (let ((text (apply #'format format-string args)))
+        (when (and text
+                   (not (string-empty-p text))
+                   ;; Ignore our own echo output
+                   (not (and cmsg (get-text-property 0 'shaoline-origin cmsg))))
+          ;; Respect pinned eval message
+          (if (and (< (float-time) shaoline--message-pinned-until)
+                   (not (equal text (shaoline-msg-current))))
+              nil
+            (shaoline-msg-save text)
+            (when (fboundp 'shaoline--debounced-update)
+              (shaoline--debounced-update))))))
+    res))
+
+(defun shaoline--save-eval-result (value)
+  "Format and pin VALUE (result of eval) for Shaoline's message segment."
+  (let* ((str (condition-case nil
+                  (pp-to-string value)
+                (error (format "%S" value))))
+         (one (string-trim (replace-regexp-in-string "\n\\s-*" " ⏎ " str)))
+         (text (format "=> %s" one))
+         (propto (propertize text 'shaoline-kind 'eval)))
+    (when (and (stringp propto) (not (string-empty-p propto)))
+      (shaoline-msg-save propto)
+      ;; Pin for a short while so generic messages don't override instantly
+      (setq shaoline--message-pinned-until (+ (float-time) 1.2))
+      ;; Eval — обновляем немедленно, чтобы линия точно успела попасть в центр
+      (if (fboundp 'shaoline-update)
+          (shaoline-update t)
+        (when (fboundp 'shaoline--debounced-update)
+          (shaoline--debounced-update))))))
+
+(defun shaoline--advice-capture-eval-last-sexp (orig &rest args)
+  "Capture result of `eval-last-sexp' and pin it briefly."
+  (let ((val (apply orig args)))
+    (shaoline--save-eval-result val)
+    val))
+
+(defun shaoline--advice-capture-eval-expression (orig &rest args)
+  "Capture result of `eval-expression'/`pp-eval-expression' and pin it briefly."
+  (let ((val (apply orig args)))
+    (shaoline--save-eval-result val)
+    val))
 
 ;; ----------------------------------------------------------------------------
 ;; Persistent visibility ------------------------------------------------------

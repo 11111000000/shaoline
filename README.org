@@ -29,7 +29,6 @@ Walk its Dao by doing nothing; everything is already done.
   — Tao Te Ching, §48
 #+end_quote
 
-
 - Installation — not on MELPA yet
 
 #+begin_src emacs-lisp
@@ -44,7 +43,7 @@ Walk its Dao by doing nothing; everything is already done.
 #+end_src
 
 Or manual/local checkout:
-h0
+
 #+begin_src emacs-lisp
 ;; Manual installation: clone/download and add to load-path
 ;; Example:
@@ -54,6 +53,9 @@ h0
 (require 'shaoline-mode)  ;; UI layer
 (shaoline-mode 1)         ;; enable globally
 #+end_src
+
+#+RESULTS:
+: t
 
 Ready. Ignore the rest.
 Curious? Let insight flow further.
@@ -169,13 +171,11 @@ Disable: ~(setq shaoline-with-tray nil)~
    Yes; icons degrade to text, serenity remains.
 5. /Force update?/ – =M-x shaoline-refresh=.
 6. /Clear it now?/ – =M-x shaoline-clear=.
+Returning to Emptiness
 
-
-- Returning to Emptiness
 #+begin_src emacs-lisp
 (shaoline-total-cleanup)   ;; removes timers, hooks, restores everything
 #+end_src
-
 
 - Zen of Performance
 • Compose string  < 0.2 ms (6 segments).
@@ -190,7 +190,7 @@ Shaoline shows both the moon and its phase.
 
 - License
 MIT. Copy it, fork it, tie it to a kite and let it fly.
-
+Это не честно.
 ---
 
 Close this buffer, take a breath, return to code – nothing to add,

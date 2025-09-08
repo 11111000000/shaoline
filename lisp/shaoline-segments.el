@@ -247,17 +247,23 @@ Signature changes immediately when branch changes or new commit is checked out."
 ;; ----------------------------------------------------------------------------
 
 (shaoline-define-segment shaoline-segment-echo-message ()
-  "Last useful message from Messages buffer, excluding Shaoline's own content."
-  (when-let ((msg (shaoline-msg-current)))
-    (unless (get-text-property 0 'shaoline-origin msg)
-      (let ((cleaned-msg (if (string-match "\n" msg)
-                             (concat (car (split-string msg "\n")) " [more]")
-                           msg)))
-        ;; Always show the last useful message, not current keys
-        (when (and (stringp cleaned-msg)
-                   (not (string-empty-p (string-trim cleaned-msg)))
-                   (not (string-match-p "^Key:" cleaned-msg)))
-          (propertize cleaned-msg 'face 'shaoline-echo))))))
+  "Last useful message from Messages buffer, excluding Shaoline's own content.
+
+Also falls back to `current-message' to catch echo-only messages that
+are not logged to *Messages* (e.g., when `inhibit-message' or
+`message-log-max' suppress logging). Prefers stored message if it is
+recent (<= 10s)."
+  (let* ((stored (shaoline-msg-current))
+         (raw (or (and stored (<= (shaoline-msg-age) 10.0) stored)
+                  (current-message))))
+    (when (and (stringp raw) (not (string-empty-p (string-trim raw))))
+      ;; Skip Shaoline's own messages (marked) and key-hints
+      (unless (or (get-text-property 0 'shaoline-origin raw)
+                  (string-match-p "^Key:" raw))
+        (let* ((oneline (if (string-match "\n" raw)
+                            (concat (car (split-string raw "\n")) " [more]")
+                          raw)))
+          (propertize oneline 'face 'shaoline-echo))))))
 
 (shaoline-define-segment shaoline-segment-current-keys ()
   "Display current prefix key combination being typed.
