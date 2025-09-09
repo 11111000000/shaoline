@@ -476,11 +476,15 @@ but gracefully ignores echo-area clears such as (message nil)."
              (not (shaoline--should-yield-echo-area-p))
              (shaoline--echo-area-stable-p))
     (let* ((content (shaoline--state-get :last-content))
-           (cur (current-message)))
+           (cur (current-message))
+           (ours (and cur (get-text-property 0 'shaoline-origin cur))))
       (when (and content
                  (not (string-empty-p content))
-                 (or (null cur)
-                     (not (get-text-property 0 'shaoline-origin cur))))
+                 (or (null cur) (not ours)))
+        (shaoline--log "yang-reassert: cur=%s ours=%s content-len=%s"
+                       (and cur (substring-no-properties cur 0 (min (length cur) 60)))
+                       (and ours t)
+                       (length content))
         (let ((tagged (propertize content 'shaoline-origin t))
               (message-log-max nil))
           (message "%s" tagged))))))
@@ -765,6 +769,8 @@ Reduced list focusing on major state changes.")
 (defun shaoline--display-cached ()
   "Display last cached content immediately without recomputation."
   (let ((content (shaoline--state-get :last-content)))
+    (shaoline--log "display-cached: content-len=%s"
+                   (and (stringp content) (length content)))
     (when (and content (not (string-empty-p content)))
       (let* ((tagged (propertize content 'shaoline-origin t))
              (message-log-max nil))

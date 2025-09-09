@@ -59,11 +59,15 @@ the brief echo-area flash."
           (start-time (float-time)))
       (shaoline--with-visible-buffer
        (lambda ()
-         (when (or force (shaoline--should-update-p))
-           (let ((content (shaoline-compose)))
-             ;; Решение «показывать всегда, когда нужно»
-             (when (or force (shaoline--should-display-p content))
-               (shaoline--display content))))))
+         (let ((permit (or force (shaoline--should-update-p))))
+           (shaoline--log "shaoline-update: force=%s permit=%s buffer=%s"
+                          force permit (buffer-name))
+           (when permit
+             (let ((content (shaoline-compose)))
+               (shaoline--log "shaoline-update: composed len=%s"
+                              (and (stringp content) (length content)))
+               (when (or force (shaoline--should-display-p content))
+                 (shaoline--display content)))))))
       ;; Record performance after the visible-buffer work
       (shaoline--record-performance start-time))))
 

@@ -214,20 +214,16 @@
 ;; ----------------------------------------------------------------------------
 
 (defun shaoline--should-update-p ()
-  "Central intelligence — Wu Wei decision making."
-  (and shaoline-mode
-       ;; Suppress automatic updates while the echo area is busy
-       (not (shaoline--echo-area-busy-p))
-       ;; Three-tier permission system
-       (or
-        ;; Tier 1: Yang mode — always allowed (with light rate limiting)
-        (and (shaoline--resolve-setting 'always-visible)
-             (shaoline--consume-update-token 'light))
-        ;; Tier 2: Significant changes — still need a (cheap) token
-        (and (shaoline--significant-change-p)
-             (shaoline--consume-update-token 'light))
-        ;; Tier 3: Normal updates — standard rate limiting
-        (shaoline--consume-update-token 'normal))))
+  "Central intelligence — Wu Wei decision making, with diagnostic logging."
+  (let* ((busy (shaoline--echo-area-busy-p))
+         (mode (cond
+                ((shaoline--resolve-setting 'always-visible) 'light)
+                ((shaoline--significant-change-p) 'light)
+                (t 'normal)))
+         (ok (and shaoline-mode (not busy) (shaoline--consume-update-token mode))))
+    (shaoline--log "should-update? %s (busy=%s mode=%s buffer=%s)"
+                   ok busy mode (buffer-name))
+    ok))
 
 ;; ----------------------------------------------------------------------------
 ;; Strategy API — External Interface

@@ -470,31 +470,36 @@ Takes no global state, produces modeline string."
 (defun shaoline--content-changed-p (new-content)
   "Check if NEW-CONTENT actually differs from last display."
   (let ((last (shaoline--state-get :last-content)))
-    (not (string-equal new-content last))))
+    (prog1 (not (string-equal new-content last))
+      (shaoline--log "content-changed? %s (new-len=%s last-len=%s)"
+                     (not (string-equal new-content last))
+                     (and (stringp new-content) (length new-content))
+                     (and (stringp last) (length last))))))
 
 (defun shaoline--should-display-p (content)
   "Return non-nil when Shaoline should (re)display CONTENT.
 
 • Respects echo-area busy / yield rules.
-• In yang (always-visible) mode we *force* re-display whenever the echo
-  area has lost our line, even if CONTENT itself has not changed."
-  (and content
-       (stringp content)
-       (not (string-empty-p content))
-       ;; 1.  Never interfere while echo-area must be yielded
-       (not (shaoline--should-yield-echo-area-p))
-       ;; 2.  Decide whether to display
-       (let* ((always (shaoline--resolve-setting 'always-visible))
-              (echo  (current-message)))
-         (or
-          ;; 2a. Usual triggers – new or empty echo-area
-          (shaoline--content-changed-p content)
-          (null echo)
-          ;; 2b. Yang re-assertion – echo-area lost our property
-          (and always
-               (shaoline--echo-area-stable-p)
-               (or (null echo)
-                   (not (get-text-property 0 'shaoline-origin echo))))))))
+• In yang (always-visible) mode we re-display whenever echo area
+  lost our line, even if CONTENT hasn’t changed."
+  (let* ((valid (and content (stringp content) (not (string-empty-p content)))))
+    (if (not valid)
+        (progn
+          (shaoline--log "should-display? no (invalid-content)")
+          nil)
+      (let* ((yield (shaoline--should-yield-echo-area-p))
+             (always (shaoline--resolve-setting 'always-visible))
+             (echo (current-message))
+             (ours (and echo (get-text-property 0 'shaoline-origin echo)))
+             (stable (shaoline--echo-area-stable-p))
+             (changed (shaoline--content-changed-p content))
+             (empty-echo (null echo))
+             (yang-reassert (and always stable (or empty-echo (not ours))))
+             (ok (and (not yield) (or changed empty-echo yang-reassert))))
+        (shaoline--log "should-display? %s (yield=%s changed=%s empty-echo=%s yang-reassert=%s ours=%s stable=%s always=%s echo=%s)"
+                       ok yield changed empty-echo yang-reassert (and ours t) stable always
+                       (and echo (substring-no-properties echo 0 (min (length echo) 60))))
+        ok))))
 
 ;; ----------------------------------------------------------------------------
 ;; 十 Strategy Protocol — Adaptation Without Force
@@ -557,16 +562,24 @@ Takes no global state, produces modeline string."
 Без перечисления команд и regex; полагаемся на универсальные
 системные индикаторы:
 
-  • active minibuffer               → mini-buffer владеет областью
+  • minibuffer-depth>0              → минибуфер действительно активен
   • cursor-in-echo-area             → курсор мигает в echo-area
   • shaoline--echo-area-input-depth → мы внутри `read-event', запущенного
                                        из echo-area (см. advice)
   • isearch-mode                    → инкрементальный поиск занимает echo-area"
-  (or (minibufferp)
-      (active-minibuffer-window)
-      cursor-in-echo-area
-      (> shaoline--echo-area-input-depth 0)
-      (and (boundp 'isearch-mode) isearch-mode)))
+  (let* ((minibufp (minibufferp))
+         (mb-depth (> (minibuffer-depth) 0))
+         (active-mini (active-minibuffer-window)) ; диагностический журнал
+         (cursor cursor-in-echo-area)
+         (ee-depth (> shaoline--echo-area-input-depth 0))
+         (isearch (and (boundp 'isearch-mode) isearch-mode))
+         (busy (or minibufp mb-depth cursor ee-depth isearch)))
+    ;; Логуем только при смене состояния, чтобы не шуметь
+    (when (not (eq busy shaoline--last-busy-log-state))
+      (setq shaoline--last-busy-log-state busy)
+      (shaoline--log "echo-busy?=%s (minibufferp=%s mb-depth>0=%s cursor=%s ee-depth>0=%s isearch=%s active-mini=%s)"
+                     busy minibufp mb-depth cursor ee-depth isearch (and active-mini t)))
+    busy))
 
 
 ;; Input-sensitive command detection
@@ -600,6 +613,9 @@ universal, future-proof indicator that Emacs действительно ждёт
 (defvar shaoline--echo-area-stable-delay 0.3
   "Seconds to wait after echo-area becomes free before reclaiming.")
 
+(defvar shaoline--last-busy-log-state nil
+  "Internal: last logged state of `shaoline--echo-area-busy-p' to reduce log spam.")
+
 (defun shaoline--echo-area-stable-p ()
   "Check if echo-area has been stable (not busy) for enough time."
   (let ((now (float-time)))
@@ -612,15 +628,14 @@ universal, future-proof indicator that Emacs действительно ждёт
 
 (defun shaoline--should-yield-echo-area-p ()
   "Comprehensive logic for when Shaoline should yield echo-area."
-  (or
-   ;; Базовые состояния ввода
-   (shaoline--echo-area-busy-p)
-
-   ;; Команды, которые могут запросить ввод
-   (memq this-command shaoline--input-sensitive-commands)
-
-   ;; Следующая команда может быть интерактивной
-   (memq last-command shaoline--input-sensitive-commands)))
+  (let* ((busy (shaoline--echo-area-busy-p))
+         (this (memq this-command shaoline--input-sensitive-commands))
+         (last (memq last-command shaoline--input-sensitive-commands))
+         (yield (or busy this last)))
+    (when yield
+      (shaoline--log "yield-echo-area: busy=%s this=%s last=%s this-cmd=%s last-cmd=%s"
+                     busy this last this-command last-command))
+    yield))
 
 ;; Public initialization function (useful feature from legacy)
 ;;;###autoload
