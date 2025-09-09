@@ -354,11 +354,11 @@ Otherwise the original `message' is executed unchanged."
     (shaoline--attach-advice #'message :around #'shaoline--advice-capture-message)
     (shaoline--attach-advice #'minibuffer-message :around #'shaoline--advice-capture-minibuffer-message)
     (shaoline--attach-advice #'read-event :around #'shaoline--advice-read-event)
-    ;; Eval results — capture and pin
-    (shaoline--attach-advice #'eval-last-sexp :around #'shaoline--advice-capture-eval-last-sexp)
-    (shaoline--attach-advice #'eval-expression :around #'shaoline--advice-capture-eval-expression)
+    ;; Eval results — capture and pin (use :filter-return so errors bypass us)
+    (shaoline--attach-advice #'eval-last-sexp :filter-return #'shaoline--filter-return-eval-last-sexp)
+    (shaoline--attach-advice #'eval-expression :filter-return #'shaoline--filter-return-eval-expression)
     (when (fboundp 'pp-eval-expression)
-      (shaoline--attach-advice #'pp-eval-expression :around #'shaoline--advice-capture-eval-expression)))
+      (shaoline--attach-advice #'pp-eval-expression :filter-return #'shaoline--filter-return-eval-expression)))
 
   ;; `shaoline--advice-preserve-empty-message' is already installed above with proper depth.
 
@@ -475,6 +475,18 @@ but gracefully ignores echo-area clears such as (message nil)."
   (let ((val (apply orig args)))
     (shaoline--save-eval-result val)
     val))
+
+;; New filter-return advices: run only on success, stay out of error backtraces.
+(defun shaoline--filter-return-eval-last-sexp (val)
+  "Filter-return advice for `eval-last-sexp' — capture VAL and pin it.
+Runs only on successful evaluation, so it stays out of error backtraces."
+  (shaoline--save-eval-result val)
+  val)
+
+(defun shaoline--filter-return-eval-expression (val)
+  "Filter-return advice for `eval-expression'/`pp-eval-expression'."
+  (shaoline--save-eval-result val)
+  val)
 
 ;; ----------------------------------------------------------------------------
 ;; Persistent visibility ------------------------------------------------------
