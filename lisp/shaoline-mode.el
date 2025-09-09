@@ -159,7 +159,8 @@ Use \\[shaoline-clear] to clear display."
 
 (defun shaoline--after-theme-change (&rest _)
   "Adapt to theme changes gracefully."
-  (run-with-idle-timer 0.5 nil #'shaoline-update))
+  (when shaoline-mode
+    (run-with-idle-timer 0.5 nil #'shaoline-update)))
 
 (add-hook 'after-load-theme-hook #'shaoline--after-theme-change)
 

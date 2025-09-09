@@ -648,8 +648,10 @@ universal, future-proof indicator that Emacs действительно ждёт
   "Maximum number of lines kept in *shaoline-logs* buffer.")
 
 (defun shaoline--log (fmt &rest args)
-  "If `shaoline-debug' is non-nil, log a debug message to *shaoline-logs* buffer."
-  (when shaoline-debug
+  "If `shaoline-debug' is non-nil, log a debug message to *shaoline-logs* buffer.
+
+Also stays silent when `shaoline-mode' is disabled."
+  (when (and shaoline-debug shaoline-mode)
     (let* ((buf (get-buffer-create "*shaoline-logs*"))
            (ts (format-time-string "[%Y-%m-%d %H:%M:%S] "))
            (msg (apply #'format fmt args)))

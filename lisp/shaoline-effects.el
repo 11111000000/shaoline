@@ -295,18 +295,22 @@ Otherwise the original `message' is executed unchanged."
 
   ;; ------------------------------------------------------------------
   ;; Yang re-assertion: keep Shaoline permanently visible.
-  ;; A very early post-command hook plus a light timer are installed
-  ;; only when STRATEGY is 'yang.
+  ;; Register hook in our registry so it is reliably removed on deactivate.
   ;; ------------------------------------------------------------------
   (when (eq strategy 'yang)
+    ;; Add with high priority; also record in our registry for cleanup
     (add-hook 'post-command-hook #'shaoline--reassert-yang-visibility -100)
+    (push (cons 'post-command-hook #'shaoline--reassert-yang-visibility) shaoline--hook-registry)
+    ;; Periodic gentle reassert; keep a dedicated variable but ensure cleanup
     (unless (boundp 'shaoline--yang-timer)
       (defvar shaoline--yang-timer nil))
     (setq shaoline--yang-timer
-          (run-with-timer 0.11 0.13 #'shaoline--maybe-reassert-yang-after-timer)))
+          (run-with-timer 0.13 0.13 #'shaoline--maybe-reassert-yang-after-timer)))
   (unless (eq strategy 'yang)
     (remove-hook 'post-command-hook #'shaoline--reassert-yang-visibility)
-    (when (bound-and-true-p shaoline--yang-timer)
+    (setq shaoline--hook-registry
+          (assq-delete-all 'post-command-hook shaoline--hook-registry))
+    (when (timerp shaoline--yang-timer)
       (cancel-timer shaoline--yang-timer)
       (setq shaoline--yang-timer nil)))
 
@@ -314,11 +318,15 @@ Otherwise the original `message' is executed unchanged."
   ;; Install the *inner-most* advice that blocks spurious (message nil)
   ;; BEFORE any other Shaoline or third-party advice appears.
   ;; depth 100 ⇒ executed last ⇒ closest to the original `message'.
+  ;; Track it in our advice registry so cleanup removes it.
   ;; ------------------------------------------------------------------
   (unless (advice-member-p #'shaoline--advice-preserve-empty-message #'message)
     (advice-add #'message :around
                 #'shaoline--advice-preserve-empty-message
-                '((depth . 100))))
+                '((depth . 100)))
+    (push (list #'message :around #'shaoline--advice-preserve-empty-message)
+          shaoline--advice-registry)
+    (push `(advice . ,#'message) shaoline--active-effects))
 
   (when (shaoline--resolve-setting 'use-hooks)
     (shaoline--attach-hook 'post-command-hook #'shaoline--smart-post-command-update)
@@ -377,6 +385,11 @@ Otherwise the original `message' is executed unchanged."
   (when (timerp shaoline--restore-timer)
     (cancel-timer shaoline--restore-timer)
     (setq shaoline--restore-timer nil))
+  ;; Also cancel yang reassert timer if present, and ensure hook is removed
+  (when (and (boundp 'shaoline--yang-timer) (timerp shaoline--yang-timer))
+    (cancel-timer shaoline--yang-timer)
+    (setq shaoline--yang-timer nil))
+  (remove-hook 'post-command-hook #'shaoline--reassert-yang-visibility)
   ;; Do *not* clear while always-visible – prevents one-frame blink.
   (unless (shaoline--resolve-setting 'always-visible)
     (shaoline--clear-echo-area))
