@@ -425,7 +425,12 @@ FALLBACK."
            (pct   (and norm (max 0 (min 100 (floor (+ 0.5 norm))))))
            ;; Normalized status and charging detection --------------------
            (st (and status (downcase (format "%s" status))))
-           (charging-p (and st (string-match-p "\\`\\(charging\\|ac\\|full\\)" st)))
+           ;; Treat any AC/charging/charged/full/on-line indicator as powered
+           (charging-p
+            (and st
+                 (or
+                  (string-match-p "\\b\\(charging\\|full\\|charged\\)\\b" st)
+                  (string-match-p "\\b\\(ac\\|ac[- ]on[- ]line\\|on[- ]line\\|online\\)\\b" st))))
            ;; Face decision ------------------------------------------------
            (face (cond
                   (charging-p 'shaoline-battery-charging-face)
