@@ -71,10 +71,25 @@ If :raise is not provided, the default offset of −0.15 em is used."
 ;; 二 Buffer Information — Identity and State
 ;; ----------------------------------------------------------------------------
 
+(defcustom shaoline-buffer-name-max-length 30
+  "Maximum length (in characters) for the buffer name segment.
+
+When nil or 0, do not truncate.
+When truncation occurs, an ellipsis character (…) is appended."
+  :type '(choice (const :tag "No truncation" nil)
+                 (integer :tag "Max characters"))
+  :group 'shaoline)
+
 (shaoline-define-segment shaoline-segment-buffer-name ()
   "Buffer name with yang energy."
-  (let ((name (buffer-name)))
-    (propertize name 'face 'shaoline-buffer-face)))
+  (let* ((name (buffer-name))
+         (maxlen shaoline-buffer-name-max-length)
+         (display (if (and (integerp maxlen)
+                           (> maxlen 0)
+                           (> (length name) maxlen))
+                      (concat (substring name 0 (max 0 (1- maxlen))) "…")
+                    name)))
+    (propertize display 'face 'shaoline-buffer-face)))
 
 (shaoline-define-segment shaoline-segment-modified ()
   "Modified indicator — the asterisk of change."
