@@ -1,6 +1,6 @@
 ;;; shaoline-effects.el --- Effect system for Shaoline -*- lexical-binding: t; -*-
 
-;; Version: 3.0.0
+;; Version: 3.2.0
 
 ;; Copyright (C) 2025 Peter
 ;; Author: Peter <11111000000@email.com>
