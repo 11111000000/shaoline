@@ -1,7 +1,5 @@
 ;;; shaoline-segments.el --- Segment garden for Shaoline 3.0 Dao -*- lexical-binding: t; -*-
 
-;; Version: 3.2.0
-
 ;; Copyright (C) 2025 Peter
 ;; Author: Peter <11111000000@email.com>
 ;; SPDX-License-Identifier: MIT
