@@ -71,7 +71,7 @@ If :raise is not provided, the default offset of −0.15 em is used."
 ;; 二 Buffer Information — Identity and State
 ;; ----------------------------------------------------------------------------
 
-(defcustom shaoline-buffer-name-max-length 30
+(defcustom shaoline-buffer-name-max-length 42
   "Maximum length (in characters) for the buffer name segment.
 
 When nil or 0, do not truncate.
