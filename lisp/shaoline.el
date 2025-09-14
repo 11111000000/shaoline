@@ -1,9 +1,11 @@
 ;;; shaoline.el --- Functional minimalist echo-area modeline -*- lexical-binding: t; -*-
 
 ;; Version: 3.2.1
-
+;; Package-Requires: ((emacs "27.1"))
+;; Keywords: convenience, mode-line, battery, clock, git, gptel, moon, project, tao
 ;; Copyright (C) 2025 Peter
 ;; Author: Peter <11111000000@email.com>
+;; Maintainer: Peter <11111000000@email.com>
 ;; SPDX-License-Identifier: MIT
 ;; Homepage: https://github.com/11111000000/shaoline
 
@@ -65,8 +67,7 @@
      shaoline-segment-gptel-model
      shaoline-segment-battery
      shaoline-segment-time
-     shaoline-segment-moon-phase
-     ))
+     shaoline-segment-moon-phase))
   "Segment configuration following the Three Treasures pattern.
 Structure: ((:left segment ...) (:center segment ...) (:right segment ...))"
   :type 'sexp
@@ -160,6 +161,15 @@ Adds verbose logging when `shaoline-debug' is non-nil."
 The original modeline-format of each buffer is saved and restored
 when Shaoline is disabled or this option is turned off."
   :type 'boolean
+  :group 'shaoline)
+
+(defcustom shaoline-preserve-modeline-modes nil
+  "Major modes for which the traditional mode-line must be preserved even when Shaoline hides mode-lines globally.
+
+Provide a list of major mode symbols, for example:
+  (setq shaoline-preserve-modeline-modes
+        '(help-mode special-mode term-mode vterm-mode eshell-mode shell-mode))"
+  :type '(repeat symbol)
   :group 'shaoline)
 
 ;; ----------------------------------------------------------------------------

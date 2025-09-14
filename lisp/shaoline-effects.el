@@ -213,14 +213,15 @@ Otherwise the original `message' is executed unchanged."
 ;; ----------------------------------------------------------------------------
 
 (shaoline-defeffect shaoline--hide-mode-line ()
-  "Hide traditional mode-line in current buffer."
-  (unless (gethash (current-buffer) shaoline--modeline-backup-registry)
-    ;; Save original mode-line-format (registry + buffer-local var)
-    (puthash (current-buffer) mode-line-format shaoline--modeline-backup-registry)
-    (setq-local shaoline--original-mode-line mode-line-format)
-    (setq mode-line-format nil)
-    (force-mode-line-update)
-    (push `(modeline . ,(current-buffer)) shaoline--active-effects)))
+  "Hide traditional mode-line in current buffer when not preserved."
+  (unless (member major-mode shaoline-preserve-modeline-modes)
+    (unless (gethash (current-buffer) shaoline--modeline-backup-registry)
+      ;; Save original mode-line-format (registry + buffer-local var)
+      (puthash (current-buffer) mode-line-format shaoline--modeline-backup-registry)
+      (setq-local shaoline--original-mode-line mode-line-format)
+      (setq mode-line-format nil)
+      (force-mode-line-update)
+      (push `(modeline . ,(current-buffer)) shaoline--active-effects))))
 
 (shaoline-defeffect shaoline--restore-mode-line ()
   "Restore traditional mode-line in current buffer."
@@ -233,17 +234,26 @@ Otherwise the original `message' is executed unchanged."
     (force-mode-line-update)))
 
 (defun shaoline--hide-mode-lines-globally ()
-  "Hide mode-lines in all buffers and set default for new buffers."
-  ;; Save the original default mode-line-format if not already saved
+  "Hide mode-lines in all buffers and also set the default to nil for new buffers.
+Preserved modes are left untouched (kept as the original default)."
+  ;; Save and override the default so brand-new buffers start hidden, too.
   (unless shaoline--original-default-modeline
     (setq shaoline--original-default-modeline (default-value 'mode-line-format)))
-
-  ;; Set the default mode-line-format to nil for all new buffers
   (setq-default mode-line-format nil)
-
-  ;; Hide mode-lines in existing buffers
+  ;; Hide existing buffers (except preserved modes)
   (dolist (buffer (buffer-list))
     (with-current-buffer buffer
+      (shaoline--hide-mode-line))))
+
+(defun shaoline--ensure-preserved-modeline ()
+  "For new buffers: if the major mode is preserved, restore the original default modeline; otherwise hide."
+  (when shaoline-mode
+    (if (member major-mode shaoline-preserve-modeline-modes)
+        (progn
+          ;; Ensure preserved modes keep a proper modeline even though the default is nil
+          (when shaoline--original-default-modeline
+            (setq mode-line-format shaoline--original-default-modeline))
+          (force-mode-line-update))
       (shaoline--hide-mode-line))))
 
 (defun shaoline--restore-mode-lines-globally ()
@@ -369,7 +379,8 @@ Otherwise the original `message' is executed unchanged."
       (shaoline--start-timer 'guard guard-interval t #'shaoline--guard-visibility)))
 
   (when (shaoline--resolve-setting 'hide-modelines)
-    (shaoline--hide-mode-lines-globally))
+    (shaoline--hide-mode-lines-globally)
+    (shaoline--attach-hook 'after-change-major-mode-hook #'shaoline--ensure-preserved-modeline))
 
   (shaoline--state-put :strategy strategy))
 
