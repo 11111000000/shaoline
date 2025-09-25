@@ -1,4 +1,4 @@
-#+TITLE: Shaoline 3 – The Modeline of Nothingness
+#+TITLE: Shaoline – The Modeline of Nothingness
 #+AUTHOR: A Wandering Byte
 #+EMAIL: 11111000000@email.com
 #+LANGUAGE: en
@@ -29,7 +29,7 @@ Walk its Dao by doing nothing; everything is already done.
   — Tao Te Ching, §48
 #+end_quote
 
-- Installation — not on MELPA yet
+* Installation — not on MELPA yet
 
 #+begin_src emacs-lisp
 ;; Using straight.el (from GitHub)
@@ -87,9 +87,9 @@ Student: “Master, how many dependencies does Shaoline have?”
 Master: “Mu.”
 
 
-- Configuration
+* Configuration
 
-* Default segments
+** Default segments
 #+begin_src emacs-lisp
 (setq shaoline-segments
       '((:left   shaoline-segment-major-mode-icon
@@ -105,7 +105,7 @@ Master: “Mu.”
 #+end_src
 Re-order, remove, or add functions as you wish.
 
-* Key variables (excerpt)
+** Key variables (excerpt)
 
 | Variable                         | Default | Meaning                            |
 |----------------------------------+---------+------------------------------------|
@@ -129,7 +129,7 @@ Interactively: =M-x customize-group RET shaoline RET=
 Cycle live: =M-x shaoline-toggle-strategy=
 
 
-- Segment Garden (all pure)
+* Segment Garden (all pure)
 
 | Segment         | Shows                           | Needs                   |
 |-----------------+---------------------------------+-------------------------|
@@ -154,13 +154,13 @@ More live in ~shaoline-segments.el~ or craft your own:
 #+end_src
 
 
-- EXWM Tray Alignment
+* EXWM Tray Alignment
 Running EXWM with a system tray? Shaoline measures its pixel width,
 converts to characters and tweaks ~shaoline-right-margin~ on the fly.
 Disable: ~(setq shaoline-with-tray nil)~
 
 
-- Frequently Asked Koans
+* Frequently Asked Koans
 1. /Where is my old modeline?/
    ~(setq shaoline-hide-modeline nil)~ or disable the mode.
 2. /Why does the line vanish on M-x?/
@@ -177,7 +177,7 @@ Returning to Emptiness
 (shaoline-total-cleanup)   ;; removes timers, hooks, restores everything
 #+end_src
 
-- Zen of Performance
+* Zen of Performance
 • Compose string  < 0.2 ms (6 segments).
 • Timers start /only/ when dynamic segments exist.
 • Token bucket: ≤ 10 updates/s even under spam.
@@ -188,7 +188,7 @@ Documentation is a finger pointing at the moon;
 Shaoline shows both the moon and its phase.
 #+end_quote
 
-- License
+* License
 MIT. Copy it, fork it, tie it to a kite and let it fly.
 Это не честно.
 ---
