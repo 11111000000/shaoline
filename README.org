@@ -54,14 +54,12 @@ Or manual/local checkout:
 (shaoline-mode 1)         ;; enable globally
 #+end_src
 
-#+RESULTS:
-: t
 
 Ready. Ignore the rest.
 Curious? Let insight flow further.
 
 
-- Architecture of Emptiness
+* Architecture of Emptiness
 1. Core           (~shaoline.el~) pure functions, no side-effects.
 2. Effects        (~shaoline-effects.el~) the /only/ gate to the world.
 3. Strategy       (~shaoline-strategy.el~) yin / yang / adaptive logic.
@@ -71,7 +69,7 @@ Curious? Let insight flow further.
 Purity is kept, impurity is isolated – the metaphysics of performance.
 
 
-- Highlights – Reflections of Void
+* Highlights – Reflections of Void
 1. Echo-area only — no windows, frames, overlays.
 2. Four-layer architecture — Core → Effects → Strategy → UI.
 3. Strategies /yin / yang / adaptive/ — auto-switch by load, file size, remote, GUI/TTY.
