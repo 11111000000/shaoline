@@ -29,7 +29,7 @@ Walk its Dao by doing nothing; everything is already done.
   — Tao Te Ching, §48
 #+end_quote
 
-* Installation — not on MELPA yet
+* Installation
 
 #+begin_src emacs-lisp
 ;; Using straight.el (from GitHub)
