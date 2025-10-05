@@ -148,13 +148,17 @@ When `shaoline-debug` is non-nil every step is logged to *shaoline-logs*."
   "Recompute `shaoline-right-margin' when `shaoline-with-tray' is enabled.
 
 Adds verbose logging when `shaoline-debug' is non-nil."
-  (when shaoline-with-tray
-    (let ((old shaoline-right-margin)
-          (w   (shaoline--exwm-tray-char-width)))
-      (when (and w (> w 0))
-        (setq shaoline-right-margin w)
-        (shaoline--log "tray-dbg: right-margin changed %s → %s"
-                       old shaoline-right-margin)))))
+  (defvar shaoline--last-margin-refresh-time 0)
+  (let ((now (float-time)))
+    (when (and shaoline-with-tray
+               (> (- now shaoline--last-margin-refresh-time) 0.5))
+      (setq shaoline--last-margin-refresh-time now)
+      (let ((old shaoline-right-margin)
+            (w   (shaoline--exwm-tray-char-width)))
+        (when (and w (> w 0))
+          (setq shaoline-right-margin w)
+          (shaoline--log "tray-dbg: right-margin changed %s → %s"
+                         old shaoline-right-margin))))))
 
 (defcustom shaoline-hide-modeline t
   "When non-nil, hide traditional modelines in all buffers.
@@ -421,16 +425,55 @@ Returns (left-str center-str right-str) as pure function."
     (shaoline--log "shaoline--compose-line result in buffer: %s: %S" (buffer-name) result)
     result))
 
+(defvar shaoline--composing-p nil
+  "Non-nil while Shaoline is composing its line; suppress side effects.")
+
+(defcustom shaoline-compose-cache-ttl 0.5
+  "Seconds to cache full composed line to avoid recomputing expensive segments.
+
+This cache helps when external callers (for example, tab-bar/tab plugins)
+call `shaoline-compose' frequently in short bursts. A small TTL (half a
+second by default) preserves responsiveness while avoiding repeated
+evaluation of heavy segments."
+  :type 'float
+  :group 'shaoline)
+
+(defvar shaoline--compose-cache (make-hash-table :test 'equal)
+  "Cache mapping a string key to (cons composed-string timestamp).")
+
+(defun shaoline--compose-cache-key (&optional width)
+  "Produce a cache key for the current buffer/frame WIDTH."
+  (format "%s|%s|%s"
+          (buffer-name)
+          (or width (frame-width))
+          shaoline-right-margin))
+
 (defun shaoline-compose (&optional width)
   "纯 Pure composition function — the heart of Shaoline.
-Takes no global state, produces modeline string."
-  ;; Re-calculate tray width if needed
-  (shaoline--refresh-right-margin)
-  (let* ((target-width (or width (frame-width) 80))
-         (left (shaoline--collect-side :left))
-         (center (shaoline--collect-side :center))
-         (right (shaoline--collect-side :right)))
-    (shaoline--compose-line left center right target-width)))
+Takes no global state, produces modeline string.
+
+Uses a short-lived cache (`shaoline--compose-cache') to avoid repeated
+evaluation of expensive segments when called many times in quick
+succession (e.g. by tab-bar formatters). The cache is keyed by
+buffer, target width and current right margin and honored for
+`shaoline-compose-cache-ttl' seconds."
+  (let* ((key (shaoline--compose-cache-key width))
+         (now (float-time))
+         (entry (gethash key shaoline--compose-cache)))
+    (when (and entry (< (- now (cdr entry)) shaoline-compose-cache-ttl))
+      (shaoline--log "shaoline-compose: cache hit for %s" key)
+      (car entry))
+    ;; Cache miss / expired — compute and store
+    (let ((shaoline--composing-p t))
+      ;; Re-calculate tray width if needed (throttled inside)
+      (shaoline--refresh-right-margin)
+      (let* ((target-width (or width (frame-width) 80))
+             (left (shaoline--collect-side :left))
+             (center (shaoline--collect-side :center))
+             (right (shaoline--collect-side :right))
+             (result (shaoline--compose-line left center right target-width)))
+        (puthash key (cons result (float-time)) shaoline--compose-cache)
+        result))))
 
 ;; ----------------------------------------------------------------------------
 ;; 八 Cache System — Intelligent Non-Action

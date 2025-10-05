@@ -60,7 +60,8 @@ Uses weak references so buffers can be garbage collected normally.")
 (shaoline-defeffect shaoline--display (content)
   "Display CONTENT in echo area with Shaoline tagging, избегая лишних перерисовок."
   (shaoline--log "shaoline--display called in buffer: %s, content: %s" (buffer-name) content)
-  (when (and (shaoline--should-display-p content)
+  (when (and (not shaoline--composing-p)
+             (shaoline--should-display-p content)
              (not (equal content (current-message))))   ; уже показываем? не трогаем.
     (shaoline--state-put :last-content content)
     (setq shaoline--last-display-time (float-time))
@@ -313,7 +314,7 @@ Preserved modes are left untouched (kept as the original default)."
     (unless (boundp 'shaoline--yang-timer)
       (defvar shaoline--yang-timer nil))
     (setq shaoline--yang-timer
-          (run-with-timer 0.13 0.13 #'shaoline--maybe-reassert-yang-after-timer)))
+          (run-with-timer 0.3 0.3 #'shaoline--maybe-reassert-yang-after-timer)))
   (unless (eq strategy 'yang)
     (remove-hook 'post-command-hook #'shaoline--reassert-yang-visibility)
     (setq shaoline--hook-registry
@@ -423,7 +424,8 @@ but gracefully ignores echo-area clears such as (message nil)."
          (clean-text (when (stringp format-string)
                        (apply #'format format-string args))))
     ;; Save non-empty messages that are NOT produced by Shaoline itself.
-    (when (and (stringp clean-text)
+    (when (and (not shaoline--composing-p)
+               (stringp clean-text)
                (not (string-empty-p clean-text))
                (not (and cmsg (get-text-property 0 'shaoline-origin cmsg))))
       ;; Respect pinned eval result: do not override for a short TTL,
@@ -440,7 +442,8 @@ but gracefully ignores echo-area clears such as (message nil)."
   "Around-advice on `minibuffer-message' to capture echo-only messages (e.g., eval results)."
   (let ((res (apply orig format-string args))
         (cmsg (current-message)))
-    (when (stringp format-string)
+    (when (and (not shaoline--composing-p)
+               (stringp format-string))
       (let ((text (apply #'format format-string args)))
         (when (and text
                    (not (string-empty-p text))
@@ -805,7 +808,8 @@ Reduced list focusing on major state changes.")
   (let ((content (shaoline--state-get :last-content)))
     (shaoline--log "display-cached: content-len=%s"
                    (and (stringp content) (length content)))
-    (when (and content (not (string-empty-p content)))
+    (when (and (not shaoline--composing-p)
+               content (not (string-empty-p content)))
       (let* ((tagged (propertize content 'shaoline-origin t))
              (message-log-max nil))
         (message "%s" tagged)))))

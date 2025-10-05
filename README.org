@@ -190,7 +190,6 @@ Shaoline shows both the moon and its phase.
 
 - License
 MIT. Copy it, fork it, tie it to a kite and let it fly.
-Это не честно.
 ---
 
 Close this buffer, take a breath, return to code – nothing to add,
