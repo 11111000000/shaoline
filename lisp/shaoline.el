@@ -234,13 +234,15 @@ Provide a list of major mode symbols, for example:
   :group 'shaoline)
 
 (defface shaoline-yin
-  '((t :inherit shaoline-base :foreground "gray70"))
-  "Yin face — passive, receptive."
+  '((t :inherit (shadow shaoline-base)))
+  "Yin face — passive, receptive.
+Inherits from `shadow' so it adapts to the current theme."
   :group 'shaoline)
 
 (defface shaoline-yang
-  '((t :inherit shaoline-base :foreground "white" :weight bold))
-  "Yang face — active, projecting."
+  '((t :inherit shaoline-base :weight bold))
+  "Yang face — active, projecting.
+Avoids hardcoded colors; lets the theme decide."
   :group 'shaoline)
 
 (defface shaoline-echo
@@ -312,7 +314,7 @@ For full dynamic adaptation, reload after theme changes."
 
 (defface shaoline-current-keys-face
   '((t :inherit font-lock-type-face))
-  "Face for project name."
+  "Face for current keys."
   :group 'shaoline)
 
 (defface shaoline-battery-critical-face
