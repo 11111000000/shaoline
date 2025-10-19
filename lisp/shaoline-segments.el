@@ -25,7 +25,7 @@
   (require 'lunar nil t))
 
 ;; External variables/functions (referenced dynamically; don't define here)
-;; flycheck-current-errors and battery-status-function are accessed via =symbol-value'
+;; flycheck-current-errors and battery-status-function are accessed via 'symbol-value'
 (declare-function flymake-diagnostic-type "flymake")
 (declare-function flymake-diagnostics "flymake")
 (declare-function gptel-backend-name "gptel")
