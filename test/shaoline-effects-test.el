@@ -188,7 +188,7 @@
     ;; Mock functions
     (cl-letf (((symbol-function 'shaoline--echo-area-busy-p) (lambda () nil))
               ((symbol-function 'current-message) (lambda () nil))
-              ((symbol-function 'shaoline-update) (lambda () (setq update-called t))))
+              ((symbol-function 'shaoline-update) (lambda (&rest _args) (setq update-called t))))
 
       (shaoline--guard-visibility)
       (should update-called))))

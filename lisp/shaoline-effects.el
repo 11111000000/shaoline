@@ -14,6 +14,16 @@
 
 (require 'shaoline)
 
+;; Byte-compiler hints and forward declarations
+(defvar shaoline--last-display-time 0
+  "Time (float) когда Shaoline в последний раз вызвала `message'.")
+(defvar shaoline--yang-timer nil)
+(defvar shaoline--restore-timer nil)
+(defvar shaoline--last-movement-update 0)
+
+(declare-function shaoline-update "shaoline-mode")
+(declare-function shaoline--debounced-update "shaoline-strategy")
+
 ;; Failsafe: ensure the counter variable exists even
 ;; if shaoline.el hasn’t been (re)loaded yet.
 (defvar shaoline--echo-area-input-depth 0)
@@ -104,7 +114,7 @@ Uses weak references so buffers can be garbage collected normally.")
 
 (defun shaoline--cleanup-all-timers ()
   "Clean up all Shaoline timers."
-  (maphash (lambda (name timer)
+  (maphash (lambda (_name timer)
              (cancel-timer timer))
            shaoline--timer-registry)
   (clrhash shaoline--timer-registry))
@@ -247,7 +257,7 @@ Preserved modes are left untouched (kept as the original default)."
       (shaoline--hide-mode-line))))
 
 (defun shaoline--ensure-preserved-modeline ()
-  "For new buffers: if the major mode is preserved, restore the original default modeline; otherwise hide."
+  "For new buffers, restore default mode-line for preserved modes; otherwise hide."
   (when shaoline-mode
     (if (member major-mode shaoline-preserve-modeline-modes)
         (progn
@@ -311,8 +321,6 @@ Preserved modes are left untouched (kept as the original default)."
     (add-hook 'post-command-hook #'shaoline--reassert-yang-visibility -100)
     (push (cons 'post-command-hook #'shaoline--reassert-yang-visibility) shaoline--hook-registry)
     ;; Periodic gentle reassert; keep a dedicated variable but ensure cleanup
-    (unless (boundp 'shaoline--yang-timer)
-      (defvar shaoline--yang-timer nil))
     (setq shaoline--yang-timer
           (run-with-timer 0.3 0.3 #'shaoline--maybe-reassert-yang-after-timer)))
   (unless (eq strategy 'yang)
@@ -410,10 +418,11 @@ Preserved modes are left untouched (kept as the original default)."
 ;; ----------------------------------------------------------------------------
 
 (defvar shaoline--message-pinned-until 0
-  "Timestamp (float-time) until which generic messages must not override a pinned one.
+  "Float timestamp until which generic messages must not override a pinned one.
 
-Used to keep the last eval result visible briefly even if other
-packages call `message' immediately afterwards.")
+Used to keep the last eval result visible briefly, even if other packages
+call `message` immediately afterwards.")
+
 
 (defun shaoline--advice-capture-message (orig-fun format-string &rest args)
   "Around-advice on `message' that stores user messages for Shaoline,
@@ -439,7 +448,8 @@ but gracefully ignores echo-area clears such as (message nil)."
     result))
 
 (defun shaoline--advice-capture-minibuffer-message (orig format-string &rest args)
-  "Around-advice on `minibuffer-message' to capture echo-only messages (e.g., eval results)."
+  "Around advice on `minibuffer-message` to capture echo-only messages.
+Save non-empty messages that are not produced by Shaoline itself."
   (let ((res (apply orig format-string args))
         (cmsg (current-message)))
     (when (and (not shaoline--composing-p)
@@ -447,15 +457,10 @@ but gracefully ignores echo-area clears such as (message nil)."
       (let ((text (apply #'format format-string args)))
         (when (and text
                    (not (string-empty-p text))
-                   ;; Ignore our own echo output
                    (not (and cmsg (get-text-property 0 'shaoline-origin cmsg))))
-          ;; Respect pinned eval message
-          (if (and (< (float-time) shaoline--message-pinned-until)
-                   (not (equal text (shaoline-msg-current))))
-              nil
-            (shaoline-msg-save text)
-            (when (fboundp 'shaoline--debounced-update)
-              (shaoline--debounced-update))))))
+          (shaoline-msg-save text)
+          (when (fboundp 'shaoline--debounced-update)
+            (shaoline--debounced-update)))))
     res))
 
 (defun shaoline--save-eval-result (value)
@@ -503,8 +508,7 @@ Runs only on successful evaluation, so it stays out of error backtraces."
 ;; ----------------------------------------------------------------------------
 ;; Persistent visibility ------------------------------------------------------
 
-(defvar shaoline--yang-timer nil
-  "Internal timer supporting continuous echo-area presence in yang mode.")
+
 
 (defun shaoline--reassert-yang-visibility ()
   "Forcefully re-display last Shaoline line if echo area lost it."
@@ -801,7 +805,7 @@ Reduced list focusing on major state changes.")
       (when should-restore
         (shaoline--log "Guard gently reclaiming echo area after %.2fs: current=%S our=%S"
                        since-last current-msg our-content)
-        (shaoline--smart-restore-visibility)))))
+        (shaoline-update t)))))
 
 (defun shaoline--display-cached ()
   "Display last cached content immediately without recomputation."
@@ -818,9 +822,6 @@ Reduced list focusing on major state changes.")
 ;; ----------------------------------------------------------------------------
 ;; Effect Logging — Observing Changes
 ;; ----------------------------------------------------------------------------
-
-(defvar shaoline--last-display-time 0
-  "Time (float) когда Shaoline в последний раз вызвала `message'.")
 
 (defvar shaoline--effect-log nil
   "Log of all effects applied.")

@@ -24,6 +24,16 @@
   (require 'calendar nil t)
   (require 'lunar nil t))
 
+;; External variables/functions (silence byte-compiler on optional deps)
+(defvar flycheck-current-errors nil)
+(declare-function flymake-diagnostic-type "flymake")
+(declare-function flymake-diagnostics "flymake")
+(declare-function gptel-backend-name "gptel")
+(declare-function lunar-new-moon-on-or-after "lunar")
+;; Mark as special so tests can dynamically bind it even with lexical-binding: t
+(defvar battery-status-function nil
+  "Function returning battery status; see =battery.el' backends.")
+
 ;; ----------------------------------------------------------------------------
 ;; 一 Core Dependencies — Essential Elements
 ;; ----------------------------------------------------------------------------
@@ -201,12 +211,12 @@ Signature changes immediately when branch changes or new commit is checked out."
                          (file-attribute-modification-time
                           (file-attributes head))))
            (ref-file
-            (when (and (file-exists-p head)
-                       (with-temp-buffer
-                         (insert-file-contents head)
-                         (goto-char (point-min))
-                         (when (looking-at "ref: \\(.+\\)")
-                           (expand-file-name (match-string 1) gitdir))))))
+            (and (file-exists-p head)
+                 (with-temp-buffer
+                   (insert-file-contents head)
+                   (goto-char (point-min))
+                   (when (looking-at "ref: \\(.+\\)")
+                     (expand-file-name (match-string 1) gitdir)))))
            (ref-mtime (when (and ref-file (file-exists-p ref-file))
                         (file-attribute-modification-time
                          (file-attributes ref-file)))))

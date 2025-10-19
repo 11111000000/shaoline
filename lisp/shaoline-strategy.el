@@ -14,6 +14,8 @@
 (require 'shaoline)
 (require 'shaoline-effects)
 
+(declare-function shaoline-update "shaoline-mode")
+
 ;; ----------------------------------------------------------------------------
 ;; Context Detection — Reading the Environment
 ;; ----------------------------------------------------------------------------

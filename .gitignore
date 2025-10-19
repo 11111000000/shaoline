@@ -1,4 +1,25 @@
-.*
-...*
+# Byte-compiled and autoloads
+*.elc
+*.elc
+lisp/*.elc
 shaoline-autoloads.el
 shaoline-pkg.el
+
+# Emacs temp files
+*~
+\#*\#
+.\#*
+
+# Build artifacts
+*.tar
+/dist/
+/build/
+
+# Tests
+test/*.elc
+
+# Nix
+/result
+.nix-*
+.*
+...*

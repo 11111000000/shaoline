@@ -19,13 +19,6 @@
 ;; are always available.
 
 ;; ----------------------------------------------------------------------------
-;; Missing Variable Declarations
-;; ----------------------------------------------------------------------------
-
-(defvar shaoline-mode nil
-  "Global mode variable for shaoline-mode.")
-
-;; ----------------------------------------------------------------------------
 ;; Core Update Function — The Heart Beat
 ;; ----------------------------------------------------------------------------
 
@@ -111,6 +104,7 @@ Use \\[shaoline-refresh] to manually update.
 Use \\[shaoline-clear] to clear display."
   :global t
   :lighter ""
+  :group 'shaoline
   :keymap nil
   (if shaoline-mode
       (shaoline--activate)
@@ -155,12 +149,19 @@ Use \\[shaoline-clear] to clear display."
 ;; Integration Hooks — Gentle Adaptation
 ;; ----------------------------------------------------------------------------
 
-(defun shaoline--after-theme-change (&rest _)
+;; Compat for Emacs<29: define enable-theme-functions so package-lint is happy
+(unless (boundp 'enable-theme-functions)
+  (defvar enable-theme-functions nil
+    "Hook run after enabling a theme (Emacs 29+).
+
+Each function is called with one argument THEME."))
+
+(defun shaoline--after-theme-change (&rest _theme)
   "Adapt to theme changes gracefully."
   (when shaoline-mode
     (run-with-idle-timer 0.5 nil #'shaoline-update)))
 
-(add-hook 'after-load-theme-hook #'shaoline--after-theme-change)
+(add-hook 'enable-theme-functions #'shaoline--after-theme-change)
 
 ;; ----------------------------------------------------------------------------
 ;; Diagnostic Functions — Self-Awareness

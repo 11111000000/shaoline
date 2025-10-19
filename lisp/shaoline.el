@@ -30,6 +30,21 @@
 (eval-when-compile (require 'rx))
 (require 'exwm nil :noerror)            ; Optional, only when EXWM is present
 
+;; Cross-file function forward declarations
+(declare-function shaoline-mode "shaoline-mode")
+
+;;;###autoload
+(defun shaoline-mode (&optional arg)
+  "Autoload shim for 'shaoline-mode' defined in shaoline-mode.el.
+This ensures (use-package shaoline :commands shaoline-mode) works even when
+an autoload points to this core file."
+  (interactive "P")
+  (require 'shaoline-mode)
+  (let ((impl (symbol-function 'shaoline-mode)))
+    (if (called-interactively-p 'any)
+        (call-interactively impl)
+      (funcall impl arg))))
+
 ;; ----------------------------------------------------------------------------
 ;; 一 Fundamental Variables — The Unchanging Essence
 ;; ----------------------------------------------------------------------------
@@ -168,11 +183,12 @@ when Shaoline is disabled or this option is turned off."
   :group 'shaoline)
 
 (defcustom shaoline-preserve-modeline-modes nil
-  "Major modes for which the traditional mode-line must be preserved even when Shaoline hides mode-lines globally.
+  "Major modes whose traditional mode line should be preserved
+even when Shaoline hides mode lines globally.
 
-Provide a list of major mode symbols, for example:
-  (setq shaoline-preserve-modeline-modes
-        '(help-mode special-mode term-mode vterm-mode eshell-mode shell-mode))"
+Provide a list of major-mode symbols, e.g., `help-mode`,
+`special-mode`, `term-mode`, `vterm-mode`, `eshell-mode`,
+`shell-mode`."
   :type '(repeat symbol)
   :group 'shaoline)
 
@@ -349,7 +365,7 @@ For full dynamic adaptation, reload after theme changes."
 
 (defun shaoline--call-segment (segment-spec)
   "Call SEGMENT-SPEC safely, returning string or empty."
-  (condition-case err
+  (condition-case _err
       (let* ((spec (if (consp segment-spec) segment-spec (list segment-spec)))
              (fn (car spec))
              (args (cdr spec)))
@@ -397,9 +413,13 @@ Returns (left-str center-str right-str) as pure function."
          (reserved-space (+ left-w right-w left-gap right-gap shaoline-right-margin))
          (available (max 0 (- width reserved-space)))
          (truncated-center
-          (if (> (string-width center-str) available)
-              (truncate-string-to-width center-str available nil nil "…")
-            center-str)))
+          (cond
+           ;; No room for center — return empty, avoid ellipsis overflow
+           ((<= available 0) "")
+           ;; Truncate with ellipsis only if there's space for it
+           ((> (string-width center-str) available)
+            (truncate-string-to-width center-str available nil nil (if (> available 1) "…" "")))
+           (t center-str))))
     (list left-str truncated-center right-str)))
 
 (defun shaoline--compose-line (left center right width)
@@ -411,13 +431,18 @@ Returns (left-str center-str right-str) as pure function."
          (left-w (string-width left-str))
          (right-w (string-width right-str))
          (gap-left (if (string-empty-p left-str) "" " "))
-         (gap-right (if (string-empty-p right-str) "" " "))
+         (align-needed (not (string-empty-p right-str)))
          (result
           (concat
            left-str
-           gap-left
+           ;; If center is empty, reuse gap-left as the align spacer to avoid an extra extra char.
+           (if (and align-needed (string-empty-p center-str) (not (string-empty-p gap-left)))
+               (propertize gap-left 'display
+                           `(space :align-to (- right ,(+ right-w shaoline-right-margin))))
+             gap-left)
            center-str
-           (when (not (string-empty-p right-str))
+           ;; Only insert a separate align space when center has content.
+           (when (and align-needed (not (string-empty-p center-str)))
              (propertize " " 'display
                          `(space :align-to (- right ,(+ right-w shaoline-right-margin)))))
            right-str)))
@@ -454,28 +479,29 @@ evaluation of heavy segments."
   "纯 Pure composition function — the heart of Shaoline.
 Takes no global state, produces modeline string.
 
-Uses a short-lived cache (`shaoline--compose-cache') to avoid repeated
+Uses a short-lived cache (`shaoline--compose-cache`) to avoid repeated
 evaluation of expensive segments when called many times in quick
 succession (e.g. by tab-bar formatters). The cache is keyed by
 buffer, target width and current right margin and honored for
-`shaoline-compose-cache-ttl' seconds."
+`shaoline-compose-cache-ttl` seconds."
   (let* ((key (shaoline--compose-cache-key width))
          (now (float-time))
          (entry (gethash key shaoline--compose-cache)))
-    (when (and entry (< (- now (cdr entry)) shaoline-compose-cache-ttl))
-      (shaoline--log "shaoline-compose: cache hit for %s" key)
-      (car entry))
-    ;; Cache miss / expired — compute and store
-    (let ((shaoline--composing-p t))
-      ;; Re-calculate tray width if needed (throttled inside)
-      (shaoline--refresh-right-margin)
-      (let* ((target-width (or width (frame-width) 80))
-             (left (shaoline--collect-side :left))
-             (center (shaoline--collect-side :center))
-             (right (shaoline--collect-side :right))
-             (result (shaoline--compose-line left center right target-width)))
-        (puthash key (cons result (float-time)) shaoline--compose-cache)
-        result))))
+    (if (and entry (< (- now (cdr entry)) shaoline-compose-cache-ttl))
+        (progn
+          (shaoline--log "shaoline-compose: cache hit for %s" key)
+          (car entry))
+      ;; Cache miss / expired — compute and store
+      (let ((shaoline--composing-p t))
+        ;; Re-calculate tray width if needed (throttled inside)
+        (shaoline--refresh-right-margin)
+        (let* ((target-width (or width (frame-width) 80))
+               (left (shaoline--collect-side :left))
+               (center (shaoline--collect-side :center))
+               (right (shaoline--collect-side :right))
+               (result (shaoline--compose-line left center right target-width)))
+          (puthash key (cons result (float-time)) shaoline--compose-cache)
+          result)))))
 
 ;; ----------------------------------------------------------------------------
 ;; 八 Cache System — Intelligent Non-Action
@@ -510,7 +536,7 @@ buffer, target width and current right margin and honored for
         (let ((result (funcall thunk)))
           (when result
             ;; Clear old entries for this key
-            (maphash (lambda (k v)
+            (maphash (lambda (k _v)
                        (when (string-prefix-p (format "%s:" key) k)
                          (remhash k shaoline--stable-segment-cache)))
                      shaoline--stable-segment-cache)

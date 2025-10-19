@@ -3,7 +3,7 @@ EMACS ?= emacs
 .PHONY: test test-core test-cache test-effects test-strategy byte-compile clean autoloads
 
 # Run all tests
-test: test-core test-cache test-effects test-strategy
+test: clean test-core test-cache test-effects test-strategy
 
 # Individual test suites
 test-core:
@@ -37,3 +37,8 @@ test-debug:
 test-individual:
 	@echo "Run individual test with: make test-individual TEST=test-name"
 	$(EMACS) -Q --batch -L lisp -l ert -l test/shaoline-core-test.el --eval "(ert '$(TEST))"
+
+lint:
+	$(EMACS) -Q --batch \
+	  --eval "(progn (require 'package) (add-to-list 'package-archives '(\"melpa\" . \"https://melpa.org/packages/\") t) (package-initialize) (unless (package-installed-p 'package-lint) (package-refresh-contents) (package-install 'package-lint)))" \
+	  -L lisp -l package-lint-batch -f package-lint-batch-and-exit lisp/*.el
