@@ -833,4 +833,7 @@ Reduced list focusing on major state changes.")
     (setq shaoline--effect-log (butlast shaoline--effect-log 50))))
 
 (provide 'shaoline-effects)
+;; Local Variables:
+;; package-lint-main-file: "shaoline.el"
+;; End:
 ;;; shaoline-effects.el ends here

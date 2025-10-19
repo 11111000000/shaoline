@@ -39,6 +39,4 @@ test-individual:
 	$(EMACS) -Q --batch -L lisp -l ert -l test/shaoline-core-test.el --eval "(ert '$(TEST))"
 
 lint:
-	$(EMACS) -Q --batch \
-	  --eval "(progn (require 'package) (add-to-list 'package-archives '(\"melpa\" . \"https://melpa.org/packages/\") t) (package-initialize) (unless (package-installed-p 'package-lint) (package-refresh-contents) (package-install 'package-lint)))" \
-	  -L lisp -l package-lint-batch -f package-lint-batch-and-exit lisp/*.el
+	$(EMACS) -Q --batch -l scripts/lint.el -f shaoline-package-lint-batch

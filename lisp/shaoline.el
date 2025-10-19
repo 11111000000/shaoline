@@ -29,8 +29,8 @@
 (require 'cl-lib)
 (eval-when-compile (require 'rx))
 (require 'exwm nil :noerror)            ; Optional, only when EXWM is present
-(defvar exwm-systemtray-width nil
-  "Pixel width of EXWM system tray (provided by EXWM). Declared to silence byte-compiler.")
+(defvar exwm-systemtray-width)
+;; External variable provided by EXWM; declared to silence byte-compiler.
 
 ;; Cross-file function forward declarations
 (declare-function shaoline-mode "shaoline-mode")

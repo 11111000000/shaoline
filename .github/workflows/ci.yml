@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        emacs_version: [27.1, 28.2, 29.4]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Emacs
+        uses: purcell/setup-emacs@master
+        with:
+          version: ${{ matrix.emacs_version }}
+      - name: Byte-compile
+        run: emacs -Q --batch -L lisp -f batch-byte-compile lisp/*.el
+      - name: Run tests
+        run: make test
+      - name: package-lint
+        run: emacs -Q --batch -l scripts/lint.el -f shaoline-package-lint-batch

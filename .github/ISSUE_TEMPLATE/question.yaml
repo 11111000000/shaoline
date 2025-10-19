@@ -1,0 +1,19 @@
+name: Question
+about: Ask anything about Shaoline and its teachings
+title: '[question] '
+labels: question
+assignees: ''
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for walking the Way.
+        Ask your question below, or share a koan, and the maintainers will respond with zen or at least a Lisp expression.
+  - type: textarea
+    id: question
+    attributes:
+      label: "My question / koan is:"
+      description: Your musings, concerns, or mysterious behavior in Emacs
+      placeholder: "Why do echoes not echo in echo area?"
+    validations:
+      required: true

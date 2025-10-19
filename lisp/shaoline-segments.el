@@ -24,15 +24,12 @@
   (require 'calendar nil t)
   (require 'lunar nil t))
 
-;; External variables/functions (silence byte-compiler on optional deps)
-(defvar flycheck-current-errors nil)
+;; External variables/functions (referenced dynamically; don't define here)
+;; flycheck-current-errors and battery-status-function are accessed via =symbol-value'
 (declare-function flymake-diagnostic-type "flymake")
 (declare-function flymake-diagnostics "flymake")
 (declare-function gptel-backend-name "gptel")
 (declare-function lunar-new-moon-on-or-after "lunar")
-;; Mark as special so tests can dynamically bind it even with lexical-binding: t
-(defvar battery-status-function nil
-  "Function returning battery status; see =battery.el' backends.")
 
 ;; ----------------------------------------------------------------------------
 ;; 一 Core Dependencies — Essential Elements
@@ -541,8 +538,8 @@ If DATA cannot be parsed, return FALLBACK."
                             (fboundp 'battery-linux-sysfs))
                        #'battery-linux-sysfs)
                       ((and (boundp 'battery-status-function)
-                            battery-status-function)
-                       battery-status-function)
+                            (symbol-value 'battery-status-function))
+                       (symbol-value 'battery-status-function))
                       (t nil)))
                     (data (when status-fn (funcall status-fn)))
                     ;; Use the full formatter to restore icon and charging colour
@@ -636,8 +633,9 @@ If DATA cannot be parsed, return FALLBACK."
   (cond
    ((and (bound-and-true-p flycheck-mode)
          (fboundp 'flycheck-count-errors)
-         flycheck-current-errors)
-    (let* ((counts (flycheck-count-errors flycheck-current-errors))
+         (boundp 'flycheck-current-errors)
+         (symbol-value 'flycheck-current-errors))
+    (let* ((counts (flycheck-count-errors (symbol-value 'flycheck-current-errors)))
            (err (or (cdr (assq 'error counts)) 0))
            (warn (or (cdr (assq 'warning counts)) 0)))
       (when (or (> err 0) (> warn 0))
@@ -730,4 +728,7 @@ If DATA cannot be parsed, return FALLBACK."
       (puthash segment (symbol-function segment) shaoline--segment-table))))
 
 (provide 'shaoline-segments)
+;; Local Variables:
+;; package-lint-main-file: "shaoline.el"
+;; End:
 ;;; shaoline-segments.el ends here

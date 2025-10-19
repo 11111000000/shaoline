@@ -256,4 +256,7 @@
            (shaoline--state-get :strategy)))
 
 (provide 'shaoline-strategy)
+;; Local Variables:
+;; package-lint-main-file: "shaoline.el"
+;; End:
 ;;; shaoline-strategy.el ends here

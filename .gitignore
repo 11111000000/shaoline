@@ -1,6 +1,5 @@
 # Byte-compiled and autoloads
 *.elc
-*.elc
 lisp/*.elc
 shaoline-autoloads.el
 shaoline-pkg.el
@@ -18,8 +17,13 @@ shaoline-pkg.el
 # Tests
 test/*.elc
 
+# Local ELPA dir used by lint target
+/.elpa-lint/
+
 # Nix
 /result
 .nix-*
-.*
+
+org
+.context
 ...*

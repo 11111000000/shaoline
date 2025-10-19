@@ -149,19 +149,15 @@ Use \\[shaoline-clear] to clear display."
 ;; Integration Hooks — Gentle Adaptation
 ;; ----------------------------------------------------------------------------
 
-;; Compat for Emacs<29: define enable-theme-functions so package-lint is happy
-(unless (boundp 'enable-theme-functions)
-  (defvar enable-theme-functions nil
-    "Hook run after enabling a theme (Emacs 29+).
-
-Each function is called with one argument THEME."))
-
 (defun shaoline--after-theme-change (&rest _theme)
   "Adapt to theme changes gracefully."
   (when shaoline-mode
     (run-with-idle-timer 0.5 nil #'shaoline-update)))
 
-(add-hook 'enable-theme-functions #'shaoline--after-theme-change)
+(if (boundp 'enable-theme-functions)
+    (add-hook 'enable-theme-functions #'shaoline--after-theme-change)
+  ;; Emacs <29 fallback: advise =load-theme' directly (avoid with-eval-after-load in packages)
+  (advice-add 'load-theme :after (lambda (&rest _) (shaoline--after-theme-change))))
 
 ;; ----------------------------------------------------------------------------
 ;; Diagnostic Functions — Self-Awareness
@@ -212,4 +208,7 @@ Each function is called with one argument THEME."))
   (message "Shaoline: returned to emptiness"))
 
 (provide 'shaoline-mode)
+;; Local Variables:
+;; package-lint-main-file: "shaoline.el"
+;; End:
 ;;; shaoline-mode.el ends here
