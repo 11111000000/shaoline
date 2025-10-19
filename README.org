@@ -31,8 +31,17 @@ Walk its Dao by doing nothing; everything is already done.
 
 * Installation
 
+MELPA (package.el):
+
 #+begin_src emacs-lisp
-;; Using straight.el (from GitHub)
+(require 'package)
+(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+(package-initialize)
+(unless (package-installed-p 'shaoline)
+  (package-refresh-contents)
+  (package-install 'shaoline))
+(require 'shaoline-mode)
+(shaoline-mode 1)
 (use-package shaoline
   :straight (shaoline
              :type git

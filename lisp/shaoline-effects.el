@@ -340,7 +340,7 @@ Preserved modes are left untouched (kept as the original default)."
   (unless (advice-member-p #'shaoline--advice-preserve-empty-message #'message)
     (advice-add #'message :around
                 #'shaoline--advice-preserve-empty-message
-                '((depth . 100)))
+                '(:depth 100))
     (push (list #'message :around #'shaoline--advice-preserve-empty-message)
           shaoline--advice-registry)
     (push `(advice . ,#'message) shaoline--active-effects))

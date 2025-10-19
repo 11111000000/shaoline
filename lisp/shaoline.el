@@ -29,21 +29,13 @@
 (require 'cl-lib)
 (eval-when-compile (require 'rx))
 (require 'exwm nil :noerror)            ; Optional, only when EXWM is present
+(defvar exwm-systemtray-width nil
+  "Pixel width of EXWM system tray (provided by EXWM). Declared to silence byte-compiler.")
 
 ;; Cross-file function forward declarations
 (declare-function shaoline-mode "shaoline-mode")
 
-;;;###autoload
-(defun shaoline-mode (&optional arg)
-  "Autoload shim for 'shaoline-mode' defined in shaoline-mode.el.
-This ensures (use-package shaoline :commands shaoline-mode) works even when
-an autoload points to this core file."
-  (interactive "P")
-  (require 'shaoline-mode)
-  (let ((impl (symbol-function 'shaoline-mode)))
-    (if (called-interactively-p 'any)
-        (call-interactively impl)
-      (funcall impl arg))))
+
 
 ;; ----------------------------------------------------------------------------
 ;; 一 Fundamental Variables — The Unchanging Essence
@@ -54,9 +46,8 @@ an autoload points to this core file."
   :group 'convenience
   :prefix "shaoline-")
 
-;; Global mode variable
-(defvar shaoline-mode nil
-  "Non-nil when Shaoline mode is active.")
+;; Global mode variable (declared; actual variable is defined by 'define-minor-mode' in shaoline-mode.el)
+(defvar shaoline-mode)
 
 ;; Core behavior flags
 (defcustom shaoline-mode-strategy 'yang
