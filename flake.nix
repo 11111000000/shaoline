@@ -21,12 +21,15 @@
         ];
         shellHook = ''
           echo "Shaoline devShell"
-          echo "Run tests:  make test"
+          echo "Run tests:    make test"
           echo "Byte-compile: make byte-compile"
+          echo "Checkdoc:     make checkdoc"
+          echo "QA sweep:     make qa"
           echo "Lint (installs package-lint from MELPA): make lint"
           echo "Or via flake apps:"
           echo "  nix run .#tests"
           echo "  nix run .#byte-compile"
+          echo "  nix run .#checkdoc"
           echo "  nix run .#lint"
         '';
       };
@@ -52,6 +55,14 @@
             exec make byte-compile
           '';
         };
+        checkdocDrv = pkgs.writeShellApplication {
+          name = "shaoline-checkdoc";
+          runtimeInputs = [ emacs pkgs.gnumake ];
+          text = ''
+            set -euo pipefail
+            exec make checkdoc
+          '';
+        };
         lintDrv = pkgs.writeShellApplication {
           name = "shaoline-lint";
           runtimeInputs = [ emacs pkgs.gnumake ];
@@ -64,6 +75,7 @@
       in rec {
         tests = { type = "app"; program = "${testsDrv}/bin/shaoline-tests"; };
         byte-compile = { type = "app"; program = "${byteCompileDrv}/bin/shaoline-byte-compile"; };
+        checkdoc = { type = "app"; program = "${checkdocDrv}/bin/shaoline-checkdoc"; };
         lint = { type = "app"; program = "${lintDrv}/bin/shaoline-lint"; };
         default = tests;
       });

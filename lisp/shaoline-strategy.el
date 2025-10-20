@@ -156,7 +156,7 @@
 (defvar shaoline--monitor-timer nil)
 
 (defun shaoline--start-context-monitoring ()
-  "Start monitoring context for adaptive strategy changes."
+  "Start monitoring context for adaptive strategy change."
   (unless shaoline--monitor-timer
     (setq shaoline--monitor-timer
           (run-with-timer 2.0 2.0 #'shaoline--check-strategy-adaptation))))
@@ -168,7 +168,7 @@
     (setq shaoline--monitor-timer nil)))
 
 (defun shaoline--check-strategy-adaptation ()
-  "Check if strategy should be adapted based on context changes."
+  "Check if strategy should be adapted based on context change."
   (when (and (eq shaoline-mode-strategy 'adaptive)
              (shaoline--context-changed-p))
     (let* ((current (shaoline--state-get :strategy))

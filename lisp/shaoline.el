@@ -37,6 +37,11 @@
 
 ;;;###autoload
 (autoload 'shaoline-mode "shaoline-mode" "Toggle Shaoline minor mode." t)
+
+;; Forward declarations from effects used by core to silence byte-compiler
+(defvar shaoline--echo-area-input-depth 0)
+(defvar shaoline--last-busy-log-state nil)
+
 ;; ----------------------------------------------------------------------------
 ;; 一 Fundamental Variables — The Unchanging Essence
 ;; ----------------------------------------------------------------------------
@@ -81,12 +86,12 @@ Structure: ((:left segment ...) (:center segment ...) (:right segment ...))"
 
 ;; Performance wisdom
 (defcustom shaoline-update-debounce 0.25
-  "Seconds to wait between updates. Increased for better performance."
+  "Seconds to wait between updates.  Increased for better performance."
   :type 'float
   :group 'shaoline)
 
 (defcustom shaoline-cache-ttl 2.0
-  "Default TTL for segment caches. Impermanence with purpose."
+  "Default TTL for segment caches.  Impermanence with purpose."
   :type 'float
   :group 'shaoline)
 
@@ -174,8 +179,8 @@ when Shaoline is disabled or this option is turned off."
   :group 'shaoline)
 
 (defcustom shaoline-preserve-modeline-modes nil
-  "Major modes whose traditional mode line should be preserved
-even when Shaoline hides mode lines globally.
+  "Major modes whose traditional mode line should be preserved.
+Even when Shaoline hides mode lines globally.
 
 Provide a list of major-mode symbols, e.g., `help-mode`,
 `special-mode`, `term-mode`, `vterm-mode`, `eshell-mode`,
@@ -195,7 +200,7 @@ Provide a list of major-mode symbols, e.g., `help-mode`,
         :strategy nil
         :last-left-width 0
         :last-right-width 0)
-  "Central state container. All flows through here.")
+  "Central state container.  All flows through here.")
 
 (defun shaoline--state-get (key)
   "Retrieve KEY from central state."
@@ -213,7 +218,7 @@ Provide a list of major-mode symbols, e.g., `help-mode`,
 (defvar shaoline--last-message-time 0)
 
 (defun shaoline-msg-save (content)
-  "Capture message CONTENT like dew on morning leaves."
+  "Capture message CONTENT like dew on morning leave."
   (when (and content (not (string-empty-p content)))
     (setq shaoline--last-message (copy-sequence content)
           shaoline--last-message-time (float-time))))
@@ -346,7 +351,7 @@ For full dynamic adaptation, reload after theme changes."
   "Segment table for compatibility with old macro system.")
 
 (defmacro shaoline-define-segment (name args docstring &rest body)
-  "Register segment NAME as pure function."
+  "Register segment NAME as pure function.  With ARGS DOCSTRING and BODY."
   (declare (indent defun))
   `(progn
      (defun ,name ,args ,docstring ,@body)
@@ -391,7 +396,7 @@ For full dynamic adaptation, reload after theme changes."
     results))
 
 (defun shaoline--calculate-layout (left center right width)
-  "Calculate optimal layout for segments given total WIDTH.
+  "Calculate optimal layout for LEFT CENTER RIGHT segments given total WIDTH.
 Returns (left-str center-str right-str) as pure function."
   (let* ((left-str (string-join (remove "" left) " "))
          (right-str (string-join (remove "" right) " "))
@@ -414,7 +419,7 @@ Returns (left-str center-str right-str) as pure function."
     (list left-str truncated-center right-str)))
 
 (defun shaoline--compose-line (left center right width)
-  "Compose final modeline string with perfect right alignment."
+  "Compose final modeline string from LEFT CENTER RIGHT with perfect alignment to WIDTH."
   (let* ((layout (shaoline--calculate-layout left center right width))
          (left-str (nth 0 layout))
          (center-str (nth 1 layout))
@@ -450,7 +455,7 @@ Returns (left-str center-str right-str) as pure function."
   "Seconds to cache full composed line to avoid recomputing expensive segments.
 
 This cache helps when external callers (for example, tab-bar/tab plugins)
-call `shaoline-compose' frequently in short bursts. A small TTL (half a
+call `shaoline-compose' frequently in short bursts.  A small TTL (half a
 second by default) preserves responsiveness while avoiding repeated
 evaluation of heavy segments."
   :type 'float
@@ -468,11 +473,11 @@ evaluation of heavy segments."
 
 (defun shaoline-compose (&optional width)
   "纯 Pure composition function — the heart of Shaoline.
-Takes no global state, produces modeline string.
+Takes no global state, produces modeline string of WIDTH.
 
 Uses a short-lived cache (`shaoline--compose-cache`) to avoid repeated
 evaluation of expensive segments when called many times in quick
-succession (e.g. by tab-bar formatters). The cache is keyed by
+succession (e.g. by tab-bar formatters).  The cache is keyed by
 buffer, target width and current right margin and honored for
 `shaoline-compose-cache-ttl` seconds."
   (let* ((key (shaoline--compose-cache-key width))
@@ -503,7 +508,7 @@ buffer, target width and current right margin and honored for
   (mapconcat (lambda (e) (format "%s" e)) elements "|"))
 
 (defun shaoline--cached-call (key ttl-seconds thunk)
-  "智能缓存 Intelligent caching with strict TTL (no sliding refresh)."
+  "智能缓存 Intelligent caching THUNK of KEY with strict TTL-SECONDS (no sliding refresh)."
   (let* ((cache (shaoline--state-get :cache))
          (entry (gethash key cache))
          (now (float-time)))
@@ -520,7 +525,7 @@ buffer, target width and current right margin and honored for
   "Cache for segments that change rarely (mode, project, etc).")
 
 (defun shaoline--stable-cached-call (key dependencies thunk)
-  "Cache stable segments until DEPENDENCIES change."
+  "Cache THUNK of KEY stable segments until DEPENDENCIES change."
   (let* ((cache-key (format "%s:%s" key (sxhash dependencies)))
          (entry (gethash cache-key shaoline--stable-segment-cache)))
     (or entry
@@ -634,11 +639,11 @@ buffer, target width and current right margin and honored for
 Без перечисления команд и regex; полагаемся на универсальные
 системные индикаторы:
 
-  • minibuffer-depth>0              → минибуфер действительно активен
-  • cursor-in-echo-area             → курсор мигает в echo-area
-  • shaoline--echo-area-input-depth → мы внутри `read-event', запущенного
-                                       из echo-area (см. advice)
-  • isearch-mode                    → инкрементальный поиск занимает echo-area"
+  • 'minibuffer-depth'>0              → минибуфер действительно активен
+  • 'cursor-in-echo-area'             → курсор мигает в echo-area
+  • 'shaoline--echo-area-input-depth' → мы внутри `read-event', запущенного
+                                       из echo-area (см.  advice)
+  • 'isearch-mode'                    → инкрементальный поиск занимает echo-area"
   (let* ((minibufp (minibufferp))
          (mb-depth (> (minibuffer-depth) 0))
          (active-mini (active-minibuffer-window)) ; диагностический журнал
@@ -680,7 +685,7 @@ buffer, target width and current right margin and honored for
 Incremented by an around-advice on `read-event' whenever
 `cursor-in-echo-area' is non-nil, and decremented afterwards.  A
 universal, future-proof indicator that Emacs действительно ждёт
-ввод в echo-area (y-or-n-p, read-char, query-replace, и т. д.).")
+ввод в echo-area (y-or-n-p, 'read-char', 'query-replace', и т. д.).")
 
 (defvar shaoline--echo-area-stable-delay 0.3
   "Seconds to wait after echo-area becomes free before reclaiming.")
@@ -720,12 +725,12 @@ universal, future-proof indicator that Emacs действительно ждёт
   "Maximum number of lines kept in *shaoline-logs* buffer.")
 
 (defun shaoline--log (fmt &rest args)
-  "If `shaoline-debug' is non-nil, log a debug message to *shaoline-logs* buffer.
+  "If 'shaoline-debug' is non-nil,  log a debug message to *shaoline-logs* buffer.
 
-Also stays silent when `shaoline-mode' is disabled."
+Use FMT and ARGS.  Also stays silent when `shaoline-mode' is disabled."
   (when (and shaoline-debug shaoline-mode)
     (let* ((buf (get-buffer-create "*shaoline-logs*"))
-           (ts (format-time-string "[%Y-%m-%d %H:%M:%S] "))
+           (ts (format-time-string "[%F %T] "))
            (msg (apply #'format fmt args)))
       (with-current-buffer buf
         (let ((inhibit-read-only t))

@@ -7,7 +7,7 @@
 ;;; Commentary:
 
 ;; 花園 Garden of Segments — Each segment is a pure function,
-;; like flowers in a zen garden. Simple, functional, harmonious.
+;; like flowers in a zen garden.  Simple, functional, harmonious.
 ;;
 ;; Tao compatibility:
 ;;   • Uses shaoline-define-segment from core
@@ -312,12 +312,12 @@ collapse the ongoing literal input so that instead of
 (shaoline-define-segment shaoline-segment-time ()
   "Digital clock display."
   (when shaoline-enable-dynamic-segments
-    (propertize (format-time-string "%H:%M") 'face 'shaoline-time-face)))
+    (propertize (format-time-string "%R") 'face 'shaoline-time-face)))
 
 (shaoline-define-segment shaoline-segment-digital-clock ()
   "Digital clock with padding."
   (when shaoline-enable-dynamic-segments
-    (propertize (format-time-string " %H:%M ") 'face 'shaoline-time-face)))
+    (propertize (format-time-string " %R ") 'face 'shaoline-time-face)))
 
 (defcustom shaoline-day-date-with-year nil
   "Whether to include year in date segment."
@@ -526,32 +526,33 @@ If DATA cannot be parsed, return FALLBACK."
      "battery-status"
      shaoline-battery-update-interval
      (lambda ()
-       ;; Lazy load battery
-       (require 'battery nil t)
        (let ((fallback (propertize "N/A" 'face 'shaoline-battery-face)))
-         (if (and (fboundp 'battery)
-                  (or (boundp 'battery-status-function)
-                      (fboundp 'battery-linux-sysfs)))
-             (let* ((status-fn
-                     (cond
-                      ((and shaoline-battery-prefer-linux-sysfs
-                            (fboundp 'battery-linux-sysfs))
+         (let* ((status-fn
+                 (or
+                  ;; Prefer the fast non-DBus backend when available
+                  (and shaoline-battery-prefer-linux-sysfs
+                       (fboundp 'battery-linux-sysfs)
                        #'battery-linux-sysfs)
-                      ((and (boundp 'battery-status-function)
-                            (symbol-value 'battery-status-function))
+                  ;; Respect dynamically provided variable (tests, configs)
+                  (and (boundp 'battery-status-function)
                        (symbol-value 'battery-status-function))
-                      (t nil)))
-                    (data (when status-fn (funcall status-fn)))
-                    ;; Use the full formatter to restore icon and charging colour
-                    (formatted (shaoline--format-battery data fallback)))
-               ;; Cache and return
-               (setq shaoline--segment-battery-cache formatted)
-               (let ((cache (shaoline--state-get :cache)))
-                 (puthash "battery-status"
-                          (cons formatted (float-time))
-                          cache))
-               shaoline--segment-battery-cache)
-           fallback))))))
+                  ;; As a last resort, try loading battery now
+                  (and (progn (require 'battery nil t) t)
+                       (or (and shaoline-battery-prefer-linux-sysfs
+                                (fboundp 'battery-linux-sysfs)
+                                #'battery-linux-sysfs)
+                           (and (boundp 'battery-status-function)
+                                (symbol-value 'battery-status-function))))))
+                (data (when status-fn (funcall status-fn)))
+                ;; Use the full formatter to restore icon and charging colour
+                (formatted (shaoline--format-battery data fallback)))
+           ;; Cache and return
+           (setq shaoline--segment-battery-cache formatted)
+           (let ((cache (shaoline--state-get :cache)))
+             (puthash "battery-status"
+                      (cons formatted (float-time))
+                      cache))
+           shaoline--segment-battery-cache))))))
 
 ;; ----------------------------------------------------------------------------
 ;; 八 Development and Tools — Coding Context

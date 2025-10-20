@@ -32,8 +32,8 @@
   "Execute FN in the buffer shown in the selected window.
 
 Some Shaoline timers are created while another buffer is current,
-so when they later fire `current-buffer' may be that old one
-(e.g. *emacs*).  Wrapping the update logic in this helper makes
+so when they later fire 'current-buffer' may be that old one
+\(e.g. *emacs*\).  Wrapping the update logic in this helper makes
 sure we first switch to the buffer actually displayed, preventing
 the brief echo-area flash."
   (let ((buf (window-buffer (selected-window))))
@@ -150,14 +150,14 @@ Use \\[shaoline-clear] to clear display."
 ;; ----------------------------------------------------------------------------
 
 (defun shaoline--after-theme-change (&rest _theme)
-  "Adapt to theme changes gracefully."
+  "Adapt to theme change gracefully."
   (when shaoline-mode
     (run-with-idle-timer 0.5 nil #'shaoline-update)))
 
 (if (boundp 'enable-theme-functions)
     (add-hook 'enable-theme-functions #'shaoline--after-theme-change)
-  ;; Emacs <29 fallback: advise =load-theme' directly (avoid with-eval-after-load in packages)
-  (advice-add 'load-theme :after (lambda (&rest _) (shaoline--after-theme-change))))
+  ;; Emacs <29 fallback: advise load-theme directly; sharp-quote is safer.
+  (advice-add 'load-theme :after #'shaoline--after-theme-change))
 
 ;; ----------------------------------------------------------------------------
 ;; Diagnostic Functions — Self-Awareness

@@ -1,6 +1,7 @@
 EMACS ?= emacs
 
-.PHONY: test test-core test-cache test-effects test-strategy byte-compile clean autoloads
+.PHONY: test test-core test-cache test-effects test-strategy byte-compile clean autoloads lint checkdoc compile-strict qa
+
 
 # Run all tests
 test: clean test-core test-cache test-effects test-strategy
@@ -40,3 +41,12 @@ test-individual:
 
 lint:
 	$(EMACS) -Q --batch -l scripts/lint.el -f shaoline-package-lint-batch
+
+checkdoc:
+	$(EMACS) -Q --batch -l scripts/checkdoc-elisp.el -f shaoline-checkdoc-elisp-lint
+
+compile-strict:
+	$(EMACS) -Q --batch -l scripts/compile-strict.el -f shaoline-byte-compile-strict
+
+# Full QA sweep: clean build, tests, lint, checkdoc and warning-free byte-compile
+qa: clean byte-compile test lint checkdoc compile-strict

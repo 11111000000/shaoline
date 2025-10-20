@@ -7,7 +7,7 @@
 ;;; Commentary:
 
 ;; All impure effects isolated here — the single place where Shaoline
-;; touches the outside world. Like a temple gate: all must pass through,
+;; touches the outside world.  Like a temple gate: all must pass through,
 ;; but the inner sanctuary remains pure.
 
 ;;; Code:
@@ -49,19 +49,20 @@
   "List of currently active effects.")
 
 (defvar shaoline--modeline-backup-registry (make-hash-table :weakness 'key)
-  "Registry mapping buffers to their original mode-line-format.
+  "Registry mapping buffers to their original 'mode-line-format'.
 Uses weak references so buffers can be garbage collected normally.")
 
 (defvar shaoline--original-default-modeline nil
-  "Backup of the original default mode-line-format.")
+  "Backup of the original default 'mode-line-format'.")
 
 ;; Buffer-local backup used by per-buffer hide/restore helpers
 ;; (unit tests look for this variable).
 (defvar-local shaoline--original-mode-line nil
-  "Original mode-line-format saved before Shaoline hides it.")
+  "Original 'mode-line-format' saved before Shaoline hides it.")
 
 (defmacro shaoline-defeffect (name args docstring &rest body)
-  "Define an effect NAME that changes the world."
+  "Define an effect NAME that change the world with ARGS and DOCSTRING.
+And optional BODY."
   (declare (indent defun))
   `(defun ,name ,args
      ,docstring
@@ -167,10 +168,10 @@ Uses weak references so buffers can be garbage collected normally.")
 ;; ────────────────────────────────────────────────────────────
 
 (defun shaoline--advice-read-event (orig &rest args)
-  "Around-advice on `read-event'.
+  "Around-advice on 'read-event'.  Use ORIG and ARGS.
 
-Если `cursor-in-echo-area' установлена, увеличиваем
-`shaoline--echo-area-input-depth' перед чтением события и
+Если 'cursor-in-echo-area' установлена, увеличиваем
+'shaoline--echo-area-input-depth' перед чтением события и
 уменьшаем после, тем самым отмечая период реального ввода в
 echo-area."
   (if cursor-in-echo-area
@@ -185,7 +186,7 @@ echo-area."
 ;; ────────────────────────────────────────────────────────────
 
 (defun shaoline--advice-preserve-empty-message (orig &rest args)
-  "Guard echo-area against flicker.
+  "Guard echo-area against flicker.  Use ORIG nad ARGS.
 
 Intercepts `(message nil)' and `(message \"\")'.  Such empty
 messages are *blocked* when:
@@ -430,8 +431,9 @@ call `message` immediately afterwards.")
 
 
 (defun shaoline--advice-capture-message (orig-fun format-string &rest args)
-  "Around-advice on `message' that stores user messages for Shaoline,
-but gracefully ignores echo-area clears such as (message nil)."
+  "Around-advice on 'message' that store user messages for Shaoline.
+but gracefully ignores echo-area clears such as (message nil).
+Use ORIG-FUN FORMAT-STRING and ARGS"
   (let* ((result (apply orig-fun format-string args))
          (cmsg (current-message))
          ;; Only try to format when the first arg is really a string.
@@ -454,7 +456,8 @@ but gracefully ignores echo-area clears such as (message nil)."
 
 (defun shaoline--advice-capture-minibuffer-message (orig format-string &rest args)
   "Around advice on `minibuffer-message` to capture echo-only messages.
-Save non-empty messages that are not produced by Shaoline itself."
+Save non-empty messages that are not produced by Shaoline itself.
+Use ORIG, FORMAT-STRING and ARGS"
   (let ((res (apply orig format-string args))
         (cmsg (current-message)))
     (when (and (not shaoline--composing-p)
@@ -487,13 +490,14 @@ Save non-empty messages that are not produced by Shaoline itself."
           (shaoline--debounced-update))))))
 
 (defun shaoline--advice-capture-eval-last-sexp (orig &rest args)
-  "Capture result of `eval-last-sexp' and pin it briefly."
+  "Capture result of 'eval-last-sexp' and pin it briefly.  Use ORIG and ARGS."
   (let ((val (apply orig args)))
     (shaoline--save-eval-result val)
     val))
 
 (defun shaoline--advice-capture-eval-expression (orig &rest args)
-  "Capture result of `eval-expression'/`pp-eval-expression' and pin it briefly."
+  "Capture result of `eval-expression'/`pp-eval-expression' and pin it briefly.
+Use ORIG and ARGS."
   (let ((val (apply orig args)))
     (shaoline--save-eval-result val)
     val))
@@ -506,7 +510,7 @@ Runs only on successful evaluation, so it stays out of error backtraces."
   val)
 
 (defun shaoline--filter-return-eval-expression (val)
-  "Filter-return advice for `eval-expression'/`pp-eval-expression'."
+  "Filter-return advice for 'eval-expression'/'pp-eval-expression'.  Use VAL."
   (shaoline--save-eval-result val)
   val)
 
@@ -766,7 +770,7 @@ Reduced list focusing on major state changes.")
 
 
 (defun shaoline--smart-post-command-update ()
-  "Smart post-command update that reduces unnecessary updates."
+  "Smart post-command update that reduces unnecessary update."
   ;; Логируем для отладки
   (shaoline--log "post-command: %s, busy: %s, yield: %s"
                  this-command

@@ -10,6 +10,9 @@
 (require 'shaoline)
 (require 'shaoline-segments)
 
+;; Ensure dynamic (special) var exists for tests; avoids void-variable when using 'symbol-value'.
+(defvar battery-status-function nil)
+
 ;; ----------------------------------------------------------------------------
 ;; Test: Battery formatting function
 ;; ----------------------------------------------------------------------------
