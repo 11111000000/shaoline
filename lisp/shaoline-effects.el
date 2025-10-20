@@ -47,16 +47,16 @@
   "List of currently active effects.")
 
 (defvar shaoline--modeline-backup-registry (make-hash-table :weakness 'key)
-  "Registry mapping buffers to their original =mode-line-format'.
+  "Registry mapping buffers to their original `mode-line-format'.
 Uses weak references so buffers can be garbage collected normally.")
 
 (defvar shaoline--original-default-modeline nil
-  "Backup of the original default =mode-line-format'.")
+  "Backup of the original default `mode-line-format'.")
 
 ;; Buffer-local backup used by per-buffer hide/restore helpers
 ;; (unit tests look for this variable).
 (defvar-local shaoline--original-mode-line nil
-  "Original =mode-line-format' saved before Shaoline hides it.")
+  "Original `mode-line-format' saved before Shaoline hides it.")
 
 (defmacro shaoline-defeffect (name args docstring &rest body)
   "Define an effect NAME that change the world with ARGS and DOCSTRING.
@@ -165,8 +165,8 @@ And optional BODY."
 (defun shaoline--advice-preserve-empty-message (orig &rest args)
   "Block spurious clears of the echo area.
 
-If the first arg to =message' is nil or an empty/whitespace-only
-string and =shaoline--allow-empty-message' is nil, suppress the
+If the first arg to `message' is nil or an empty/whitespace-only
+string and `shaoline--allow-empty-message' is nil, suppress the
 call; otherwise forward to ORIG with ARGS."
   (let* ((fmt (car args)))
     (cond
@@ -187,9 +187,9 @@ call; otherwise forward to ORIG with ARGS."
 ;; ────────────────────────────────────────────────────────────
 
 (defun shaoline--advice-read-event (orig &rest args)
-  "Around-advice on =read-event'.  Use ORIG and ARGS.
+  "Around-advice on `read-event'.  Use ORIG and ARGS.
 
-Если =cursor-in-echo-area' установлена, увеличиваем
+Если `cursor-in-echo-area' установлена, увеличиваем
 =shaoline--echo-area-input-depth' перед чтением события и
 уменьшаем после, тем самым отмечая период реального ввода в
 echo-area."
@@ -426,7 +426,7 @@ call `message` immediately afterwards.")
 
 
 (defun shaoline--advice-capture-message (orig-fun format-string &rest args)
-  "Store user messages for Shaoline around =message'.
+  "Store user messages for Shaoline around `message'.
 Gracefully ignore echo-area clears such as (message nil).
 Use ORIG-FUN, FORMAT-STRING and ARGS."
   (let ((result (apply orig-fun format-string args))
@@ -485,7 +485,7 @@ Use ORIG, FORMAT-STRING and ARGS"
           (shaoline--debounced-update))))))
 
 (defun shaoline--advice-capture-eval-last-sexp (orig &rest args)
-  "Capture result of =eval-last-sexp' and pin it briefly.  Use ORIG and ARGS."
+  "Capture result of `eval-last-sexp' and pin it briefly.  Use ORIG and ARGS."
   (let ((val (apply orig args)))
     (shaoline--save-eval-result val)
     val))
@@ -505,7 +505,7 @@ Runs only on successful evaluation, so it stays out of error backtraces."
   val)
 
 (defun shaoline--filter-return-eval-expression (val)
-  "Filter-return advice for =eval-expression'/=pp-eval-expression'.  Use VAL."
+  "Filter-return advice for `eval-expression'/`pp-eval-expression'.  Use VAL."
   (shaoline--save-eval-result val)
   val)
 

@@ -120,7 +120,7 @@ dynamically so you normally do not need to change it by hand."
 
 When enabled Shaoline measures the tray frame’s pixel width,
 converts it to character cells for the current frame and
-temporarily sets =shaoline-right-margin' to that value each time
+temporarily sets `shaoline-right-margin' to that value each time
 the line is composed."
   :type 'boolean
   :group 'shaoline)
@@ -161,9 +161,9 @@ When `shaoline-debug` is non-nil every step is logged to *shaoline-logs*."
           chars)))))
 
 (defun shaoline--refresh-right-margin ()
-  "Recompute =shaoline-right-margin' when =shaoline-with-tray' is enabled.
+  "Recompute `shaoline-right-margin' when `shaoline-with-tray' is enabled.
 
-Adds verbose logging when =shaoline-debug' is non-nil."
+Adds verbose logging when `shaoline-debug' is non-nil."
   (let ((now (float-time)))
     (when (and shaoline-with-tray
                (> (- now shaoline--last-margin-refresh-time) 0.5))
@@ -651,9 +651,9 @@ No sliding refresh."
 
   • `minibuffer-depth'>0              → минибуфер действительно активен
   • `cursor-in-echo-area'             → курсор мигает в echo-area
-  • `shaoline--echo-area-input-depth' → мы внутри =read-event', запущенного
+  • `shaoline--echo-area-input-depth' → мы внутри `read-event', запущенного
                                        из echo-area (см.  advice)
-  • =isearch-mode'                    → инкрементальный поиск занимает echo-area"
+  • `isearch-mode'                    → инкрементальный поиск занимает echo-area"
   (let* ((minibufp (minibufferp))
          (mb-depth (> (minibuffer-depth) 0))
          (active-mini (active-minibuffer-window)) ; диагностический журнал
@@ -726,7 +726,7 @@ No sliding refresh."
   "Maximum number of lines kept in *shaoline-logs* buffer.")
 
 (defun shaoline--log (fmt &rest args)
-  "If =shaoline-debug' is non-nil, log a debug message to /shaoline-logs/ buffer.
+  "If `shaoline-debug' is non-nil, log a debug message to /shaoline-logs/ buffer.
 
 Use FMT and ARGS.  Also stays silent when `shaoline-mode' is disabled."
   (when (and shaoline-debug shaoline-mode)

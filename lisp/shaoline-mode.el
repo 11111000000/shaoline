@@ -33,7 +33,7 @@
   "Execute FN in the buffer shown in the selected window.
 
 Some Shaoline timers are created while another buffer is current, so when
-they later fire, =current-buffer' may be that old one (e.g., /emacs/).
+they later fire, `current-buffer' may be that old one (e.g., /emacs/).
 Wrapping the update logic in this helper makes sure we first switch to the
 buffer actually displayed, preventing the brief echo-area flash."
   (let ((buf (window-buffer (selected-window))))
