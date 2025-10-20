@@ -1,6 +1,6 @@
 EMACS ?= emacs
 
-.PHONY: test test-core test-cache test-effects test-strategy byte-compile clean autoloads lint checkdoc compile-strict qa
+.PHONY: test test-core test-cache test-effects test-strategy byte-compile clean autoloads lint checkdoc compile-strict qa format-tabs format-docstrings format-comments fix-footers fix-local-vars autofix
 
 
 # Run all tests
@@ -47,6 +47,24 @@ checkdoc:
 
 compile-strict:
 	$(EMACS) -Q --batch -l scripts/compile-strict.el -f shaoline-byte-compile-strict
+
+format-tabs:
+	$(EMACS) -Q --batch -l scripts/format-tabs.el -f shaoline-format-tabs
+
+format-docstrings:
+	$(EMACS) -Q --batch -l scripts/fix-docstrings.el -f shaoline-fix-docstrings
+
+format-comments:
+	$(EMACS) -Q --batch -l scripts/fill-comments.el -f shaoline-fill-comments
+
+fix-footers:
+	$(EMACS) -Q --batch -l scripts/fix-footers.el -f shaoline-fix-footers
+
+fix-local-vars:
+	$(EMACS) -Q --batch -l scripts/fix-local-vars.el -f shaoline-check-local-vars
+
+# One-shot automatic formatting helpers
+autofix: format-docstrings format-comments fix-footers
 
 # Full QA sweep: clean build, tests, lint, checkdoc and warning-free byte-compile
 qa: clean byte-compile test lint checkdoc compile-strict

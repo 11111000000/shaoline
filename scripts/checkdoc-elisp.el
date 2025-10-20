@@ -12,12 +12,31 @@
       (package-refresh-contents)
       (package-install 'elisp-lint))
     (require 'elisp-lint)
+    (require 'cl-lib)
     (let* ((dir   (expand-file-name "lisp" default-directory))
-           (files (directory-files dir t "\\.el\\'"))
+           ;; Исключаем любые autoloads (*.el, *-autoloads.el, lisp-autoloads.el) и -pkg.el
+           (files (cl-remove-if
+                   (lambda (f)
+                     (string-match-p
+                      "\\(\\(?:-\\|\\)autoloads\\.el\\'\\)\\|\\(-pkg\\.el\\'\\)"
+                      (file-name-nondirectory f)))
+                   (directory-files dir t "\\.el\\'")))
+           ;; Запускаем только checkdoc (при желании добавьте check-declare)
+           (elisp-lint-validators '(checkdoc))
+           (elisp-lint-ignored-validators nil)
+           (elisp-lint-file-ignored-regexps '(".*autoloads\\.el\\'" ".*-pkg\\.el\\'"))
            ;; exit status we set only if our wrapper catches an error/returns non-zero
            (status 0))
       (condition-case err
-          (let ((command-line-args-left files))
+          ;; Ограничим валидаторы до checkdoc через CLI-флаги: отключим шумные проверки.
+          (let ((command-line-args-left
+                 (append '("--no-indent"
+                           "--no-indent-character"
+                           "--no-fill-column"
+                           "--no-byte-compile"
+                           "--no-package-lint"
+                           "--no-check-declare")  ;; при желании уберите этот флаг
+                         files)))
             (cond
              ;; Newer elisp-lint entrypoint that exits non-zero on failures
              ((fboundp 'elisp-lint-batch-and-exit)
