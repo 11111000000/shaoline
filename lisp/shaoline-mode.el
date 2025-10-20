@@ -11,6 +11,7 @@
 
 ;;; Code:
 
+(require 'shaoline-compat-vars)
 (require 'shaoline)
 (require 'shaoline-effects)
 (require 'shaoline-strategy)
@@ -31,11 +32,10 @@
 (defun shaoline--with-visible-buffer (fn)
   "Execute FN in the buffer shown in the selected window.
 
-Some Shaoline timers are created while another buffer is current,
-so when they later fire 'current-buffer' may be that old one
-\(e.g. *emacs*\).  Wrapping the update logic in this helper makes
-sure we first switch to the buffer actually displayed, preventing
-the brief echo-area flash."
+Some Shaoline timers are created while another buffer is current, so when
+they later fire, =current-buffer' may be that old one (e.g., /emacs/).
+Wrapping the update logic in this helper makes sure we first switch to the
+buffer actually displayed, preventing the brief echo-area flash."
   (let ((buf (window-buffer (selected-window))))
     (if (eq buf (current-buffer))
         (funcall fn)

@@ -11,10 +11,9 @@
 
 ;;; Code:
 
-;; Forward declaration to silence compiler when this file is compiled
-;; before shaoline-mode.el. define-minor-mode will provide the real binding.
-(defvar shaoline-mode nil
-  "Non-nil if Shaoline minor mode is enabled.")
+(require 'shaoline-compat-vars)
+
+;; shaoline-mode is declared in shaoline-compat-vars.el
 
 (require 'shaoline)
 (require 'shaoline-effects)

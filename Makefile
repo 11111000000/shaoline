@@ -27,7 +27,7 @@ autoloads:
 	$(EMACS) -Q --batch -L lisp --eval "(progn (require 'package) (loaddefs-generate \"lisp\" \"shaoline-autoloads.el\"))"
 
 clean:
-	rm -f lisp/*.elc shaoline-autoloads.el
+	rm -f lisp/*.elc shaoline-autoloads.el lisp/*autoloads.el
 
 install: byte-compile autoloads test
 

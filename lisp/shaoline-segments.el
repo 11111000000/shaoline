@@ -17,6 +17,7 @@
 
 ;;; Code:
 
+(require 'shaoline-compat-vars)
 (require 'shaoline)
 (require 'subr-x) ;; string-empty-p, string-trim, etc.
 (require 'async nil :noerror)

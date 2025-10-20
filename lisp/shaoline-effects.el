@@ -12,26 +12,24 @@
 
 ;;; Code:
 
-;; Forward declaration to silence compiler when this file is compiled
-;; before shaoline-mode.el. define-minor-mode will provide the real binding.
-(defvar shaoline-mode nil
-  "Non-nil if Shaoline minor mode is enabled.")
+(require 'shaoline-compat-vars)
+
+;; shaoline-mode is declared in shaoline-compat-vars.el
 
 (require 'shaoline)
+(require 'cl-lib)
+(require 'subr-x)
 
 ;; Byte-compiler hints and forward declarations
 (defvar shaoline--last-display-time 0
   "Time (float) когда Shaoline в последний раз вызвала `message'.")
-(defvar shaoline--yang-timer nil)
-(defvar shaoline--restore-timer nil)
-(defvar shaoline--last-movement-update 0)
+;; shaoline--yang-timer, shaoline--restore-timer and shaoline--last-movement-update
+;; are declared in shaoline-compat-vars.el
 
 (declare-function shaoline-update "shaoline-mode")
 (declare-function shaoline--debounced-update "shaoline-strategy")
 
-;; Failsafe: ensure the counter variable exists even
-;; if shaoline.el hasn’t been (re)loaded yet.
-(defvar shaoline--echo-area-input-depth 0)
+;; shaoline--echo-area-input-depth is declared in shaoline-compat-vars.el
 
 ;; Dynamic gate-keeper: when non-nil, Shaoline temporarily *allows*
 ;; `(message nil)' / "" to pass through untouched.  Use it via
@@ -49,16 +47,16 @@
   "List of currently active effects.")
 
 (defvar shaoline--modeline-backup-registry (make-hash-table :weakness 'key)
-  "Registry mapping buffers to their original 'mode-line-format'.
+  "Registry mapping buffers to their original =mode-line-format'.
 Uses weak references so buffers can be garbage collected normally.")
 
 (defvar shaoline--original-default-modeline nil
-  "Backup of the original default 'mode-line-format'.")
+  "Backup of the original default =mode-line-format'.")
 
 ;; Buffer-local backup used by per-buffer hide/restore helpers
 ;; (unit tests look for this variable).
 (defvar-local shaoline--original-mode-line nil
-  "Original 'mode-line-format' saved before Shaoline hides it.")
+  "Original =mode-line-format' saved before Shaoline hides it.")
 
 (defmacro shaoline-defeffect (name args docstring &rest body)
   "Define an effect NAME that change the world with ARGS and DOCSTRING.
@@ -163,15 +161,36 @@ And optional BODY."
   (push (list function how advice-fn) shaoline--advice-registry)
   (push `(advice . ,function) shaoline--active-effects))
 
+;; Inner-most guard to prevent unintended echo-area clears
+(defun shaoline--advice-preserve-empty-message (orig &rest args)
+  "Block spurious clears of the echo area.
+
+If the first arg to =message' is nil or an empty/whitespace-only
+string and =shaoline--allow-empty-message' is nil, suppress the
+call; otherwise forward to ORIG with ARGS."
+  (let* ((fmt (car args)))
+    (cond
+     ;; nil means clear; block unless explicitly allowed
+     ((and (null fmt) (not shaoline--allow-empty-message))
+      nil)
+     ;; empty/whitespace strings — block unless explicitly allowed
+     ((and (stringp fmt)
+           (string-empty-p (string-trim (format "%s" fmt)))
+           (not shaoline--allow-empty-message))
+      nil)
+     ;; anything else — pass through
+     (t
+      (apply orig args)))))
+
 ;; ────────────────────────────────────────────────────────────
 ;;  新 advice: расширяем систему advice
 ;; ────────────────────────────────────────────────────────────
 
 (defun shaoline--advice-read-event (orig &rest args)
-  "Around-advice on 'read-event'.  Use ORIG and ARGS.
+  "Around-advice on =read-event'.  Use ORIG and ARGS.
 
-Если 'cursor-in-echo-area' установлена, увеличиваем
-'shaoline--echo-area-input-depth' перед чтением события и
+Если =cursor-in-echo-area' установлена, увеличиваем
+=shaoline--echo-area-input-depth' перед чтением события и
 уменьшаем после, тем самым отмечая период реального ввода в
 echo-area."
   (if cursor-in-echo-area
@@ -181,31 +200,6 @@ echo-area."
             (apply orig args)
           (cl-decf shaoline--echo-area-input-depth)))
     (apply orig args)))
-
-;; Существующее advice, блокирующее (message nil)
-;; ────────────────────────────────────────────────────────────
-
-(defun shaoline--advice-preserve-empty-message (orig &rest args)
-  "Guard echo-area against flicker.  Use ORIG nad ARGS.
-
-Intercepts `(message nil)' and `(message \"\")'.  Such empty
-messages are *blocked* when:
-
-  • The echo-area currently shows Shaoline content (property
-    `shaoline-origin'), and
-  • `shaoline--allow-empty-message' is *not* bound non-nil.
-
-Otherwise the original `message' is executed unchanged."
-  (let* ((empty? (or (equal args '(nil))
-                     (and (= (length args) 1)
-                          (stringp (car args))
-                          (string-empty-p (car args)))))
-         (shaoline-visible?
-          (let ((cur (current-message)))
-            (and cur (get-text-property 0 'shaoline-origin cur)))))
-    (if (and empty? shaoline-visible? (not shaoline--allow-empty-message))
-        (current-message)          ; keep our line – no blink
-      (apply orig args))))
 
 (shaoline-defeffect shaoline--detach-advice (function advice-fn)
   "Detach ADVICE-FN from FUNCTION."
@@ -349,7 +343,8 @@ Preserved modes are left untouched (kept as the original default)."
                 '(:depth 100))
     (push (list #'message :around #'shaoline--advice-preserve-empty-message)
           shaoline--advice-registry)
-    (push `(advice . ,#'message) shaoline--active-effects))
+    (push '(advice . message) shaoline--active-effects))
+
 
   (when (shaoline--resolve-setting 'use-hooks)
     (shaoline--attach-hook 'post-command-hook #'shaoline--smart-post-command-update)
@@ -431,14 +426,14 @@ call `message` immediately afterwards.")
 
 
 (defun shaoline--advice-capture-message (orig-fun format-string &rest args)
-  "Around-advice on 'message' that store user messages for Shaoline.
-but gracefully ignores echo-area clears such as (message nil).
-Use ORIG-FUN FORMAT-STRING and ARGS"
-  (let* ((result (apply orig-fun format-string args))
-         (cmsg (current-message))
-         ;; Only try to format when the first arg is really a string.
-         (clean-text (when (stringp format-string)
-                       (apply #'format format-string args))))
+  "Store user messages for Shaoline around =message'.
+Gracefully ignore echo-area clears such as (message nil).
+Use ORIG-FUN, FORMAT-STRING and ARGS."
+  (let ((result (apply orig-fun format-string args))
+        (cmsg (current-message))
+        ;; Only try to format when the first arg is really a string.
+        (clean-text (when (stringp format-string)
+                      (apply #'format format-string args))))
     ;; Save non-empty messages that are NOT produced by Shaoline itself.
     (when (and (not shaoline--composing-p)
                (stringp clean-text)
@@ -490,7 +485,7 @@ Use ORIG, FORMAT-STRING and ARGS"
           (shaoline--debounced-update))))))
 
 (defun shaoline--advice-capture-eval-last-sexp (orig &rest args)
-  "Capture result of 'eval-last-sexp' and pin it briefly.  Use ORIG and ARGS."
+  "Capture result of =eval-last-sexp' and pin it briefly.  Use ORIG and ARGS."
   (let ((val (apply orig args)))
     (shaoline--save-eval-result val)
     val))
@@ -510,7 +505,7 @@ Runs only on successful evaluation, so it stays out of error backtraces."
   val)
 
 (defun shaoline--filter-return-eval-expression (val)
-  "Filter-return advice for 'eval-expression'/'pp-eval-expression'.  Use VAL."
+  "Filter-return advice for =eval-expression'/=pp-eval-expression'.  Use VAL."
   (shaoline--save-eval-result val)
   val)
 
@@ -552,8 +547,8 @@ Runs only on successful evaluation, so it stays out of error backtraces."
 во время ввода или ожидания команд."
   nil)
 
-(defvar shaoline--restore-timer nil
-  "Idle timer for deferred visibility restore (avoid stacking).")
+;; shaoline--restore-timer is declared near the top of this file.
+;; (kept there to ensure early declaration before any references)
 
 (defun shaoline--post-command-restore ()
   "Delayed restoration after command completion (single pending timer)."
@@ -764,8 +759,8 @@ Reduced list focusing on major state changes.")
     ;; Всё остальное — по изменению значимого состояния
     (t (shaoline--significant-change-p)))))
 
-(defvar shaoline--last-movement-update 0
-  "Time of last movement-triggered update.")
+;; shaoline--last-movement-update is declared near the top of this file.
+;; (kept there to ensure early declaration before any references)
 
 
 

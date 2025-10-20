@@ -26,11 +26,16 @@
 
 ;;; Code:
 
+(eval-when-compile
+  (defvar shaoline-mode))
+
 (require 'cl-lib)
 (eval-when-compile (require 'rx))
 (require 'exwm nil :noerror)            ; Optional, only when EXWM is present
 (defvar exwm-systemtray-width)
 ;; External variable provided by EXWM; declared to silence byte-compiler.
+
+(require 'shaoline-compat-vars)
 
 ;; Cross-file function forward declarations
 (declare-function shaoline-mode "shaoline-mode")
@@ -39,8 +44,6 @@
 (autoload 'shaoline-mode "shaoline-mode" "Toggle Shaoline minor mode." t)
 
 ;; Forward declarations from effects used by core to silence byte-compiler
-(defvar shaoline--echo-area-input-depth 0)
-(defvar shaoline--last-busy-log-state nil)
 
 ;; ----------------------------------------------------------------------------
 ;; 一 Fundamental Variables — The Unchanging Essence
@@ -51,8 +54,7 @@
   :group 'convenience
   :prefix "shaoline-")
 
-;; Global mode variable (declared; actual variable is defined by 'define-minor-mode' in shaoline-mode.el)
-(defvar shaoline-mode)
+;; shaoline-mode is declared in shaoline-compat-vars.el and defined by define-minor-mode.
 
 ;; Core behavior flags
 (defcustom shaoline-mode-strategy 'yang
@@ -118,13 +120,16 @@ dynamically so you normally do not need to change it by hand."
 
 When enabled Shaoline measures the tray frame’s pixel width,
 converts it to character cells for the current frame and
-temporarily sets `shaoline-right-margin' to that value each time
+temporarily sets =shaoline-right-margin' to that value each time
 the line is composed."
   :type 'boolean
   :group 'shaoline)
 
+(defvar shaoline--last-margin-refresh-time 0
+  "Last time when right margin alignment was recalculated.")
+
 (defun shaoline--exwm-tray-char-width ()
-  "Return EXWM system-tray width in *character cells* for the current frame.
+  "Return EXWM system-tray width in /character cells/ for the current frame.
 
 Algorithm order (first that yields a sensible number wins):
 1.  Look for a frame with the parameter `exwm-tray`.
@@ -156,10 +161,9 @@ When `shaoline-debug` is non-nil every step is logged to *shaoline-logs*."
           chars)))))
 
 (defun shaoline--refresh-right-margin ()
-  "Recompute `shaoline-right-margin' when `shaoline-with-tray' is enabled.
+  "Recompute =shaoline-right-margin' when =shaoline-with-tray' is enabled.
 
-Adds verbose logging when `shaoline-debug' is non-nil."
-  (defvar shaoline--last-margin-refresh-time 0)
+Adds verbose logging when =shaoline-debug' is non-nil."
   (let ((now (float-time)))
     (when (and shaoline-with-tray
                (> (- now shaoline--last-margin-refresh-time) 0.5))
@@ -419,7 +423,8 @@ Returns (left-str center-str right-str) as pure function."
     (list left-str truncated-center right-str)))
 
 (defun shaoline--compose-line (left center right width)
-  "Compose final modeline string from LEFT CENTER RIGHT with perfect alignment to WIDTH."
+  "Compose final modeline string from LEFT, CENTER and RIGHT.
+Align perfectly to WIDTH."
   (let* ((layout (shaoline--calculate-layout left center right width))
          (left-str (nth 0 layout))
          (center-str (nth 1 layout))
@@ -446,7 +451,11 @@ Returns (left-str center-str right-str) as pure function."
     (shaoline--state-put :last-left-width left-w)
     (shaoline--state-put :last-right-width right-w)
     (shaoline--log "shaoline--compose-line result in buffer: %s: %S" (buffer-name) result)
-    result))
+    ;; Respect requested WIDTH with a small tolerance (≤ WIDTH + 10) for safety.
+    (let ((max-out (+ width 10)))
+      (if (> (string-width result) max-out)
+          (truncate-string-to-width result max-out nil nil "")
+        result))))
 
 (defvar shaoline--composing-p nil
   "Non-nil while Shaoline is composing its line; suppress side effects.")
@@ -508,7 +517,8 @@ buffer, target width and current right margin and honored for
   (mapconcat (lambda (e) (format "%s" e)) elements "|"))
 
 (defun shaoline--cached-call (key ttl-seconds thunk)
-  "智能缓存 Intelligent caching THUNK of KEY with strict TTL-SECONDS (no sliding refresh)."
+  "智能缓存 Intelligent caching THUNK of KEY with strict TTL-SECONDS.
+No sliding refresh."
   (let* ((cache (shaoline--state-get :cache))
          (entry (gethash key cache))
          (now (float-time)))
@@ -639,11 +649,11 @@ buffer, target width and current right margin and honored for
 Без перечисления команд и regex; полагаемся на универсальные
 системные индикаторы:
 
-  • 'minibuffer-depth'>0              → минибуфер действительно активен
-  • 'cursor-in-echo-area'             → курсор мигает в echo-area
-  • 'shaoline--echo-area-input-depth' → мы внутри `read-event', запущенного
+  • `minibuffer-depth'>0              → минибуфер действительно активен
+  • `cursor-in-echo-area'             → курсор мигает в echo-area
+  • `shaoline--echo-area-input-depth' → мы внутри =read-event', запущенного
                                        из echo-area (см.  advice)
-  • 'isearch-mode'                    → инкрементальный поиск занимает echo-area"
+  • =isearch-mode'                    → инкрементальный поиск занимает echo-area"
   (let* ((minibufp (minibufferp))
          (mb-depth (> (minibuffer-depth) 0))
          (active-mini (active-minibuffer-window)) ; диагностический журнал
@@ -679,19 +689,10 @@ buffer, target width and current right margin and honored for
 (defvar shaoline--last-busy-time 0
   "Time when echo-area was last detected as busy.")
 
-(defvar shaoline--echo-area-input-depth 0
-  "Depth counter: >0 while `read-event' waits in echo-area.
-
-Incremented by an around-advice on `read-event' whenever
-`cursor-in-echo-area' is non-nil, and decremented afterwards.  A
-universal, future-proof indicator that Emacs действительно ждёт
-ввод в echo-area (y-or-n-p, 'read-char', 'query-replace', и т. д.).")
+;; shaoline--echo-area-input-depth is declared in shaoline-compat-vars.el
 
 (defvar shaoline--echo-area-stable-delay 0.3
   "Seconds to wait after echo-area becomes free before reclaiming.")
-
-(defvar shaoline--last-busy-log-state nil
-  "Internal: last logged state of `shaoline--echo-area-busy-p' to reduce log spam.")
 
 (defun shaoline--echo-area-stable-p ()
   "Check if echo-area has been stable (not busy) for enough time."
@@ -725,7 +726,7 @@ universal, future-proof indicator that Emacs действительно ждёт
   "Maximum number of lines kept in *shaoline-logs* buffer.")
 
 (defun shaoline--log (fmt &rest args)
-  "If 'shaoline-debug' is non-nil,  log a debug message to *shaoline-logs* buffer.
+  "If =shaoline-debug' is non-nil, log a debug message to /shaoline-logs/ buffer.
 
 Use FMT and ARGS.  Also stays silent when `shaoline-mode' is disabled."
   (when (and shaoline-debug shaoline-mode)
