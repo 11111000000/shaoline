@@ -12,6 +12,11 @@
 
 ;;; Code:
 
+;; Forward declaration to silence compiler when this file is compiled
+;; before shaoline-mode.el. define-minor-mode will provide the real binding.
+(defvar shaoline-mode nil
+  "Non-nil if Shaoline minor mode is enabled.")
+
 (require 'shaoline)
 
 ;; Byte-compiler hints and forward declarations

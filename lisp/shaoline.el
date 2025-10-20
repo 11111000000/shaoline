@@ -36,17 +36,7 @@
 (declare-function shaoline-mode "shaoline-mode")
 
 ;;;###autoload
-(defun shaoline-mode (&optional arg)
-  "Autoload shim for 'shaoline-mode' defined in shaoline-mode.el.
-This ensures (use-package shaoline :commands shaoline-mode) works even when
-an autoload points to this core file."
-  (interactive "P")
-  (require 'shaoline-mode)
-  (let ((impl (symbol-function 'shaoline-mode)))
-    (if (called-interactively-p 'any)
-        (call-interactively impl)
-      (funcall impl arg))))
-
+(autoload 'shaoline-mode "shaoline-mode" "Toggle Shaoline minor mode." t)
 ;; ----------------------------------------------------------------------------
 ;; 一 Fundamental Variables — The Unchanging Essence
 ;; ----------------------------------------------------------------------------
