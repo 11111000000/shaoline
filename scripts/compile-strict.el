@@ -2,20 +2,10 @@
 
 (require 'cl-lib)
 
-;; Avoid lexical/dynamic conflict: mark compiler vars as special in this unit.
-(defvar byte-compile-error-on-warn)
-(defvar byte-compile-warnings)
-
 (defun shaoline-byte-compile-strict ()
   "Byte-compile all lisp/*.el with warnings as errors.
 Exits with non-zero status when any warning/error is signaled."
-  (let* ((byte-compile-error-on-warn nil)
-         ;; Treat most warnings as errors, but skip noisy/benign categories:
-         ;; - obsolete: Emacs itself may emit these during compilation
-         ;; - lexical: duplicate defvar across compilation units
-         ;; - redefine: benign cross-file redefinitions/forward declarations
-         (byte-compile-warnings '(not obsolete lexical redefine))
-         (load-prefer-newer t)
+  (let* ((load-prefer-newer t)
          (dir   (expand-file-name "lisp" default-directory))
          (files (cl-remove-if
                  (lambda (f) (string= (file-name-nondirectory f) "shaoline-compat-vars.el"))
@@ -36,6 +26,10 @@ Exits with non-zero status when any warning/error is signaled."
     (let ((compat (expand-file-name "shaoline-compat-vars.el" dir)))
       (when (file-exists-p compat)
         (load compat nil t)))
+    ;; Set compiler flags globally (not via lexical let-binding) to avoid
+    ;; dynamic/lexical conflicts during downstream compilations.
+    (setq byte-compile-error-on-warn nil
+          byte-compile-warnings '(not obsolete lexical redefine))
 
     (let ((orig-warn (symbol-function 'byte-compile-warn)))
       (cl-letf (((symbol-function 'byte-compile-warn)
