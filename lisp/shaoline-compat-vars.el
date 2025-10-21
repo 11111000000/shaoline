@@ -1,5 +1,14 @@
 ;;; shaoline-compat-vars.el --- Shared special vars for Shaoline  -*- lexical-binding: nil; -*-
 
+;; Version: 3.3.2
+;; Package-Requires: ((emacs "27.1"))
+;; Keywords: convenience, internal
+;; Copyright (C) 2025 Peter
+;; Author: Peter <11111000000@email.com>
+;; Maintainer: Peter <11111000000@email.com>
+;; SPDX-License-Identifier: MIT
+;; Homepage: https://github.com/11111000000/shaoline
+
 ;; This file only forward-declares special (dynamic) variables that are
 ;; referenced across compilation units. It must not introduce any lexical
 ;; bindings for these symbols to avoid “Defining as dynamic an already lexical var”.
