@@ -470,7 +470,7 @@ Use ORIG, FORMAT-STRING and ARGS"
   "Format and pin VALUE (result of eval) for Shaoline's message segment."
   (let* ((str (condition-case nil
                   (pp-to-string value)
-                (error (format "%S" value))))
+                (error (prin1-to-string value))))
          (one (string-trim (replace-regexp-in-string "\n\\s-*" " ⏎ " str)))
          (text (format "=> %s" one))
          (propto (propertize text 'shaoline-kind 'eval)))

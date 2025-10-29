@@ -16,8 +16,7 @@
            (files (cl-remove-if
                    (lambda (f)
                      (let ((bn (file-name-nondirectory f)))
-                       (or (string-match-p "\\(autoloads\\.el\\|-pkg\\.el\\)\\'" bn)
-                           (string= bn "shaoline-compat-vars.el"))))
+                       (string-match-p "\\(autoloads\\.el\\|-pkg\\.el\\)\\'" bn)))
                    (directory-files dir t "\\.el\\'")))
            (status 0))
       (dolist (f files)
