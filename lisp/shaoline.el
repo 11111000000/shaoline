@@ -1,6 +1,6 @@
 ;;; shaoline.el --- Functional minimalist echo-area modeline -*- lexical-binding: t; -*-
 
-;; Version: 3.3.3
+;; Version: 3.3.4
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: convenience, mode-line, battery, clock, git, gptel, moon, project, tao
 ;; Copyright (C) 2025 Peter
