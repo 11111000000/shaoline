@@ -193,7 +193,7 @@
   "Start token bucket rate limiting."
   (unless shaoline--bucket-timer
     (setq shaoline--bucket-timer
-          (run-with-timer 0.2 0.2 #'shaoline--refill-bucket))))
+          (run-with-timer 0.25 0.25 #'shaoline--refill-bucket))))
 
 (defun shaoline--stop-rate-limiting ()
   "Stop rate limiting."
@@ -206,7 +206,7 @@
   (pcase mode
     ;; Light mode: always allow if any tokens available, minimal cost
     ('light (when (> shaoline--update-bucket 0)
-              (cl-decf shaoline--update-bucket 0.2) ; Minimal token cost
+              (cl-decf shaoline--update-bucket 0.6) ; Increased cost to reduce burst rate
               t))
     ;; Normal mode: standard token consumption
     (_ (when (> shaoline--update-bucket 0)

@@ -29,6 +29,20 @@
 (declare-function shaoline-update "shaoline-mode")
 (declare-function shaoline--debounced-update "shaoline-strategy")
 
+(defvar shaoline--msg-update-timer nil
+  "Timer used to coalesce bursts of message/minibuffer-message updates.")
+
+(defun shaoline--schedule-msg-update ()
+  "Schedule a single debounced update for recent message bursts."
+  (unless shaoline--msg-update-timer
+    (setq shaoline--msg-update-timer
+          (run-with-timer
+           0.2 nil
+           (lambda ()
+             (setq shaoline--msg-update-timer nil)
+             (when (fboundp 'shaoline--debounced-update)
+               (shaoline--debounced-update)))))))
+
 ;; shaoline--echo-area-input-depth is declared in shaoline-compat-vars.el
 
 ;; Dynamic gate-keeper: when non-nil, Shaoline temporarily *allows*
@@ -437,6 +451,7 @@ Use ORIG-FUN, FORMAT-STRING and ARGS."
     ;; Save non-empty messages that are NOT produced by Shaoline itself.
     (when (and (not shaoline--composing-p)
                (stringp clean-text)
+               (<= (length clean-text) 2000)
                (not (string-empty-p clean-text))
                (not (and cmsg (get-text-property 0 'shaoline-origin cmsg))))
       ;; Respect pinned eval result: do not override for a short TTL,
@@ -445,8 +460,7 @@ Use ORIG-FUN, FORMAT-STRING and ARGS."
                (not (equal clean-text (shaoline-msg-current))))
           nil
         (shaoline-msg-save clean-text)
-        (when (fboundp 'shaoline--debounced-update)
-          (shaoline--debounced-update))))
+        (shaoline--schedule-msg-update)))
     result))
 
 (defun shaoline--advice-capture-minibuffer-message (orig format-string &rest args)
@@ -459,11 +473,11 @@ Use ORIG, FORMAT-STRING and ARGS"
                (stringp format-string))
       (let ((text (apply #'format format-string args)))
         (when (and text
+                   (<= (length text) 2000)
                    (not (string-empty-p text))
                    (not (and cmsg (get-text-property 0 'shaoline-origin cmsg))))
           (shaoline-msg-save text)
-          (when (fboundp 'shaoline--debounced-update)
-            (shaoline--debounced-update)))))
+          (shaoline--schedule-msg-update))))
     res))
 
 (defun shaoline--save-eval-result (value)
@@ -559,7 +573,7 @@ Runs only on successful evaluation, so it stays out of error backtraces."
     (unless (timerp shaoline--restore-timer)
       (setq shaoline--restore-timer
             (run-with-idle-timer
-             0.15 nil
+             0.25 nil
              (lambda ()
                (setq shaoline--restore-timer nil)
                (shaoline--smart-restore-visibility)))))))
@@ -800,7 +814,7 @@ Reduced list focusing on major state changes.")
            (should-restore
             (and our-content
                  (not (string-empty-p our-content))
-                 (> since-last 0.3) ; Увеличенная задержка для стабильности
+                 (> since-last 0.6) ; Увеличенная задержка для стабильности
                  (or (null current-msg)
                      (and (not (get-text-property 0 'shaoline-origin current-msg))
                           ;; Не восстанавливаем поверх системных сообщений

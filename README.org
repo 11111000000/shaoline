@@ -96,6 +96,9 @@ Master: “Mu.”
 
 * Configuration
 
+Tip: frequent external calls re-use the composed line thanks to
+~shaoline-compose-cache-ttl~ and ~shaoline-compose-min-interval~.
+
 ** Default segments
 #+begin_src emacs-lisp
 (setq shaoline-segments
@@ -114,16 +117,19 @@ Re-order, remove, or add functions as you wish.
 
 ** Key variables (excerpt)
 
-| Variable                         | Default | Meaning                            |
-|----------------------------------+---------+------------------------------------|
-| shaoline-mode-strategy           | 'yang   | yin / yang / adaptive              |
-| shaoline-enable-dynamic-segments | t       | Clock, battery & friends           |
-| shaoline-right-margin            | 1       | Fixed right padding                |
-| shaoline-with-tray               | t       | Auto-adjust to EXWM system tray    |
-| shaoline-hide-modeline           | t       | Hide the classic modeline          |
-| shaoline-update-debounce         | 0.15    | Throttle cursor-movement refreshes |
-| shaoline-cache-ttl               | 2.0     | Default cache TTL                  |
-| shaoline-debug                   | nil     | Verbose logs in /shaoline-logs/      |
+| Variable                         | Default | Meaning                                      |
+|----------------------------------+---------+----------------------------------------------|
+| shaoline-mode-strategy           | 'yang   | yin / yang / adaptive                        |
+| shaoline-enable-dynamic-segments | t       | Clock, battery & friends                     |
+| shaoline-right-margin            | 1       | Fixed right padding                          |
+| shaoline-with-tray               | t       | Auto-adjust to EXWM system tray              |
+| shaoline-tray-refresh-interval   | 1.5     | Seconds between tray margin recalculations   |
+| shaoline-hide-modeline           | t       | Hide the classic modeline                    |
+| shaoline-update-debounce         | 0.25    | Throttle cursor-movement refreshes           |
+| shaoline-cache-ttl               | 2.0     | Default cache TTL (segments)                 |
+| shaoline-compose-cache-ttl       | 0.5     | TTL for full composed line cache             |
+| shaoline-compose-min-interval    | 0.2     | Min interval between real recompositions     |
+| shaoline-debug                   | nil     | Verbose logs in /shaoline-logs/              |
 
 Interactively: =M-x customize-group RET shaoline RET=
 
@@ -165,6 +171,8 @@ More live in ~shaoline-segments.el~ or craft your own:
 Running EXWM with a system tray? Shaoline measures its pixel width,
 converts to characters and tweaks ~shaoline-right-margin~ on the fly.
 Disable: ~(setq shaoline-with-tray nil)~
+Tune refresh: ~(setq shaoline-tray-refresh-interval 1.5)~
+Tune refresh: ~(setq shaoline-tray-refresh-interval 1.5)~
 
 
 * Frequently Asked Koans
@@ -187,7 +195,7 @@ Returning to Emptiness
 * Zen of Performance
 • Compose string  < 0.2 ms (6 segments).
 • Timers start /only/ when dynamic segments exist.
-• Token bucket: ≤ 10 updates/s even under spam.
+• Token bucket shapes traffic; light-updates rate-limited further.
 • Memory footprint – the heaviest object is this README.
 
 #+begin_quote

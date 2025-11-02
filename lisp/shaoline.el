@@ -120,9 +120,14 @@ dynamically so you normally do not need to change it by hand."
 
 When enabled Shaoline measures the tray frame’s pixel width,
 converts it to character cells for the current frame and
-temporarily sets `shaoline-right-margin' to that value each time
+temporarily sets =shaoline-right-margin' to that value each time
 the line is composed."
   :type 'boolean
+  :group 'shaoline)
+
+(defcustom shaoline-tray-refresh-interval 1.5
+  "Minimum seconds between tray margin recalculations."
+  :type 'float
   :group 'shaoline)
 
 (defvar shaoline--last-margin-refresh-time 0
@@ -166,7 +171,7 @@ When `shaoline-debug` is non-nil every step is logged to *shaoline-logs*."
 Adds verbose logging when `shaoline-debug' is non-nil."
   (let ((now (float-time)))
     (when (and shaoline-with-tray
-               (> (- now shaoline--last-margin-refresh-time) 0.5))
+               (> (- now shaoline--last-margin-refresh-time) shaoline-tray-refresh-interval))
       (setq shaoline--last-margin-refresh-time now)
       (let ((old shaoline-right-margin)
             (w   (shaoline--exwm-tray-char-width)))
@@ -473,6 +478,15 @@ evaluation of heavy segments."
 (defvar shaoline--compose-cache (make-hash-table :test 'equal)
   "Cache mapping a string key to (cons composed-string timestamp).")
 
+(defcustom shaoline-compose-min-interval 0.2
+  "Minimum interval in seconds between real recompositions.
+When hit repeatedly within this window, =shaoline-compose' returns the cached line."
+  :type 'float
+  :group 'shaoline)
+
+(defvar shaoline--last-compose-time 0.0
+  "Timestamp of the last real composition.")
+
 (defun shaoline--compose-cache-key (&optional width)
   "Produce a cache key for the current buffer/frame WIDTH."
   (format "%s|%s|%s"
@@ -484,19 +498,26 @@ evaluation of heavy segments."
   "纯 Pure composition function — the heart of Shaoline.
 Takes no global state, produces modeline string of WIDTH.
 
-Uses a short-lived cache (`shaoline--compose-cache`) to avoid repeated
+Uses a short-lived cache (=shaoline--compose-cache=) to avoid repeated
 evaluation of expensive segments when called many times in quick
 succession (e.g. by tab-bar formatters).  The cache is keyed by
 buffer, target width and current right margin and honored for
-`shaoline-compose-cache-ttl` seconds."
+=shaoline-compose-cache-ttl= seconds. Additionally limits real recomposition
+by =shaoline-compose-min-interval= to smooth out bursts."
   (let* ((key (shaoline--compose-cache-key width))
          (now (float-time))
          (entry (gethash key shaoline--compose-cache)))
-    (if (and entry (< (- now (cdr entry)) shaoline-compose-cache-ttl))
-        (progn
-          (shaoline--log "shaoline-compose: cache hit for %s" key)
-          (car entry))
-      ;; Cache miss / expired — compute and store
+    (cond
+     ;; Normal TTL hit
+     ((and entry (< (- now (cdr entry)) shaoline-compose-cache-ttl))
+      (shaoline--log "shaoline-compose: cache hit for %s" key)
+      (car entry))
+     ;; TTL expired but we are within min-interval since last compose → reuse
+     ((and entry (< (- now shaoline--last-compose-time) shaoline-compose-min-interval))
+      (shaoline--log "shaoline-compose: min-interval reuse for %s" key)
+      (car entry))
+     (t
+      ;; Real recomposition
       (let ((shaoline--composing-p t))
         ;; Re-calculate tray width if needed (throttled inside)
         (shaoline--refresh-right-margin)
@@ -505,8 +526,9 @@ buffer, target width and current right margin and honored for
                (center (shaoline--collect-side :center))
                (right (shaoline--collect-side :right))
                (result (shaoline--compose-line left center right target-width)))
-          (puthash key (cons result (float-time)) shaoline--compose-cache)
-          result)))))
+          (puthash key (cons result now) shaoline--compose-cache)
+          (setq shaoline--last-compose-time now)
+          result))))))
 
 ;; ----------------------------------------------------------------------------
 ;; 八 Cache System — Intelligent Non-Action
@@ -691,7 +713,7 @@ No sliding refresh."
 
 ;; shaoline--echo-area-input-depth is declared in shaoline-compat-vars.el
 
-(defvar shaoline--echo-area-stable-delay 0.3
+(defvar shaoline--echo-area-stable-delay 0.5
   "Seconds to wait after echo-area becomes free before reclaiming.")
 
 (defun shaoline--echo-area-stable-p ()
