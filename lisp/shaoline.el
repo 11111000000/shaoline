@@ -33,6 +33,8 @@
 (eval-when-compile (require 'rx))
 (require 'exwm nil :noerror)            ; Optional, only when EXWM is present
 (defvar exwm-systemtray-width)
+(defvar exwm-systemtray--width)
+(defvar exwm-systemtray--geometry)
 ;; External variable provided by EXWM; declared to silence byte-compiler.
 
 (require 'shaoline-compat-vars)
@@ -130,6 +132,14 @@ the line is composed."
   :type 'float
   :group 'shaoline)
 
+(defcustom shaoline-tray-fixed-chars nil
+  "If non-nil, use this fixed number of character cells as right margin (tray width).
+This overrides auto-detection. Useful when EXWM doesn't expose tray metrics or when
+a custom panel is used. Example: (setq shaoline-tray-fixed-chars 12)."
+  :type '(choice (const :tag "Auto-detect" nil)
+                 (integer :tag "Fixed chars"))
+  :group 'shaoline)
+
 (defvar shaoline--last-margin-refresh-time 0
   "Last time when right margin alignment was recalculated.")
 
@@ -137,48 +147,127 @@ the line is composed."
   "Return EXWM system-tray width in /character cells/ for the current frame.
 
 Algorithm order (first that yields a sensible number wins):
-1.  Look for a frame with the parameter `exwm-tray`.
-2.  Use `exwm-systemtray-width` (pixels) maintained by EXWM.
-3.  Otherwise return nil.
+0.  If shaoline-tray-fixed-chars is non-nil — use it.
+1.  Prefer EXWM system tray metrics (require 'exwm-systemtray on demand):
+    1a) exwm-systemtray-width (> 0)
+    1b) If still empty, compute from exwm-systemtray--list summing icon widths and gaps.
+2.  Legacy fallbacks (kept for compatibility):
+    try ad-hoc “tray frames” and internal vars (if any).
+3.  Convert pixels to chars; otherwise return nil.
 
-When `shaoline-debug` is non-nil every step is logged to *shaoline-logs*."
+Verbose logs when shaoline-debug is non-nil."
   (when (and shaoline-with-tray (featurep 'exwm))
-    (let ((charw (frame-char-width))
-          pixels)
-      ;; 1. Try dedicated tray frame
-      (when-let ((tray-frame
-                  (cl-find-if (lambda (f) (frame-parameter f 'exwm-tray))
-                              (frame-list))))
-        (setq pixels (frame-pixel-width tray-frame))
-        (shaoline--log "tray-dbg: found tray-frame %S, width=%s px" tray-frame pixels))
-      ;; 2. Fall back to variable set by exwm-systemtray.el
-      (when (and (not pixels)
-                 (boundp 'exwm-systemtray-width)
-                 (numberp exwm-systemtray-width)
-                 (> exwm-systemtray-width 0))
-        (setq pixels exwm-systemtray-width)
-        (shaoline--log "tray-dbg: using exwm-systemtray-width=%s px" pixels))
-      ;; 3. Convert to characters
-      (when (and pixels charw (> charw 0))
-        (let ((chars (ceiling (/ pixels (float charw)))))
-          (shaoline--log "tray-dbg: %s px ≈ %s chars (char-width=%s)"
-                         pixels chars charw)
-          chars)))))
+    (let* ((charw (frame-char-width))
+           (pixels nil))
+      (shaoline--log "tray-dbg: enter (with-tray=%s exwm=%s char-width=%s fixed=%S)"
+                     shaoline-with-tray (featurep 'exwm) charw shaoline-tray-fixed-chars)
+      (cond
+       ;; 0) Explicit override in character cells
+       ((and (integerp shaoline-tray-fixed-chars)
+             (> shaoline-tray-fixed-chars 0))
+        (shaoline--log "tray-dbg: using shaoline-tray-fixed-chars=%s (chars)" shaoline-tray-fixed-chars)
+        shaoline-tray-fixed-chars)
+       (t
+        ;; 1) Prefer official EXWM systemtray metrics
+        (ignore-errors (require 'exwm-systemtray nil :noerror))
+        ;; 1a) exwm-systemtray-width (pixels)
+        (unless pixels
+          (when (and (boundp 'exwm-systemtray-width)
+                     (numberp exwm-systemtray-width)
+                     (> exwm-systemtray-width 0))
+            (setq pixels exwm-systemtray-width)
+            (shaoline--log "tray-dbg: using exwm-systemtray-width=%s px" pixels)))
+        ;; 1b) If width is still not known, compute from icon list
+        (unless pixels
+          (when (and (boundp 'exwm-systemtray--list)
+                     (symbol-value 'exwm-systemtray--list))
+            (let* ((gap (or (and (boundp 'exwm-systemtray-icon-gap)
+                                 (numberp exwm-systemtray-icon-gap)
+                                 exwm-systemtray-icon-gap)
+                            2))
+                   (x gap))
+              (dolist (pair (symbol-value 'exwm-systemtray--list))
+                (let* ((icon (cdr pair))
+                       (vis (ignore-errors (slot-value icon 'visible)))
+                       (w   (ignore-errors (slot-value icon 'width))))
+                  (when vis
+                    (setq x (+ x (or w 0) gap)))))
+              (when (> x 0)
+                (setq pixels x)
+                (shaoline--log "tray-dbg: computed from icon list=%s px (gap=%s)" pixels gap)))))
+
+        ;; 2) Legacy fallbacks kept for compatibility ---------------------------------
+        ;; 2a) Dedicated tray frame via param exwm-tray
+        (unless pixels
+          (when-let ((tray-frame (cl-find-if (lambda (f) (frame-parameter f 'exwm-tray))
+                                             (frame-list))))
+            (setq pixels (frame-pixel-width tray-frame))
+            (shaoline--log "tray-dbg: found tray-frame by param exwm-tray %S, width=%s px" tray-frame pixels)))
+        ;; 2b) Dedicated tray frame via param exwm-systemtray
+        (unless pixels
+          (when-let ((tray-frame (cl-find-if (lambda (f) (frame-parameter f 'exwm-systemtray))
+                                             (frame-list))))
+            (setq pixels (frame-pixel-width tray-frame))
+            (shaoline--log "tray-dbg: found tray-frame by param exwm-systemtray %S, width=%s px" tray-frame pixels)))
+        ;; 2c) Frame name contains 'EXWM System Tray'
+        (unless pixels
+          (dolist (f (frame-list))
+            (when (not pixels)
+              (let ((nm (frame-parameter f 'name)))
+                (when (and nm (string-match-p "EXWM System Tray" (format "%s" nm)))
+                  (setq pixels (frame-pixel-width f))
+                  (shaoline--log "tray-dbg: found tray-frame by name=%S, width=%s px" nm pixels))))))
+        ;; 2d) Internal variables (very unlikely in modern EXWM)
+        (unless pixels
+          (when (and (boundp 'exwm-systemtray--width)
+                     (numberp exwm-systemtray--width)
+                     (> exwm-systemtray--width 0))
+            (setq pixels exwm-systemtray--width)
+            (shaoline--log "tray-dbg: using exwm-systemtray--width=%s px" pixels)))
+        (unless pixels
+          (when (boundp 'exwm-systemtray--geometry)
+            (let* ((g exwm-systemtray--geometry)
+                   (w (cond
+                       ((and (vectorp g) (>= (length g) 3)) (aref g 2))
+                       ((and (consp g) (>= (length g) 3)) (nth 2 g))
+                       (t nil))))
+              (when (and (numberp w) (> w 0))
+                (setq pixels w)
+                (shaoline--log "tray-dbg: using exwm-systemtray--geometry width=%s px" w)))))
+
+        (unless pixels
+          (shaoline--log "tray-dbg: pixels not found (no systemtray metrics / frame hints)"))
+        (when (and (not pixels) (or (not charw) (<= charw 0)))
+          (shaoline--log "tray-dbg: invalid char-width=%S (cannot convert to chars)" charw))
+
+        ;; 3) Convert to character cells
+        (when (and pixels charw (> charw 0))
+          (let ((chars (ceiling (/ pixels (float charw)))))
+            (shaoline--log "tray-dbg: %s px ≈ %s chars (char-width=%s)" pixels chars charw)
+            chars)))))))
 
 (defun shaoline--refresh-right-margin ()
-  "Recompute `shaoline-right-margin' when `shaoline-with-tray' is enabled.
+  "Recompute =shaoline-right-margin' when =shaoline-with-tray' is enabled.
 
-Adds verbose logging when `shaoline-debug' is non-nil."
-  (let ((now (float-time)))
-    (when (and shaoline-with-tray
-               (> (- now shaoline--last-margin-refresh-time) shaoline-tray-refresh-interval))
+Adds verbose logging when =shaoline-debug' is non-nil."
+  (let* ((now (float-time))
+         (delta (- now shaoline--last-margin-refresh-time)))
+    (cond
+     ((not shaoline-with-tray)
+      (shaoline--log "tray-dbg: skip refresh (with-tray=nil)"))
+     ((<= delta shaoline-tray-refresh-interval)
+      (shaoline--log "tray-dbg: skip refresh (Δ=%.2fs ≤ interval=%.2fs)"
+                     delta shaoline-tray-refresh-interval))
+     (t
       (setq shaoline--last-margin-refresh-time now)
+      (shaoline--log "tray-dbg: refreshing margin… exwm=%s" (featurep 'exwm))
       (let ((old shaoline-right-margin)
             (w   (shaoline--exwm-tray-char-width)))
+        (shaoline--log "tray-dbg: probe result w=%S (chars)" w)
         (when (and w (> w 0))
           (setq shaoline-right-margin w)
           (shaoline--log "tray-dbg: right-margin changed %s → %s"
-                         old shaoline-right-margin))))))
+                         old shaoline-right-margin)))))))
 
 (defcustom shaoline-hide-modeline t
   "When non-nil, hide traditional modelines in all buffers.
@@ -425,6 +514,9 @@ Returns (left-str center-str right-str) as pure function."
            ((> (string-width center-str) available)
             (truncate-string-to-width center-str available nil nil (if (> available 1) "…" "")))
            (t center-str))))
+    (shaoline--log "layout-dbg: width=%s rm=%s left=%s(%s) right=%s(%s) reserved=%s available=%s"
+                   width shaoline-right-margin
+                   left-str left-w right-str right-w reserved-space available)
     (list left-str truncated-center right-str)))
 
 (defun shaoline--compose-line (left center right width)
@@ -455,9 +547,11 @@ Align perfectly to WIDTH."
     ;; Store rendered segment widths for shaoline-available-center-width
     (shaoline--state-put :last-left-width left-w)
     (shaoline--state-put :last-right-width right-w)
+    (shaoline--log "compose-line-dbg: left-w=%s right-w=%s rm=%s width=%s align-needed=%s"
+                   left-w right-w shaoline-right-margin width align-needed)
     (shaoline--log "shaoline--compose-line result in buffer: %s: %S" (buffer-name) result)
-    ;; Respect requested WIDTH with a small tolerance (≤ WIDTH + 10) for safety.
-    (let ((max-out (+ width 10)))
+    ;; Respect requested WIDTH strictly to avoid echo-area wrapping.
+    (let ((max-out width))
       (if (> (string-width result) max-out)
           (truncate-string-to-width result max-out nil nil "")
         result))))
@@ -504,31 +598,36 @@ succession (e.g. by tab-bar formatters).  The cache is keyed by
 buffer, target width and current right margin and honored for
 =shaoline-compose-cache-ttl= seconds. Additionally limits real recomposition
 by =shaoline-compose-min-interval= to smooth out bursts."
-  (let* ((key (shaoline--compose-cache-key width))
-         (now (float-time))
-         (entry (gethash key shaoline--compose-cache)))
-    (cond
-     ;; Normal TTL hit
-     ((and entry (< (- now (cdr entry)) shaoline-compose-cache-ttl))
-      (shaoline--log "shaoline-compose: cache hit for %s" key)
-      (car entry))
-     ;; TTL expired but we are within min-interval since last compose → reuse
-     ((and entry (< (- now shaoline--last-compose-time) shaoline-compose-min-interval))
-      (shaoline--log "shaoline-compose: min-interval reuse for %s" key)
-      (car entry))
-     (t
-      ;; Real recomposition
-      (let ((shaoline--composing-p t))
-        ;; Re-calculate tray width if needed (throttled inside)
-        (shaoline--refresh-right-margin)
-        (let* ((target-width (or width (frame-width) 80))
-               (left (shaoline--collect-side :left))
-               (center (shaoline--collect-side :center))
-               (right (shaoline--collect-side :right))
-               (result (shaoline--compose-line left center right target-width)))
-          (puthash key (cons result now) shaoline--compose-cache)
-          (setq shaoline--last-compose-time now)
-          result))))))
+  ;; Always refresh tray margin first (internally throttled), so the cache key
+  ;; reflects the current right margin even on cache hits.
+  (let* ((now (float-time))
+         (prev-rm shaoline-right-margin))
+    (shaoline--refresh-right-margin)
+    (let* ((key (shaoline--compose-cache-key width))
+           (entry (gethash key shaoline--compose-cache)))
+      (shaoline--log "compose-dbg: begin key=%s width=%s prev-rm=%s rm=%s Δmargin=%.2fs interval=%.2fs"
+                     key (or width (frame-width)) prev-rm shaoline-right-margin
+                     (- now shaoline--last-margin-refresh-time) shaoline-tray-refresh-interval)
+      (cond
+       ;; Normal TTL hit
+       ((and entry (< (- now (cdr entry)) shaoline-compose-cache-ttl))
+        (shaoline--log "shaoline-compose: cache hit for %s" key)
+        (car entry))
+       ;; TTL expired but we are within min-interval since last compose → reuse
+       ((and entry (< (- now shaoline--last-compose-time) shaoline-compose-min-interval))
+        (shaoline--log "shaoline-compose: min-interval reuse for %s" key)
+        (car entry))
+       (t
+        ;; Real recomposition
+        (let ((shaoline--composing-p t))
+          (let* ((target-width (or width (frame-width) 80))
+                 (left (shaoline--collect-side :left))
+                 (center (shaoline--collect-side :center))
+                 (right (shaoline--collect-side :right))
+                 (result (shaoline--compose-line left center right target-width)))
+            (puthash key (cons result now) shaoline--compose-cache)
+            (setq shaoline--last-compose-time now)
+            result)))))))
 
 ;; ----------------------------------------------------------------------------
 ;; 八 Cache System — Intelligent Non-Action
