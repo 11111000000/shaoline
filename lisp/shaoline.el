@@ -36,6 +36,7 @@
 (defvar exwm-systemtray--width)
 (defvar exwm-systemtray--geometry)
 ;; External variable provided by EXWM; declared to silence byte-compiler.
+(declare-function slot-value "eieio")
 
 (require 'shaoline-compat-vars)
 

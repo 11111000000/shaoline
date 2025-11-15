@@ -467,7 +467,7 @@ Use ORIG-FUN, FORMAT-STRING and ARGS."
     result))
 
 (defun shaoline--advice-capture-minibuffer-message (orig format-string &rest args)
-  "Around advice on `minibuffer-message` to capture echo-only messages.
+  "Around advice on `minibuffer-message' to capture echo-only messages.
 Save non-empty messages that are not produced by Shaoline itself.
 Use ORIG, FORMAT-STRING and ARGS"
   (let ((res (apply orig format-string args))
