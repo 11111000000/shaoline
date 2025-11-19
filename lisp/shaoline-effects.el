@@ -446,25 +446,27 @@ call `message` immediately afterwards.")
   "Store user messages for Shaoline around `message'.
 Gracefully ignore echo-area clears such as (message nil).
 Use ORIG-FUN, FORMAT-STRING and ARGS."
-  (let ((result (apply orig-fun format-string args))
-        (cmsg (current-message))
-        ;; Only try to format when the first arg is really a string.
-        (clean-text (when (stringp format-string)
-                      (apply #'format format-string args))))
-    ;; Save non-empty messages that are NOT produced by Shaoline itself.
-    (when (and (not shaoline--composing-p)
-               (stringp clean-text)
-               (<= (length clean-text) 2000)
-               (not (string-empty-p clean-text))
-               (not (and cmsg (get-text-property 0 'shaoline-origin cmsg))))
-      ;; Respect pinned eval result: do not override for a short TTL,
-      ;; unless it's the same text.
-      (if (and (< (float-time) shaoline--message-pinned-until)
-               (not (equal clean-text (shaoline-msg-current))))
-          nil
-        (shaoline-msg-save clean-text)
-        (shaoline--schedule-msg-update)))
-    result))
+  (if (not (shaoline--segment-enabled-p 'shaoline-segment-echo-message))
+      (apply orig-fun format-string args)
+    (let ((result (apply orig-fun format-string args))
+          (cmsg (current-message))
+          ;; Only try to format when the first arg is really a string.
+          (clean-text (when (stringp format-string)
+                        (apply #'format format-string args))))
+      ;; Save non-empty messages that are NOT produced by Shaoline itself.
+      (when (and (not shaoline--composing-p)
+                 (stringp clean-text)
+                 (<= (length clean-text) 2000)
+                 (not (string-empty-p clean-text))
+                 (not (and cmsg (get-text-property 0 'shaoline-origin cmsg))))
+        ;; Respect pinned eval result: do not override for a short TTL,
+        ;; unless it's the same text.
+        (if (and (< (float-time) shaoline--message-pinned-until)
+                 (not (equal clean-text (shaoline-msg-current))))
+            nil
+          (shaoline-msg-save clean-text)
+          (shaoline--schedule-msg-update)))
+      result)))
 
 (defun shaoline--advice-capture-minibuffer-message (orig format-string &rest args)
   "Around advice on `minibuffer-message' to capture echo-only messages.

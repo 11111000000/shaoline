@@ -185,53 +185,100 @@ When truncation occurs, an ellipsis character (…) is appended."
        (propertize name 'face 'shaoline-project-face)))))
 
 ;; Robust Git helpers — repo detection and fast invalidation
+(defvar shaoline--git-top-cache (make-hash-table :test 'equal)
+  "Memo table mapping directory paths to their Git toplevel path.
+
+Values are absolute directory names without trailing slash.
+Non-repo directories are memoized as nil to avoid repeated probes.")
+
 (defun shaoline--git-top-level (dir)
   "Return top-level Git directory for DIR or nil.
-Avoids remote TRAMP paths and gracefully handles errors."
-  (when (and dir (not (file-remote-p dir)) (executable-find "git"))
-    (let ((default-directory dir))
+
+Fast and side-effect free:
+- Avoids TRAMP/remote paths
+- Uses `locate-dominating-file' to find .git without spawning Git
+- Memoizes results in `shaoline--git-top-cache'
+- Falls back to `git rev-parse --show-toplevel' only if necessary."
+  (when (and dir (not (file-remote-p dir)))
+    (let* ((dir (file-name-as-directory (expand-file-name dir)))
+           (cached (gethash dir shaoline--git-top-cache 'nohit)))
+      (if (not (eq cached 'nohit))
+          cached
+        (let ((top (locate-dominating-file dir ".git")))
+          (unless top
+            ;; Very rare fallback — ask Git once
+            (when (executable-find "git")
+              (let ((default-directory dir))
+                (setq top (ignore-errors
+                            (car (process-lines "git" "rev-parse" "--show-toplevel")))))))
+          (when top
+            (setq top (directory-file-name (expand-file-name top))))
+          (puthash dir top shaoline--git-top-cache)
+          top)))))
+
+(defun shaoline--read-file-first-line-literally (file &optional max-bytes)
+  "Return first line of FILE as a raw string without coding conversion.
+Reads at most MAX-BYTES (default 256). Returns nil if FILE is not readable."
+  (let ((limit (or max-bytes 256)))
+    (when (and file (file-readable-p file))
       (condition-case nil
-          (car (process-lines "git" "rev-parse" "--show-toplevel"))
+          (with-temp-buffer
+            (let ((coding-system-for-read 'no-conversion))
+              (insert-file-contents-literally file nil 0 limit))
+            (goto-char (point-min))
+            (let ((line (buffer-substring-no-properties
+                         (point-min)
+                         (or (save-excursion
+                               (when (search-forward "\n" nil t)
+                                 (match-beginning 0)))
+                             (min (+ (point-min) limit) (point-max))))))
+              (string-trim-right line)))
         (error nil)))))
+
+(defun shaoline--gitdir-path (toplevel)
+  "Return absolute gitdir path for repo TOPLEVEL.
+Handles both .git directories and worktree-style .git files with a gitdir: pointer."
+  (let* ((dotgit (expand-file-name ".git" toplevel)))
+    (cond
+     ((file-directory-p dotgit) dotgit)
+     ((file-regular-p dotgit)
+      (let ((line (shaoline--read-file-first-line-literally dotgit 256)))
+        (when (and line
+                   (string-match "\\`gitdir:\\s-*\\(.+\\)\\'" (string-trim line)))
+          (expand-file-name (match-string 1 line) toplevel))))
+     (t nil))))
 
 (defun shaoline--git-depsig (dir)
   "Return cache dependency signature for Git HEAD in DIR.
 Signature changes immediately when branch changes or new commit is checked out."
-  (when-let ((toplevel (shaoline--git-top-level dir)))
-    (let* ((default-directory toplevel)
-           (gitdir
-            (condition-case nil
-                (car (process-lines "git" "rev-parse" "--git-dir"))
-              (error ".git")))
-           (gitdir (expand-file-name gitdir toplevel))
-           (head (expand-file-name "HEAD" gitdir))
-           (head-mtime (when (file-exists-p head)
-                         (file-attribute-modification-time
-                          (file-attributes head))))
-           (ref-file
-            (and (file-exists-p head)
-                 (with-temp-buffer
-                   (insert-file-contents head)
-                   (goto-char (point-min))
-                   (when (looking-at "ref: \\(.+\\)")
-                     (expand-file-name (match-string 1) gitdir)))))
-           (ref-mtime (when (and ref-file (file-exists-p ref-file))
-                        (file-attribute-modification-time
-                         (file-attributes ref-file)))))
+  (when-let* ((toplevel (shaoline--git-top-level dir))
+              (gitdir (shaoline--gitdir-path toplevel)))
+    (let* ((head (expand-file-name "HEAD" gitdir))
+           (head-attrs (and (file-exists-p head) (file-attributes head)))
+           (head-mtime (and head-attrs (file-attribute-modification-time head-attrs)))
+           (head-line (and head-attrs (shaoline--read-file-first-line-literally head 256)))
+           (ref-file (when (and head-line (string-match "\\`ref:\\s-*\\(.+\\)\\'" head-line))
+                       (expand-file-name (match-string 1 head-line) gitdir)))
+           (ref-attrs (and ref-file (file-exists-p ref-file) (file-attributes ref-file)))
+           (ref-mtime (and ref-attrs (file-attribute-modification-time ref-attrs))))
       (list toplevel head-mtime ref-mtime))))
 
 (defun shaoline--git-current-branch (dir)
   "Return current branch name for DIR, or detached short SHA if not on a branch."
-  (when-let ((toplevel (shaoline--git-top-level dir)))
-    (let ((default-directory toplevel))
-      (or
-       (condition-case nil
-           (car (process-lines "git" "symbolic-ref" "--quiet" "--short" "HEAD"))
-         (error nil))
-       (condition-case nil
-           (let ((sha (car (process-lines "git" "rev-parse" "--short" "HEAD"))))
-             (format "detached:%s" sha))
-         (error nil))))))
+  (when-let* ((toplevel (shaoline--git-top-level dir))
+              (gitdir (shaoline--gitdir-path toplevel)))
+    (let* ((head (expand-file-name "HEAD" gitdir))
+           (line (shaoline--read-file-first-line-literally head 256)))
+      (cond
+       ;; ref: refs/heads/feature/xyz
+       ((and line (string-match "\\`ref:\\s-*\\(.+\\)\\'" line))
+        (let* ((ref (string-trim (match-string 1 line)))
+               (name (replace-regexp-in-string "\\`refs/heads/" "" ref)))
+          name))
+       ;; Detached HEAD with a SHA in HEAD
+       ((and line (string-match "\\`[0-9a-fA-F]\\{7,\\}" (string-trim line)))
+        (format "detached:%s" (downcase (substring (string-trim line) 0 7))))
+       (t nil)))))
 
 (shaoline-define-segment shaoline-segment-git-branch ()
   "Current Git branch with icon. Works in non-file buffers (e.g., Dired)."
