@@ -45,7 +45,8 @@ buffer actually displayed, preventing the brief echo-area flash."
 (defun shaoline-update (&optional force)
   "Update Shaoline display with optional FORCE override."
   (interactive "P")
-  (unless shaoline--update-in-progress
+  (unless (and (boundp 'shaoline--update-in-progress)
+               shaoline--update-in-progress)
     (let ((shaoline--update-in-progress t)
           (start-time (float-time)))
       (shaoline--with-visible-buffer
@@ -112,6 +113,10 @@ Use \\[shaoline-clear] to clear display."
 
 (defun shaoline--activate ()
   "Activate Shaoline with current strategy."
+  ;; Fail-open: ensure shared vars exist before any advice/timers can run.
+  (when (fboundp 'shaoline--ensure-shared-vars)
+    (shaoline--ensure-shared-vars))
+
   ;; Initialize state
   (shaoline--state-put :last-content "")
   (shaoline--state-put :cache (make-hash-table :test 'equal))
@@ -120,9 +125,12 @@ Use \\[shaoline-clear] to clear display."
   (shaoline--start-rate-limiting)
 
   ;; Apply initial strategy
-  (if (eq shaoline-mode-strategy 'adaptive)
-      (shaoline-switch-to-adaptive)
-    (shaoline--apply-strategy shaoline-mode-strategy))
+  (let ((strategy (or (and (boundp 'shaoline-mode-strategy)
+                           shaoline-mode-strategy)
+                      'yang)))
+    (if (eq strategy 'adaptive)
+        (shaoline-switch-to-adaptive)
+      (shaoline--apply-strategy strategy)))
 
 
 

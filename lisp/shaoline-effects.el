@@ -32,8 +32,44 @@
 (defvar shaoline--msg-update-timer nil
   "Timer used to coalesce bursts of message/minibuffer-message updates.")
 
+(defun shaoline--ensure-shared-vars ()
+  "Ensure shared Shaoline state variables are bound to safe defaults.
+
+This is a fail-open guard: even if the user has mixed/old .elc/.eln or
+multiple Shaoline copies in `load-path', or is live-reloading files while
+`shaoline-mode' is active, advice/hooks must not brick Emacs with repeated
+void-variable errors."
+  (unless (boundp 'shaoline--composing-p)
+    (setq shaoline--composing-p nil))
+  (unless (boundp 'shaoline--pending-updates)
+    (setq shaoline--pending-updates 0))
+  (unless (boundp 'shaoline--message-pinned-until)
+    (setq shaoline--message-pinned-until 0))
+  (unless (boundp 'shaoline--update-bucket)
+    (setq shaoline--update-bucket 0))
+  ;; Hot-path vars used from hooks/advice/timers (must never be void).
+  (unless (boundp 'shaoline--echo-area-input-depth)
+    (setq shaoline--echo-area-input-depth 0))
+  (unless (boundp 'shaoline--last-busy-log-state)
+    (setq shaoline--last-busy-log-state nil))
+  (unless (boundp 'shaoline--last-movement-update)
+    (setq shaoline--last-movement-update 0))
+  (unless (boundp 'shaoline--msg-update-timer)
+    (setq shaoline--msg-update-timer nil))
+  (unless (boundp 'shaoline--current-keys)
+    (setq shaoline--current-keys ""))
+  (unless (boundp 'shaoline--current-keys-time)
+    (setq shaoline--current-keys-time 0))
+  (unless (boundp 'shaoline--clear-keys-timer)
+    (setq shaoline--clear-keys-timer nil))
+  (unless (boundp 'shaoline--last-display-time)
+    (setq shaoline--last-display-time 0))
+  (unless (boundp 'shaoline--last-significant-state)
+    (setq shaoline--last-significant-state nil)))
+
 (defun shaoline--schedule-msg-update ()
   "Schedule a single debounced update for recent message bursts."
+  (shaoline--ensure-shared-vars)
   (unless shaoline--msg-update-timer
     (setq shaoline--msg-update-timer
           (run-with-timer
@@ -41,6 +77,9 @@
            (lambda ()
              (setq shaoline--msg-update-timer nil)
              (when (fboundp 'shaoline--debounced-update)
+               ;; Strategy uses `shaoline--pending-updates' (cl-incf).  If the user
+               ;; somehow ended up with an unbound variable, bind it fail-open.
+               (shaoline--ensure-shared-vars)
                (shaoline--debounced-update)))))))
 
 ;; shaoline--echo-area-input-depth is declared in shaoline-compat-vars.el
@@ -88,7 +127,7 @@ And optional BODY."
 (shaoline-defeffect shaoline--display (content)
   "Display CONTENT in echo area with Shaoline tagging, избегая лишних перерисовок."
   (shaoline--log "shaoline--display called in buffer: %s, content: %s" (buffer-name) content)
-  (when (and (not shaoline--composing-p)
+  (when (and (not (bound-and-true-p shaoline--composing-p))
              (shaoline--should-display-p content)
              (not (equal content (current-message))))   ; уже показываем? не трогаем.
     (shaoline--state-put :last-content content)
@@ -327,6 +366,7 @@ Preserved modes are left untouched (kept as the original default)."
 
 (defun shaoline--apply-strategy (strategy)
   "Apply STRATEGY by orchestrating appropriate effects."
+  (shaoline--ensure-shared-vars)
   (shaoline--cleanup-all-effects) ; Clean slate
 
   ;; ------------------------------------------------------------------
@@ -446,6 +486,7 @@ call `message` immediately afterwards.")
   "Store user messages for Shaoline around `message'.
 Gracefully ignore echo-area clears such as (message nil).
 Use ORIG-FUN, FORMAT-STRING and ARGS."
+  (shaoline--ensure-shared-vars)
   (if (not (shaoline--segment-enabled-p 'shaoline-segment-echo-message))
       (apply orig-fun format-string args)
     (let ((result (apply orig-fun format-string args))
@@ -454,27 +495,29 @@ Use ORIG-FUN, FORMAT-STRING and ARGS."
           (clean-text (when (stringp format-string)
                         (apply #'format format-string args))))
       ;; Save non-empty messages that are NOT produced by Shaoline itself.
-      (when (and (not shaoline--composing-p)
+      (when (and (not (bound-and-true-p shaoline--composing-p))
                  (stringp clean-text)
                  (<= (length clean-text) 2000)
                  (not (string-empty-p clean-text))
                  (not (and cmsg (get-text-property 0 'shaoline-origin cmsg))))
         ;; Respect pinned eval result: do not override for a short TTL,
         ;; unless it's the same text.
-        (if (and (< (float-time) shaoline--message-pinned-until)
-                 (not (equal clean-text (shaoline-msg-current))))
-            nil
-          (shaoline-msg-save clean-text)
-          (shaoline--schedule-msg-update)))
+        (let ((pinned-until shaoline--message-pinned-until))
+          (if (and (< (float-time) pinned-until)
+                   (not (equal clean-text (shaoline-msg-current))))
+              nil
+            (shaoline-msg-save clean-text)
+            (shaoline--schedule-msg-update))))
       result)))
 
 (defun shaoline--advice-capture-minibuffer-message (orig format-string &rest args)
   "Around advice on `minibuffer-message' to capture echo-only messages.
 Save non-empty messages that are not produced by Shaoline itself.
 Use ORIG, FORMAT-STRING and ARGS"
+  (shaoline--ensure-shared-vars)
   (let ((res (apply orig format-string args))
         (cmsg (current-message)))
-    (when (and (not shaoline--composing-p)
+    (when (and (not (bound-and-true-p shaoline--composing-p))
                (stringp format-string))
       (let ((text (apply #'format format-string args)))
         (when (and text
@@ -835,10 +878,11 @@ Reduced list focusing on major state changes.")
 
 (defun shaoline--display-cached ()
   "Display last cached content immediately without recomputation."
+  (shaoline--ensure-shared-vars)
   (let ((content (shaoline--state-get :last-content)))
     (shaoline--log "display-cached: content-len=%s"
                    (and (stringp content) (length content)))
-    (when (and (not shaoline--composing-p)
+    (when (and (not (bound-and-true-p shaoline--composing-p))
                content (not (string-empty-p content)))
       (let* ((tagged (propertize content 'shaoline-origin t))
              (message-log-max nil)

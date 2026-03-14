@@ -74,6 +74,26 @@
 (defvar shaoline--debounce-timer nil)
 (defvar shaoline--pending-updates 0)
 
+(defun shaoline--ensure-strategy-vars ()
+  "Ensure strategy hot-path variables are bound to safe defaults.
+
+Needed because these variables are read/incremented from timers/advice
+paths; if they are ever unbound (mixed builds, old .elc/.eln, or during
+live reload), Emacs can get stuck in repeated void-variable errors."
+  (unless (boundp 'shaoline--pending-updates)
+    (setq shaoline--pending-updates 0))
+  (unless (boundp 'shaoline--update-bucket)
+    (setq shaoline--update-bucket 0))
+  ;; Timers that may be read/cancelled from hot paths.
+  (unless (boundp 'shaoline--debounce-timer)
+    (setq shaoline--debounce-timer nil))
+  (unless (boundp 'shaoline--bucket-timer)
+    (setq shaoline--bucket-timer nil))
+  (unless (boundp 'shaoline--monitor-timer)
+    (setq shaoline--monitor-timer nil))
+  (unless (boundp 'shaoline--strategy-transition-timer)
+    (setq shaoline--strategy-transition-timer nil)))
+
 (defun shaoline--adaptive-debounce-delay ()
   "Calculate optimal debounce delay based on context and performance."
   (let* ((base-delay 0.1)
@@ -87,6 +107,7 @@
 
 (defun shaoline--debounced-update ()
   "Intelligent debounced update with adaptive timing."
+  (shaoline--ensure-strategy-vars)
   (cl-incf shaoline--pending-updates)
   (when shaoline--debounce-timer
     (cancel-timer shaoline--debounce-timer))
@@ -95,6 +116,7 @@
          (shaoline--adaptive-debounce-delay)
          nil
          (lambda ()
+           (shaoline--ensure-strategy-vars)
            (setq shaoline--pending-updates 0
                  shaoline--debounce-timer nil)
            (shaoline-update)))))
@@ -105,6 +127,7 @@
 
 (defun shaoline--system-under-stress-p ()
   "Detect if system is under stress and should reduce activity."
+  (shaoline--ensure-strategy-vars)
   (or (> shaoline--pending-updates 5)
       (> (plist-get shaoline--metrics :avg-update-time) 0.05)
       (when-let ((load (car (load-average))))
@@ -118,6 +141,7 @@
 
 (defun shaoline--transition-to-strategy (new-strategy &optional delay)
   "Transition to NEW-STRATEGY after optional DELAY."
+  (shaoline--ensure-strategy-vars)
   (when shaoline--strategy-transition-timer
     (cancel-timer shaoline--strategy-transition-timer))
   (if delay
@@ -168,8 +192,10 @@
 
 (defun shaoline--check-strategy-adaptation ()
   "Check if strategy should be adapted based on context change."
-  (when (and (eq shaoline-mode-strategy 'adaptive)
-             (shaoline--context-changed-p))
+  (when (and (eq (or (and (boundp 'shaoline-mode-strategy) shaoline-mode-strategy)
+                  'yang)
+              'adaptive)
+           (shaoline--context-changed-p))
     (let* ((current (shaoline--state-get :strategy))
            (optimal (shaoline--adaptive-strategy-selection)))
       (unless (eq current optimal)
@@ -186,6 +212,7 @@
 
 (defun shaoline--refill-bucket ()
   "Refill update bucket with tokens."
+  (shaoline--ensure-strategy-vars)
   (setq shaoline--update-bucket
         (min 10 (1+ shaoline--update-bucket))))
 
@@ -203,6 +230,7 @@
 
 (defun shaoline--consume-update-token (&optional mode)
   "Consume update token based on MODE (:light, :normal)."
+  (shaoline--ensure-strategy-vars)
   (pcase mode
     ;; Light mode: always allow if any tokens available, minimal cost
     ('light (when (> shaoline--update-bucket 0)

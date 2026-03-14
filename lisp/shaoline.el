@@ -851,7 +851,8 @@ No sliding refresh."
   "If `shaoline-debug' is non-nil, log a debug message to /shaoline-logs/ buffer.
 
 Use FMT and ARGS.  Also stays silent when `shaoline-mode' is disabled."
-  (when (and shaoline-debug shaoline-mode)
+  (when (and (bound-and-true-p shaoline-debug)
+             (bound-and-true-p shaoline-mode))
     (let* ((buf (get-buffer-create "*shaoline-logs*"))
            (ts (format-time-string "[%F %T] "))
            (msg (apply #'format fmt args)))
