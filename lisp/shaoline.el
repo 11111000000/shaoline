@@ -301,12 +301,89 @@ Provide a list of major-mode symbols, e.g., `help-mode`,
         :last-right-width 0)
   "Central state container.  All flows through here.")
 
+(defun shaoline--ensure-core-vars ()
+  "Ensure core Shaoline variables are bound to safe defaults.
+
+This is a fail-open guard for hot-path callers (advice/hooks/timers).
+It is especially important during hot reload workflows that temporarily
+`makunbound' defvars before reloading files."
+  (unless (boundp 'shaoline-mode-strategy)
+    (setq shaoline-mode-strategy 'yang))
+  (unless (boundp 'shaoline-hide-modeline)
+    (setq shaoline-hide-modeline t))
+  (unless (boundp 'shaoline-update-debounce)
+    (setq shaoline-update-debounce 0.25))
+  (unless (boundp 'shaoline-cache-ttl)
+    (setq shaoline-cache-ttl 2.0))
+  (unless (boundp 'shaoline-right-margin)
+    (setq shaoline-right-margin 1))
+  ;; Strategy table is consulted from hot paths (effects/strategy).
+  (unless (boundp 'shaoline--strategies)
+    (setq shaoline--strategies
+          '((yin    . ((update-method . manual)
+                       (use-hooks     . nil)
+                       (use-advice    . nil)
+                       (use-timers    . nil)
+                       (always-visible . nil)
+                       (hide-modelines . nil)))
+            (yang   . ((update-method . automatic)
+                       (use-hooks     . t)
+                       (use-advice    . t)
+                       (use-timers    . t)
+                       (always-visible . t)
+                       (hide-modelines . t)))
+            (adaptive . ((update-method . context)
+                         (use-hooks     . adaptive)
+                         (use-advice    . adaptive)
+                         (use-timers    . adaptive)
+                         (always-visible . adaptive)
+                         (hide-modelines . adaptive))))))
+  ;; Segment configuration is consulted frequently during composition.
+  (unless (boundp 'shaoline-segments)
+    (setq shaoline-segments
+          '((:left
+             shaoline-segment-major-mode-icon
+             shaoline-segment-buffer-name
+             shaoline-segment-modified)
+            (:center shaoline-segment-echo-message)
+            (:right
+             shaoline-segment-input-method
+             shaoline-segment-current-keys
+             shaoline-segment-position
+             shaoline-segment-project-name
+             shaoline-segment-git-branch
+             shaoline-segment-gptel-model
+             shaoline-segment-battery
+             shaoline-segment-time
+             shaoline-segment-moon-phase))))
+  ;; Logging trim threshold (used inside shaoline--log).
+  (unless (boundp 'shaoline--log-max-lines)
+    (setq shaoline--log-max-lines 1000)))
+
 (defun shaoline--state-get (key)
   "Retrieve KEY from central state."
+  (unless (boundp 'shaoline--state)
+    (setq shaoline--state
+          (list :last-content ""
+                :cache (make-hash-table :test 'equal)
+                :timers '()
+                :hooks '()
+                :strategy nil
+                :last-left-width 0
+                :last-right-width 0)))
   (plist-get shaoline--state key))
 
 (defun shaoline--state-put (key value)
   "Store VALUE at KEY in central state."
+  (unless (boundp 'shaoline--state)
+    (setq shaoline--state
+          (list :last-content ""
+                :cache (make-hash-table :test 'equal)
+                :timers '()
+                :hooks '()
+                :strategy nil
+                :last-left-width 0
+                :last-right-width 0)))
   (setq shaoline--state (plist-put shaoline--state key value)))
 
 ;; ----------------------------------------------------------------------------
@@ -324,11 +401,15 @@ Provide a list of major-mode symbols, e.g., `help-mode`,
 
 (defun shaoline-msg-current ()
   "Return current captured message, or nil."
-  shaoline--last-message)
+  (and (boundp 'shaoline--last-message) shaoline--last-message))
 
 (defun shaoline-msg-age ()
   "Return age of current message in seconds."
-  (- (float-time) shaoline--last-message-time))
+  (if (and (boundp 'shaoline--last-message-time)
+           (numberp shaoline--last-message-time))
+      (- (float-time) shaoline--last-message-time)
+    ;; If the timestamp is temporarily unbound (hot reload), treat as very old.
+    most-positive-fixnum))
 
 (defun shaoline-msg-clear ()
   "Clear captured message."
@@ -599,6 +680,25 @@ succession (e.g. by tab-bar formatters).  The cache is keyed by
 buffer, target width and current right margin and honored for
 =shaoline-compose-cache-ttl= seconds. Additionally limits real recomposition
 by =shaoline-compose-min-interval= to smooth out bursts."
+  ;; Hot reload safety: the user's reloader may temporarily (makunbound) defvars.
+  (unless (boundp 'shaoline--compose-cache)
+    (setq shaoline--compose-cache (make-hash-table :test 'equal)))
+  (unless (boundp 'shaoline--last-compose-time)
+    (setq shaoline--last-compose-time 0.0))
+  (unless (boundp 'shaoline-compose-cache-ttl)
+    (setq shaoline-compose-cache-ttl 0.5))
+  (unless (boundp 'shaoline-compose-min-interval)
+    (setq shaoline-compose-min-interval 0.2))
+  (unless (boundp 'shaoline-right-margin)
+    (setq shaoline-right-margin 1))
+  (unless (boundp 'shaoline-with-tray)
+    (setq shaoline-with-tray t))
+  (unless (boundp 'shaoline-tray-refresh-interval)
+    (setq shaoline-tray-refresh-interval 1.5))
+  (unless (boundp 'shaoline--last-margin-refresh-time)
+    (setq shaoline--last-margin-refresh-time 0))
+  (unless (boundp 'shaoline-tray-fixed-chars)
+    (setq shaoline-tray-fixed-chars nil))
   ;; Always refresh tray margin first (internally throttled), so the cache key
   ;; reflects the current right margin even on cache hits.
   (let* ((now (float-time))
@@ -780,11 +880,16 @@ No sliding refresh."
          (mb-depth (> (minibuffer-depth) 0))
          (active-mini (active-minibuffer-window)) ; диагностический журнал
          (cursor cursor-in-echo-area)
-         (ee-depth (> shaoline--echo-area-input-depth 0))
+         (ee-depth (> (if (boundp 'shaoline--echo-area-input-depth)
+                          shaoline--echo-area-input-depth
+                        0)
+                      0))
          (isearch (and (boundp 'isearch-mode) isearch-mode))
          (busy (or minibufp mb-depth cursor ee-depth isearch)))
     ;; Логуем только при смене состояния, чтобы не шуметь
-    (when (not (eq busy shaoline--last-busy-log-state))
+    (when (not (eq busy (if (boundp 'shaoline--last-busy-log-state)
+                            shaoline--last-busy-log-state
+                          nil)))
       (setq shaoline--last-busy-log-state busy)
       (shaoline--log "echo-busy?=%s (minibufferp=%s mb-depth>0=%s cursor=%s ee-depth>0=%s isearch=%s active-mini=%s)"
                      busy minibufp mb-depth cursor ee-depth isearch (and active-mini t)))
@@ -818,19 +923,30 @@ No sliding refresh."
 
 (defun shaoline--echo-area-stable-p ()
   "Check if echo-area has been stable (not busy) for enough time."
-  (let ((now (float-time)))
+  (let* ((now (float-time))
+         (last (if (and (boundp 'shaoline--last-busy-time)
+                        (numberp shaoline--last-busy-time))
+                   shaoline--last-busy-time
+                 0))
+         (delay (if (and (boundp 'shaoline--echo-area-stable-delay)
+                         (numberp shaoline--echo-area-stable-delay))
+                    shaoline--echo-area-stable-delay
+                  0.5)))
     (if (shaoline--echo-area-busy-p)
         (progn
           (setq shaoline--last-busy-time now)
           nil)
       ;; Стабильна достаточно долго
-      (> (- now shaoline--last-busy-time) shaoline--echo-area-stable-delay))))
+      (> (- now last) delay))))
 
 (defun shaoline--should-yield-echo-area-p ()
   "Comprehensive logic for when Shaoline should yield echo-area."
   (let* ((busy (shaoline--echo-area-busy-p))
-         (this (memq this-command shaoline--input-sensitive-commands))
-         (last (memq last-command shaoline--input-sensitive-commands))
+         (cmds (if (boundp 'shaoline--input-sensitive-commands)
+                   shaoline--input-sensitive-commands
+                 nil))
+         (this (memq this-command cmds))
+         (last (memq last-command cmds))
          (yield (or busy this last)))
     (when yield
       (shaoline--log "yield-echo-area: busy=%s this=%s last=%s this-cmd=%s last-cmd=%s"

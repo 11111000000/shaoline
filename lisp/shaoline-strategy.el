@@ -56,6 +56,7 @@
 
 (defun shaoline--record-performance (start-time)
   "Record performance metrics from START-TIME."
+  (shaoline--ensure-strategy-vars)
   (let* ((duration (- (float-time) start-time))
          (count (1+ (plist-get shaoline--metrics :update-count)))
          (total (+ duration (plist-get shaoline--metrics :total-time)))
@@ -84,6 +85,13 @@ live reload), Emacs can get stuck in repeated void-variable errors."
     (setq shaoline--pending-updates 0))
   (unless (boundp 'shaoline--update-bucket)
     (setq shaoline--update-bucket 0))
+  ;; Performance metrics may be read from update hot-path (mode layer).
+  (unless (boundp 'shaoline--metrics)
+    (setq shaoline--metrics
+          '(:update-count 0
+            :total-time 0.0
+            :last-update-time 0.0
+            :avg-update-time 0.0)))
   ;; Timers that may be read/cancelled from hot paths.
   (unless (boundp 'shaoline--debounce-timer)
     (setq shaoline--debounce-timer nil))
@@ -96,6 +104,7 @@ live reload), Emacs can get stuck in repeated void-variable errors."
 
 (defun shaoline--adaptive-debounce-delay ()
   "Calculate optimal debounce delay based on context and performance."
+  (shaoline--ensure-strategy-vars)
   (let* ((base-delay 0.1)
          (size-factor (min 2.0 (/ (buffer-size) 50000.0)))
          (load-factor (if-let ((load (car (load-average))))
@@ -180,12 +189,14 @@ live reload), Emacs can get stuck in repeated void-variable errors."
 
 (defun shaoline--start-context-monitoring ()
   "Start monitoring context for adaptive strategy change."
+  (shaoline--ensure-strategy-vars)
   (unless shaoline--monitor-timer
     (setq shaoline--monitor-timer
           (run-with-timer 2.0 2.0 #'shaoline--check-strategy-adaptation))))
 
 (defun shaoline--stop-context-monitoring ()
   "Stop context monitoring."
+  (shaoline--ensure-strategy-vars)
   (when shaoline--monitor-timer
     (cancel-timer shaoline--monitor-timer)
     (setq shaoline--monitor-timer nil)))
@@ -218,12 +229,14 @@ live reload), Emacs can get stuck in repeated void-variable errors."
 
 (defun shaoline--start-rate-limiting ()
   "Start token bucket rate limiting."
+  (shaoline--ensure-strategy-vars)
   (unless shaoline--bucket-timer
     (setq shaoline--bucket-timer
           (run-with-timer 0.25 0.25 #'shaoline--refill-bucket))))
 
 (defun shaoline--stop-rate-limiting ()
   "Stop rate limiting."
+  (shaoline--ensure-strategy-vars)
   (when shaoline--bucket-timer
     (cancel-timer shaoline--bucket-timer)
     (setq shaoline--bucket-timer nil)))

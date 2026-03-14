@@ -39,6 +39,9 @@ This is a fail-open guard: even if the user has mixed/old .elc/.eln or
 multiple Shaoline copies in `load-path', or is live-reloading files while
 `shaoline-mode' is active, advice/hooks must not brick Emacs with repeated
 void-variable errors."
+  ;; Centralized rebinding for hot-reload / makunbound workflows.
+  (when (fboundp 'shaoline--ensure-hot-vars)
+    (shaoline--ensure-hot-vars))
   (unless (boundp 'shaoline--composing-p)
     (setq shaoline--composing-p nil))
   (unless (boundp 'shaoline--pending-updates)
@@ -65,7 +68,26 @@ void-variable errors."
   (unless (boundp 'shaoline--last-display-time)
     (setq shaoline--last-display-time 0))
   (unless (boundp 'shaoline--last-significant-state)
-    (setq shaoline--last-significant-state nil)))
+    (setq shaoline--last-significant-state nil))
+  ;; Hot-path: read in message advice; must never be void.
+  (unless (boundp 'shaoline--allow-empty-message)
+    (setq shaoline--allow-empty-message nil))
+  ;; Registries are mutated (push/setq) from hooks/advice/timers; must never be void.
+  (unless (boundp 'shaoline--active-effects)
+    (setq shaoline--active-effects nil))
+  (unless (boundp 'shaoline--hook-registry)
+    (setq shaoline--hook-registry nil))
+  (unless (boundp 'shaoline--advice-registry)
+    (setq shaoline--advice-registry nil))
+  (unless (boundp 'shaoline--timer-registry)
+    (setq shaoline--timer-registry (make-hash-table)))
+  (unless (boundp 'shaoline--modeline-backup-registry)
+    (setq shaoline--modeline-backup-registry (make-hash-table :weakness 'key)))
+  (unless (boundp 'shaoline--original-default-modeline)
+    (setq shaoline--original-default-modeline nil))
+  ;; Effect log is pushed to from many paths; must never be void.
+  (unless (boundp 'shaoline--effect-log)
+    (setq shaoline--effect-log nil)))
 
 (defun shaoline--schedule-msg-update ()
   "Schedule a single debounced update for recent message bursts."
@@ -223,20 +245,27 @@ And optional BODY."
 
 If the first arg to `message' is nil or an empty/whitespace-only
 string and `shaoline--allow-empty-message' is nil, suppress the
-call; otherwise forward to ORIG with ARGS."
-  (let* ((fmt (car args)))
-    (cond
-     ;; nil means clear; block unless explicitly allowed
-     ((and (null fmt) (not shaoline--allow-empty-message))
-      nil)
-     ;; empty/whitespace strings — block unless explicitly allowed
-     ((and (stringp fmt)
-           (string-empty-p (string-trim (format "%s" fmt)))
-           (not shaoline--allow-empty-message))
-      nil)
-     ;; anything else — pass through
-     (t
-      (apply orig args)))))
+call; otherwise forward to ORIG with ARGS.
+
+Fail-open: if anything goes wrong (e.g. hot reload / makunbound), do not
+brick Emacs — just call ORIG."
+  (condition-case _err
+      (progn
+        (shaoline--ensure-shared-vars)
+        (let* ((fmt (car args)))
+          (cond
+           ;; nil means clear; block unless explicitly allowed
+           ((and (null fmt) (not (bound-and-true-p shaoline--allow-empty-message)))
+            nil)
+           ;; empty/whitespace strings — block unless explicitly allowed
+           ((and (stringp fmt)
+                 (string-empty-p (string-trim (format "%s" fmt)))
+                 (not (bound-and-true-p shaoline--allow-empty-message)))
+            nil)
+           ;; anything else — pass through
+           (t
+            (apply orig args)))))
+    (error (apply orig args))))
 
 ;; ────────────────────────────────────────────────────────────
 ;;  新 advice: расширяем систему advice
@@ -248,14 +277,20 @@ call; otherwise forward to ORIG with ARGS."
 Если `cursor-in-echo-area' установлена, увеличиваем
 =shaoline--echo-area-input-depth' перед чтением события и
 уменьшаем после, тем самым отмечая период реального ввода в
-echo-area."
-  (if cursor-in-echo-area
+echo-area.
+
+Fail-open: do not interfere with input if Shaoline is mid-reload."
+  (condition-case _err
       (progn
-        (cl-incf shaoline--echo-area-input-depth)
-        (unwind-protect
-            (apply orig args)
-          (cl-decf shaoline--echo-area-input-depth)))
-    (apply orig args)))
+        (shaoline--ensure-shared-vars)
+        (if cursor-in-echo-area
+            (progn
+              (cl-incf shaoline--echo-area-input-depth)
+              (unwind-protect
+                  (apply orig args)
+                (cl-decf shaoline--echo-area-input-depth)))
+          (apply orig args)))
+    (error (apply orig args))))
 
 (shaoline-defeffect shaoline--detach-advice (function advice-fn)
   "Detach ADVICE-FN from FUNCTION."
@@ -281,7 +316,9 @@ echo-area."
 
 (shaoline-defeffect shaoline--hide-mode-line ()
   "Hide traditional mode-line in current buffer when not preserved."
-  (unless (member major-mode shaoline-preserve-modeline-modes)
+  (unless (member major-mode (or (and (boundp 'shaoline-preserve-modeline-modes)
+                                     shaoline-preserve-modeline-modes)
+                                nil))
     (unless (gethash (current-buffer) shaoline--modeline-backup-registry)
       ;; Save original mode-line-format (registry + buffer-local var)
       (puthash (current-buffer) mode-line-format shaoline--modeline-backup-registry)
@@ -315,7 +352,9 @@ Preserved modes are left untouched (kept as the original default)."
 (defun shaoline--ensure-preserved-modeline ()
   "For new buffers, restore default mode-line for preserved modes; otherwise hide."
   (when shaoline-mode
-    (if (member major-mode shaoline-preserve-modeline-modes)
+    (if (member major-mode (or (and (boundp 'shaoline-preserve-modeline-modes)
+                                   shaoline-preserve-modeline-modes)
+                              nil))
         (progn
           ;; Ensure preserved modes keep a proper modeline even though the default is nil
           (when shaoline--original-default-modeline
@@ -384,7 +423,8 @@ Preserved modes are left untouched (kept as the original default)."
     (remove-hook 'post-command-hook #'shaoline--reassert-yang-visibility)
     (setq shaoline--hook-registry
           (assq-delete-all 'post-command-hook shaoline--hook-registry))
-    (when (timerp shaoline--yang-timer)
+    (when (and (boundp 'shaoline--yang-timer)
+               (timerp shaoline--yang-timer))
       (cancel-timer shaoline--yang-timer)
       (setq shaoline--yang-timer nil)))
 
@@ -458,7 +498,8 @@ Preserved modes are left untouched (kept as the original default)."
   (shaoline--cleanup-all-advice)
   (shaoline--cleanup-all-modelines)
   ;; Cancel pending deferred restore, if any
-  (when (timerp shaoline--restore-timer)
+  (when (and (boundp 'shaoline--restore-timer)
+             (timerp shaoline--restore-timer))
     (cancel-timer shaoline--restore-timer)
     (setq shaoline--restore-timer nil))
   ;; Also cancel yang reassert timer if present, and ensure hook is removed
@@ -485,48 +526,64 @@ call `message` immediately afterwards.")
 (defun shaoline--advice-capture-message (orig-fun format-string &rest args)
   "Store user messages for Shaoline around `message'.
 Gracefully ignore echo-area clears such as (message nil).
-Use ORIG-FUN, FORMAT-STRING and ARGS."
-  (shaoline--ensure-shared-vars)
-  (if (not (shaoline--segment-enabled-p 'shaoline-segment-echo-message))
-      (apply orig-fun format-string args)
-    (let ((result (apply orig-fun format-string args))
-          (cmsg (current-message))
-          ;; Only try to format when the first arg is really a string.
-          (clean-text (when (stringp format-string)
-                        (apply #'format format-string args))))
-      ;; Save non-empty messages that are NOT produced by Shaoline itself.
-      (when (and (not (bound-and-true-p shaoline--composing-p))
-                 (stringp clean-text)
-                 (<= (length clean-text) 2000)
-                 (not (string-empty-p clean-text))
-                 (not (and cmsg (get-text-property 0 'shaoline-origin cmsg))))
-        ;; Respect pinned eval result: do not override for a short TTL,
-        ;; unless it's the same text.
-        (let ((pinned-until shaoline--message-pinned-until))
-          (if (and (< (float-time) pinned-until)
-                   (not (equal clean-text (shaoline-msg-current))))
-              nil
-            (shaoline-msg-save clean-text)
-            (shaoline--schedule-msg-update))))
-      result)))
+Use ORIG-FUN, FORMAT-STRING and ARGS.
+
+Fail-open: if Shaoline is mid-reload / vars are temporarily unbound, never
+brick Emacs — fall back to calling ORIG-FUN."
+  (condition-case _err
+      (progn
+        (shaoline--ensure-shared-vars)
+        (if (not (shaoline--segment-enabled-p 'shaoline-segment-echo-message))
+            (apply orig-fun format-string args)
+          (let ((result (apply orig-fun format-string args))
+                (cmsg (current-message))
+                ;; Only try to format when the first arg is really a string.
+                (clean-text (when (stringp format-string)
+                              (apply #'format format-string args))))
+            ;; Save non-empty messages that are NOT produced by Shaoline itself.
+            (when (and (not (bound-and-true-p shaoline--composing-p))
+                       (stringp clean-text)
+                       (<= (length clean-text) 2000)
+                       (not (string-empty-p clean-text))
+                       (not (and cmsg (get-text-property 0 'shaoline-origin cmsg))))
+              ;; Respect pinned eval result: do not override for a short TTL,
+              ;; unless it's the same text.
+              (let ((pinned-until (if (boundp 'shaoline--message-pinned-until)
+                                      shaoline--message-pinned-until
+                                    0)))
+                (if (and (< (float-time) pinned-until)
+                         (fboundp 'shaoline-msg-current)
+                         (not (equal clean-text (shaoline-msg-current))))
+                    nil
+                  (when (fboundp 'shaoline-msg-save)
+                    (shaoline-msg-save clean-text))
+                  (shaoline--schedule-msg-update))))
+            result)))
+    (error (apply orig-fun format-string args))))
 
 (defun shaoline--advice-capture-minibuffer-message (orig format-string &rest args)
   "Around advice on `minibuffer-message' to capture echo-only messages.
 Save non-empty messages that are not produced by Shaoline itself.
-Use ORIG, FORMAT-STRING and ARGS"
-  (shaoline--ensure-shared-vars)
-  (let ((res (apply orig format-string args))
-        (cmsg (current-message)))
-    (when (and (not (bound-and-true-p shaoline--composing-p))
-               (stringp format-string))
-      (let ((text (apply #'format format-string args)))
-        (when (and text
-                   (<= (length text) 2000)
-                   (not (string-empty-p text))
-                   (not (and cmsg (get-text-property 0 'shaoline-origin cmsg))))
-          (shaoline-msg-save text)
-          (shaoline--schedule-msg-update))))
-    res))
+Use ORIG, FORMAT-STRING and ARGS
+
+Fail-open: never brick Emacs during hot reload — on any error call ORIG."
+  (condition-case _err
+      (progn
+        (shaoline--ensure-shared-vars)
+        (let ((res (apply orig format-string args))
+              (cmsg (current-message)))
+          (when (and (not (bound-and-true-p shaoline--composing-p))
+                     (stringp format-string))
+            (let ((text (apply #'format format-string args)))
+              (when (and text
+                         (<= (length text) 2000)
+                         (not (string-empty-p text))
+                         (not (and cmsg (get-text-property 0 'shaoline-origin cmsg))))
+                (when (fboundp 'shaoline-msg-save)
+                  (shaoline-msg-save text))
+                (shaoline--schedule-msg-update))))
+          res))
+    (error (apply orig format-string args))))
 
 (defun shaoline--save-eval-result (value)
   "Format and pin VALUE (result of eval) for Shaoline's message segment."
@@ -617,11 +674,15 @@ Runs only on successful evaluation, so it stays out of error backtraces."
 
 (defun shaoline--post-command-restore ()
   "Delayed restoration after command completion (single pending timer)."
+  (shaoline--ensure-shared-vars)
   (shaoline--log "post-command-restore: yield=%s pending=%S"
                  (shaoline--should-yield-echo-area-p)
-                 (and (timerp shaoline--restore-timer) shaoline--restore-timer))
+                 (and (boundp 'shaoline--restore-timer)
+                      (timerp shaoline--restore-timer)
+                      shaoline--restore-timer))
   (unless (shaoline--should-yield-echo-area-p)
-    (unless (timerp shaoline--restore-timer)
+    (unless (and (boundp 'shaoline--restore-timer)
+                 (timerp shaoline--restore-timer))
       (setq shaoline--restore-timer
             (run-with-idle-timer
              0.25 nil
@@ -811,6 +872,7 @@ Reduced list focusing on major state changes.")
 3. «Движение» (`shaoline--movement-commands`) — не чаще, чем раз в
    `shaoline-update-debounce` секунд.
 4. В остальных случаях полагаемся на `shaoline--significant-change-p`."
+  (shaoline--ensure-shared-vars)
   (and
    ;; Основное правило: НЕ обновляем если echo-area должна быть свободной
    (not (shaoline--should-yield-echo-area-p))
@@ -820,7 +882,7 @@ Reduced list focusing on major state changes.")
     ;; Частые перемещения курсора — тротлим
     ((memq command shaoline--movement-commands)
      (> (- (float-time) shaoline--last-movement-update)
-        shaoline-update-debounce))
+        (or (and (boundp 'shaoline-update-debounce) shaoline-update-debounce) 0.25)))
     ;; Всё остальное — по изменению значимого состояния
     (t (shaoline--significant-change-p)))))
 
@@ -831,6 +893,7 @@ Reduced list focusing on major state changes.")
 
 (defun shaoline--smart-post-command-update ()
   "Smart post-command update that reduces unnecessary update."
+  (shaoline--ensure-shared-vars)
   ;; Логируем для отладки
   (shaoline--log "post-command: %s, busy: %s, yield: %s"
                  this-command

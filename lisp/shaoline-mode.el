@@ -49,19 +49,34 @@ buffer actually displayed, preventing the brief echo-area flash."
                shaoline--update-in-progress)
     (let ((shaoline--update-in-progress t)
           (start-time (float-time)))
-      (shaoline--with-visible-buffer
-       (lambda ()
-         (let ((permit (or force (shaoline--should-update-p))))
-           (shaoline--log "shaoline-update: force=%s permit=%s buffer=%s"
-                          force permit (buffer-name))
-           (when permit
-             (let ((content (shaoline-compose)))
-               (shaoline--log "shaoline-update: composed len=%s"
-                              (and (stringp content) (length content)))
-               (when (or force (shaoline--should-display-p content))
-                 (shaoline--display content)))))))
+      (condition-case _err
+          (shaoline--with-visible-buffer
+           (lambda ()
+             (let ((permit (or force
+                              (and (fboundp 'shaoline--should-update-p)
+                                   (condition-case _e
+                                       (shaoline--should-update-p)
+                                     (error nil))))))
+               (shaoline--log "shaoline-update: force=%s permit=%s buffer=%s"
+                              force permit (buffer-name))
+               (when permit
+                 (let ((content (condition-case _e (shaoline-compose) (error ""))))
+                   (shaoline--log "shaoline-update: composed len=%s"
+                                  (and (stringp content) (length content)))
+                   (when (and (stringp content)
+                              (not (string-empty-p content))
+                              (or force
+                                  (condition-case _e (shaoline--should-display-p content)
+                                    (error nil))))
+                     (condition-case _e
+                         (shaoline--display content)
+                       (error nil))))))))
+        (error nil))
       ;; Record performance after the visible-buffer work
-      (shaoline--record-performance start-time))))
+      (when (fboundp 'shaoline--record-performance)
+        (condition-case _err
+            (shaoline--record-performance start-time)
+          (error nil))))))
 
 ;; ----------------------------------------------------------------------------
 ;; Manual Control Functions — User Agency

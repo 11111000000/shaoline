@@ -89,7 +89,9 @@ When truncation occurs, an ellipsis character (…) is appended."
 (shaoline-define-segment shaoline-segment-buffer-name ()
   "Buffer name with yang energy."
   (let* ((name (buffer-name))
-         (maxlen shaoline-buffer-name-max-length)
+         (maxlen (if (boundp 'shaoline-buffer-name-max-length)
+                     shaoline-buffer-name-max-length
+                   42))
          (display (if (and (integerp maxlen)
                            (> maxlen 0)
                            (> (length name) maxlen))
@@ -108,7 +110,7 @@ When truncation occurs, an ellipsis character (…) is appended."
    "major-mode"
    (list major-mode (display-graphic-p) shaoline-enable-dynamic-segments)
    (lambda ()
-     (let ((icon (when (and shaoline-enable-dynamic-segments
+     (let ((icon (when (and (bound-and-true-p shaoline-enable-dynamic-segments)
                             (display-graphic-p)
                             (featurep 'all-the-icons)
                             major-mode)
@@ -123,12 +125,12 @@ When truncation occurs, an ellipsis character (…) is appended."
   "Major mode icon only (GUI) or abbreviated text (TTY)."
   (shaoline--cached-call
    (shaoline--cache-key "mode-icon" major-mode (display-graphic-p))
-   shaoline-cache-ttl
+   (or (and (boundp 'shaoline-cache-ttl) (numberp shaoline-cache-ttl) shaoline-cache-ttl) 2.0)
    (lambda ()
      (cond
       ;; GUI with icons
       ((and (display-graphic-p)
-            shaoline-enable-dynamic-segments
+            (bound-and-true-p shaoline-enable-dynamic-segments)
             (featurep 'all-the-icons)
             major-mode)
        (shaoline--icon #'all-the-icons-icon-for-mode major-mode))
@@ -292,7 +294,7 @@ Signature changes immediately when branch changes or new commit is checked out."
        (lambda ()
          (when-let ((branch (shaoline--git-current-branch dir)))
            (concat
-            (when (and shaoline-enable-dynamic-segments
+            (when (and (bound-and-true-p shaoline-enable-dynamic-segments)
                        (display-graphic-p)
                        (featurep 'all-the-icons))
               (concat (shaoline--icon #'all-the-icons-octicon "git-branch" :face 'shaoline-git-face) " "))
@@ -359,12 +361,12 @@ collapse the ongoing literal input so that instead of
 
 (shaoline-define-segment shaoline-segment-time ()
   "Digital clock display."
-  (when shaoline-enable-dynamic-segments
+  (when (bound-and-true-p shaoline-enable-dynamic-segments)
     (propertize (format-time-string "%R") 'face 'shaoline-time-face)))
 
 (shaoline-define-segment shaoline-segment-digital-clock ()
   "Digital clock with padding."
-  (when shaoline-enable-dynamic-segments
+  (when (bound-and-true-p shaoline-enable-dynamic-segments)
     (propertize (format-time-string " %R ") 'face 'shaoline-time-face)))
 
 (defcustom shaoline-day-date-with-year nil
@@ -374,8 +376,10 @@ collapse the ongoing literal input so that instead of
 
 (shaoline-define-segment shaoline-segment-day-date (&rest args)
   "Date segment with optional year."
-  (when shaoline-enable-dynamic-segments
-    (let* ((with-year (or (plist-get args :with-year) shaoline-day-date-with-year))
+  (when (bound-and-true-p shaoline-enable-dynamic-segments)
+    (let* ((with-year (or (plist-get args :with-year)
+                          (and (boundp 'shaoline-day-date-with-year) shaoline-day-date-with-year)
+                          nil))
            (fmt (if with-year "%d.%m.%Y" "%d.%m")))
       (propertize (format-time-string fmt) 'face 'shaoline-date-face))))
 
@@ -420,7 +424,7 @@ fraction is 0..1 (0=new moon), info contains :prev, :next, :span, :age."
 
 (shaoline-define-segment shaoline-segment-moon-phase ()
   "Moon phase indicator (8-step), with lunar.el precision when available."
-  (when shaoline-enable-dynamic-segments
+  (when (bound-and-true-p shaoline-enable-dynamic-segments)
     (shaoline--cached-call
      (shaoline--cache-key "moon" (floor (/ (float-time) 3600)))
      3600.0 ; Cache for one hour
@@ -568,17 +572,20 @@ If DATA cannot be parsed, return FALLBACK."
 
 (shaoline-define-segment shaoline-segment-battery ()
   "Battery status without heavy D-Bus polling; cached."
-  (if (not shaoline-enable-dynamic-segments)
+  (if (not (bound-and-true-p shaoline-enable-dynamic-segments))
       ""
     (shaoline--cached-call
      "battery-status"
-     shaoline-battery-update-interval
+     (or (and (boundp 'shaoline-battery-update-interval)
+              (numberp shaoline-battery-update-interval)
+              shaoline-battery-update-interval)
+         60.0)
      (lambda ()
        (let ((fallback (propertize "N/A" 'face 'shaoline-battery-face)))
          (let* ((status-fn
                  (or
                   ;; Prefer the fast non-DBus backend when available
-                  (and shaoline-battery-prefer-linux-sysfs
+                  (and (bound-and-true-p shaoline-battery-prefer-linux-sysfs)
                        (fboundp 'battery-linux-sysfs)
                        #'battery-linux-sysfs)
                   ;; Respect dynamically provided variable (tests, configs)
@@ -586,7 +593,7 @@ If DATA cannot be parsed, return FALLBACK."
                        (symbol-value 'battery-status-function))
                   ;; As a last resort, try loading battery now
                   (and (progn (require 'battery nil t) t)
-                       (or (and shaoline-battery-prefer-linux-sysfs
+                       (or (and (bound-and-true-p shaoline-battery-prefer-linux-sysfs)
                                 (fboundp 'battery-linux-sysfs)
                                 #'battery-linux-sysfs)
                            (and (boundp 'battery-status-function)
@@ -652,14 +659,22 @@ If DATA cannot be parsed, return FALLBACK."
 
 (shaoline-define-segment shaoline-segment-minor-modes ()
   "Display active minor modes."
-  (let ((now (float-time)))
-    (if (< (- now shaoline--minor-modes-timestamp) shaoline-minor-modes-cache-ttl)
+  (let ((now (float-time))
+        (ttl (or (and (boundp 'shaoline-minor-modes-cache-ttl)
+                      (numberp shaoline-minor-modes-cache-ttl)
+                      shaoline-minor-modes-cache-ttl)
+                 1.0)))
+    (if (< (- now shaoline--minor-modes-timestamp) ttl)
         shaoline--minor-modes-cache
       (setq shaoline--minor-modes-timestamp now
             shaoline--minor-modes-cache
             (let* ((gui-p (display-graphic-p))
-                   (icon-map shaoline-minor-modes-icon-map)
-                   (text-map shaoline-minor-modes-text-map)
+                   (icon-map (if (boundp 'shaoline-minor-modes-icon-map)
+                                 shaoline-minor-modes-icon-map
+                               nil))
+                   (text-map (if (boundp 'shaoline-minor-modes-text-map)
+                                 shaoline-minor-modes-text-map
+                               nil))
                    (modes (delq nil
                                 (mapcar
                                  (lambda (mode-pair)

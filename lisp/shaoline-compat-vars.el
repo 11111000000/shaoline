@@ -96,6 +96,52 @@
 (defvar shaoline--last-significant-state nil
   "Last significant state used for change detection in effects layer.")
 
+(defun shaoline--ensure-hot-vars ()
+  "Ensure Shaoline hot-path variables are bound to safe defaults.
+
+This function is intentionally conservative and fail-open: it is designed to
+run from advice/hooks/timers while Shaoline is active, including during
+hot-reload workflows that temporarily `makunbound' defvars."
+  ;; Core gates/state ----------------------------------------------------------
+  (unless (boundp 'shaoline-mode) (setq shaoline-mode nil))
+  (unless (boundp 'shaoline--composing-p) (setq shaoline--composing-p nil))
+  ;; Strategy hot vars ---------------------------------------------------------
+  (unless (boundp 'shaoline--pending-updates) (setq shaoline--pending-updates 0))
+  (unless (boundp 'shaoline--update-bucket) (setq shaoline--update-bucket 0))
+  (unless (boundp 'shaoline--debounce-timer) (setq shaoline--debounce-timer nil))
+  (unless (boundp 'shaoline--bucket-timer) (setq shaoline--bucket-timer nil))
+  (unless (boundp 'shaoline--monitor-timer) (setq shaoline--monitor-timer nil))
+  (unless (boundp 'shaoline--strategy-transition-timer) (setq shaoline--strategy-transition-timer nil))
+  (unless (boundp 'shaoline--metrics)
+    (setq shaoline--metrics
+          '(:update-count 0
+            :total-time 0.0
+            :last-update-time 0.0
+            :avg-update-time 0.0)))
+  ;; Effects hot vars ----------------------------------------------------------
+  (unless (boundp 'shaoline--message-pinned-until) (setq shaoline--message-pinned-until 0))
+  (unless (boundp 'shaoline--msg-update-timer) (setq shaoline--msg-update-timer nil))
+  (unless (boundp 'shaoline--allow-empty-message) (setq shaoline--allow-empty-message nil))
+  (unless (boundp 'shaoline--echo-area-input-depth) (setq shaoline--echo-area-input-depth 0))
+  (unless (boundp 'shaoline--last-busy-log-state) (setq shaoline--last-busy-log-state nil))
+  (unless (boundp 'shaoline--yang-timer) (setq shaoline--yang-timer nil))
+  (unless (boundp 'shaoline--restore-timer) (setq shaoline--restore-timer nil))
+  (unless (boundp 'shaoline--last-movement-update) (setq shaoline--last-movement-update 0))
+  (unless (boundp 'shaoline--current-keys) (setq shaoline--current-keys ""))
+  (unless (boundp 'shaoline--current-keys-time) (setq shaoline--current-keys-time 0))
+  (unless (boundp 'shaoline--clear-keys-timer) (setq shaoline--clear-keys-timer nil))
+  (unless (boundp 'shaoline--last-display-time) (setq shaoline--last-display-time 0))
+  (unless (boundp 'shaoline--last-significant-state) (setq shaoline--last-significant-state nil))
+  ;; Registries mutated from hot paths ----------------------------------------
+  (unless (boundp 'shaoline--active-effects) (setq shaoline--active-effects nil))
+  (unless (boundp 'shaoline--hook-registry) (setq shaoline--hook-registry nil))
+  (unless (boundp 'shaoline--advice-registry) (setq shaoline--advice-registry nil))
+  (unless (boundp 'shaoline--timer-registry) (setq shaoline--timer-registry (make-hash-table)))
+  (unless (boundp 'shaoline--modeline-backup-registry)
+    (setq shaoline--modeline-backup-registry (make-hash-table :weakness 'key)))
+  (unless (boundp 'shaoline--original-default-modeline) (setq shaoline--original-default-modeline nil))
+  (unless (boundp 'shaoline--effect-log) (setq shaoline--effect-log nil)))
+
 (provide 'shaoline-compat-vars)
 ;; Local Variables:
 ;; package-lint-main-file: "shaoline.el"
