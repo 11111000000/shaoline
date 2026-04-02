@@ -50,7 +50,7 @@
 ;; Icon helper – local to Shaoline
 ;; ---------------------------------------------------------------------------
 (defun shaoline--icon (generator icon &rest args)
-  "Render ICON via GENERATOR with unified metrics (height 0.9, no v-adjust)
+  "Render ICON via GENERATOR with unified metrics (height 0.6, no v-adjust)
 and raise the baseline by a customizable offset.
 
 GENERATOR is any `all-the-icons-*' function.
@@ -58,20 +58,53 @@ ICON      is its first argument.
 ARGS      are forwarded, but any :height or :v-adjust supplied by the caller
 are overridden to guarantee a consistent box size unless overridden by :raise.
 A :raise keyword argument can be provided to adjust the vertical alignment.
-If :raise is not provided, the default offset of −0.15 em is used."
+If :raise is not provided, the default offset of −0.10 em is used."
   (when (featurep 'all-the-icons)
-    (let* ((raise-offset (or (plist-get args :raise) -0.15))
+    (let* ((raise-offset (or (plist-get args :raise) -0.05))
            ;; Remove :raise from ARGS so it isn't passed to the generator
            (filtered-args
             (cl-loop for (k v) on args by #'cddr
                      unless (eq k :raise)
                      append (list k v)))
            (str (apply generator icon
-                       :height 0.9 :v-adjust 0
+                       :height 0.75 :v-adjust 0
                        filtered-args)))
       (when (stringp str)
         (propertize str 'display `(raise ,raise-offset))))))
 
+(defcustom shaoline-major-mode-icon-width 2
+  "Fixed width (in character cells) reserved for `shaoline-segment-major-mode-icon'.
+
+A stable fixed width prevents the whole Shaoline line from “jumping”
+horizontally when switching major modes whose icons have different widths.
+
+Set to 0 to disable padding/reserved space (legacy behavior)."
+  :type 'integer
+  :group 'shaoline)
+
+(defun shaoline--fixed-width (str width &optional pad-char)
+  "Return STR padded/truncated to exactly WIDTH columns.
+If STR is nil, treat it as empty. PAD-CHAR defaults to space."
+  (let* ((s (or str ""))
+         (w (max 0 (or width 0)))
+         (pad (or pad-char ?\s))
+         (sw (string-width s)))
+    (cond
+     ((<= w 0) s)
+     ((= sw w) s)
+     ((> sw w) (truncate-string-to-width s w nil nil ""))
+     (t (concat s (make-string (- w sw) pad))))))
+
+(defun shaoline--major-mode-icon-fallback ()
+  "Fallback 1-char marker when icon fonts are unavailable."
+  (let* ((raw (condition-case nil
+                  (format-mode-line mode-name)
+                (error "")))
+         (s (string-trim (format "%s" (or raw major-mode ""))))
+         (ch (if (and (stringp s) (> (length s) 0))
+                 (substring s 0 1)
+               "?")))
+    (propertize ch 'face 'shaoline-mode-face)))
 
 ;; ----------------------------------------------------------------------------
 ;; 二 Buffer Information — Identity and State
