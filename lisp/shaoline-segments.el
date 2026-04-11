@@ -757,37 +757,50 @@ If DATA cannot be parsed, return FALLBACK."
 
 (shaoline-define-segment shaoline-segment-gptel-model ()
   "Display the current gptel model (never empty)."
-  ;; Ensure gptel is loaded if available, but don't error if not in load-path.
-  (unless (featurep 'gptel)
-    (ignore-errors
-      (when-let ((lib (locate-library "gptel")))
-        (load lib nil 'nomessage))))
-  (let* ((model
-          (cond
-           ((and (boundp 'gptel-model) (symbolp gptel-model))
-            (symbol-name gptel-model))
-           ((and (boundp 'gptel-model) (stringp gptel-model))
-            gptel-model)
-           ((and (fboundp 'gptel--model-name) (boundp 'gptel-model))
-            (ignore-errors (gptel--model-name gptel-model)))
-           (t nil))))
-    (shaoline--log "gptel-seg: feature=%s model=%S backend=%s gui=%s"
-                   (featurep 'gptel)
-                   model
-                   (and (boundp 'gptel-backend)
-                        (ignore-errors (gptel-backend-name gptel-backend)))
-                   (display-graphic-p))
-    (let* ((model-str (or (and (stringp model) (not (string-empty-p model)) model)
-                          (and (boundp 'gptel-backend)
-                               (ignore-errors (gptel-backend-name gptel-backend)))
-                          ;; Final fallback so the segment is never empty:
-                          "gptel"))
-           ;; Always prefer a reliable emoji robot in GUI to avoid font issues
-           (icon (and (display-graphic-p) "🤖")))
-      (concat
-       (when (and icon (stringp icon) (not (string-empty-p icon)))
-         (concat icon " "))
-       (propertize model-str 'face 'shaoline-gptel-face)))));; ----------------------------------------------------------------------------
+  (cond
+   ;; agent-shell buffer — show its model
+   ((and (featurep 'agent-shell)
+         (boundp 'agent-shell-mode)
+         (derived-mode-p 'agent-shell-mode)
+         (fboundp 'agent-shell--state))
+    (when-let* ((state (ignore-errors (agent-shell--state)))
+                (model-id (map-nested-elt state '(:session :model-id))))
+      (let ((model-name (or (car (seq-find (lambda (model)
+                                             (string= (map-elt model :model-id) model-id))
+                                           (map-nested-elt state '(:session :models))))
+                            model-id)))
+        (propertize model-name 'face 'shaoline-gptel-face))))
+   ;; gptel buffer or generic — show gptel model
+   (t
+    (unless (featurep 'gptel)
+      (ignore-errors
+        (when-let ((lib (locate-library "gptel")))
+          (load lib nil 'nomessage))))
+    (let* ((model
+            (cond
+             ((and (boundp 'gptel-model) (symbolp gptel-model))
+              (symbol-name gptel-model))
+             ((and (boundp 'gptel-model) (stringp gptel-model))
+              gptel-model)
+             ((and (fboundp 'gptel--model-name) (boundp 'gptel-model))
+              (ignore-errors (gptel--model-name gptel-model)))
+             (t nil))))
+      (shaoline--log "gptel-seg: feature=%s model=%S backend=%s gui=%s"
+                     (featurep 'gptel)
+                     model
+                     (and (boundp 'gptel-backend)
+                          (ignore-errors (gptel-backend-name gptel-backend)))
+                     (display-graphic-p))
+      (let* ((model-str (or (and (stringp model) (not (string-empty-p model)) model)
+                            (and (boundp 'gptel-backend)
+                                 (ignore-errors (gptel-backend-name gptel-backend)))
+                            "gptel"))
+             (icon (and (display-graphic-p) "🤖")))
+        (concat
+         (when (and icon (stringp icon) (not (string-empty-p icon)))
+           (concat icon " "))
+         (propertize model-str 'face 'shaoline-gptel-face)))))))
+
 ;; 九 Utility Segments — Simple Building Blocks
 ;; ----------------------------------------------------------------------------
 

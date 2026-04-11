@@ -128,9 +128,16 @@ the line is composed."
   :type 'boolean
   :group 'shaoline)
 
-(defcustom shaoline-tray-refresh-interval 1.5
-  "Minimum seconds between tray margin recalculations."
+(defcustom shaoline-tray-refresh-interval 0.5
+  "Minimum seconds between tray margin recalculations.
+Reduced from 1.5 to 0.5 for faster reaction to tray changes."
   :type 'float
+  :group 'shaoline)
+
+(defcustom shaoline-tray-margin-buffer 3
+  "Additional buffer (in characters) between tray and Shaoline widgets.
+Prevents overlap when tray width measurement has slight inaccuracies."
+  :type 'integer
   :group 'shaoline)
 
 (defcustom shaoline-tray-fixed-chars nil
@@ -243,9 +250,16 @@ Verbose logs when shaoline-debug is non-nil."
 
         ;; 3) Convert to character cells
         (when (and pixels charw (> charw 0))
-          (let ((chars (ceiling (/ pixels (float charw)))))
-            (shaoline--log "tray-dbg: %s px ≈ %s chars (char-width=%s)" pixels chars charw)
-            chars)))))))
+          (let* ((chars (ceiling (/ pixels (float charw))))
+                 (buffer (if (and (boundp 'shaoline-tray-margin-buffer)
+                                  (integerp shaoline-tray-margin-buffer)
+                                  (> shaoline-tray-margin-buffer 0))
+                             shaoline-tray-margin-buffer
+                           3))
+                 (total (+ chars buffer)))
+            (shaoline--log "tray-dbg: %s px ≈ %s chars + %s buffer = %s total (char-width=%s)"
+                           pixels chars buffer total charw)
+            total)))))))
 
 (defun shaoline--refresh-right-margin ()
   "Recompute =shaoline-right-margin' when =shaoline-with-tray' is enabled.
@@ -464,12 +478,12 @@ Avoids hardcoded colors; lets the theme decide."
   :group 'shaoline)
 
 (defface shaoline-project-face
-  '((t :inherit font-lock-function-name-face))
+  '((t :inherit font-lock-function-name-face :foreground "#5e9fff" :weight bold))
   "Face for project name."
   :group 'shaoline)
 
 (defface shaoline-gptel-face
-  '((t :inherit shaoline-yin))
+  '((t :inherit shaoline-yin :foreground "#b259b6"))
   "Face for gptel model indicator."
   :group 'shaoline)
 
