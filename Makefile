@@ -1,6 +1,6 @@
 EMACS ?= emacs
 
-.PHONY: test test-core test-cache test-effects test-strategy byte-compile clean autoloads lint checkdoc compile-strict qa format-tabs format-docstrings format-comments fix-footers fix-local-vars autofix
+.PHONY: test test-core test-cache test-effects test-strategy test-e2e byte-compile clean autoloads lint checkdoc compile-strict qa format-tabs format-docstrings format-comments fix-footers fix-local-vars autofix
 
 
 # Run all tests
@@ -18,6 +18,10 @@ test-effects:
 
 test-strategy:
 	$(EMACS) -Q --batch -L lisp -l ert -l test/shaoline-strategy-test.el -f ert-run-tests-batch-and-exit
+
+# E2E vertical tests
+test-e2e:
+	$(EMACS) -Q --batch -L lisp -l ert -l test/shaoline-e2e-test.el -f ert-run-tests-batch-and-exit
 
 # Compilation and packaging
 byte-compile:
