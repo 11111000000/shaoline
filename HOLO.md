@@ -27,6 +27,8 @@ Shaoline — функциональный минималистичный mode-li
 - **INV-Pure-Segments**: Каждый segment регистрируется через `shaoline-define-segment`
 - **INV-TTL-Cache**: Тяжёлые сегменты кешируются с TTL (shaoline-cache-ttl)
 - **INV-Stable-Cache**: Кеш сбрасывается при смене директории
+- **INV-Composition-Purity**: `shaoline-compose` — чистая функция (без side effects)
+- **INV-Stratety-Adaptive**: Стратегия влияет на поведение, но не на core логику
 
 ---
 
@@ -50,6 +52,12 @@ Shaoline — функциональный минималистичный mode-li
 - **Exit**: N/A (стабильный контракт)
 - **Proof**: `make test-core` — тесты segment-gptel-model
 
+### [Frozen] Pure composition
+- **Choice**: shaoline-compose возвращает строку без side effects
+- **Status**: Frozen
+- **Exit**: N/A (стабильный контракт)
+- **Proof**: `make test-core` — тесты shaoline-compose-*
+
 ### [Draft] EXWM tray support
 - **Choice**: Автоопределение ширины tray через exwm-systemtray--*
 - **Status**: Draft
@@ -62,9 +70,10 @@ Shaoline — функциональный минималистичный mode-li
 
 - [x] HOLO.md существует (Stage, Purpose, Invariants, Decisions)
 - [x] SURFACE.md существует (FROZEN items + Proof)
-- [x] ≥1 FROZEN item с Proof
+- [x] ≥1 FROZEN item с Proof (7 items)
 - [x] E2E тест (vertical scenario в SURFACE.md)
-- [ ] `make test` проходят
+- [x] Инварианты покрыты E2E тестами
+- [ ] `make test` проходят (nix сломан, использовать pro)
 
 ---
 

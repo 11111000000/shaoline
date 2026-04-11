@@ -32,6 +32,18 @@
 - **Proof**: `make test-cache` — тест кеша
 - **Invariant**: INV-Determinism, INV-Core-IO-Boundary
 
+### shaoline-compose
+- **Stability**: [FROZEN]
+- **Spec**: Композиция сегментов в строку mode-line (pure function)
+- **Proof**: `make test-core` — тест shaoline-compose-output-is-string
+- **Invariant**: INV-Pure-Segments, INV-Determinism
+
+### shaoline-define-segment
+- **Stability**: [FROZEN]
+- **Spec**: Макрос регистрации сегмента в реестре
+- **Proof**: `make test-core` — сегменты доступны через shaoline--segment-registry
+- **Invariant**: INV-Pure-Segments
+
 ---
 
 ## FLUID Items (изменяемые контракты)
@@ -72,6 +84,16 @@
 ###Обновление
 - **Spec**: `shaoline-update` принудительное обновление
 - **Success**: Все сегменты пересчитываются
+
+###Стратегия yin/yang
+- **Spec**: `(shaoline-switch-to-yin)`, `(shaoline-switch-to-yang)`, `(shaoline-switch-to-adaptive)`
+- **Success**: Поведение mode-line меняется
+- **Invariant**: INV-Determinism
+
+###Visibility control
+- **Spec**: `shaoline--should-display-p` проверяет условия отображения
+- **Success**: mode-line виден/скрыт в зависимости от состояния
+- **Invariant**: INV-Determinism
 
 ---
 

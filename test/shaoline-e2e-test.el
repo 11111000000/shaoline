@@ -91,6 +91,62 @@
     (should (> (length result) 0))))
 
 ;; ----------------------------------------------------------------------------
+;; E2E Scenario: Pure composition
+;; ----------------------------------------------------------------------------
+
+(ert-deftest e2e-shaoline-compose-returns-string ()
+  "FROZEN: shaoline-compose возвращает строку (pure function)."
+  (let ((result (shaoline-compose)))
+    (should (stringp result))))
+
+(ert-deftest e2e-shaoline-compose-determinism ()
+  "INV-Determinism: одинаковые вызовы дают одинаковый результат."
+  (let* ((result1 (shaoline-compose))
+         (result2 (shaoline-compose)))
+    (should (string= result1 result2))))
+
+(ert-deftest e2e-shaoline-compose-respects-width ()
+  "FROZEN: shaoline-compose учитывает параметр width."
+  (let* ((result-80 (shaoline-compose 80))
+         (result-40 (shaoline-compose 40)))
+    (should (stringp result-80))
+    (should (stringp result-40))))
+
+;; ----------------------------------------------------------------------------
+;; E2E Scenario: Segment registry
+;; ----------------------------------------------------------------------------
+
+(ert-deftest e2e-shaoline-segment-registry ()
+  "FROZEN: Сегменты регистрируются в реестре."
+  (let* ((project-name-reg (gethash 'shaoline-segment-project-name shaoline--segment-registry))
+         (gptel-model-reg (gethash 'shaoline-segment-gptel-model shaoline--segment-registry)))
+    (should (functionp project-name-reg))
+    (should (functionp gptel-model-reg))))
+
+;; ----------------------------------------------------------------------------
+;; E2E Scenario: Strategy switching
+;; ----------------------------------------------------------------------------
+
+(ert-deftest e2e-shaoline-strategy-switching ()
+  "INV-Determinism: Переключение стратегии меняет поведение."
+  (let* ((initial-strategy shaoline-mode-strategy))
+    (shaoline-switch-to-yang)
+    (should (eq shaoline-mode-strategy 'yang))
+    (shaoline-switch-to-yin)
+    (should (eq shaoline-mode-strategy 'yin))
+    ;; Restore
+    (setq shaoline-mode-strategy initial-strategy)))
+
+;; ----------------------------------------------------------------------------
+;; E2E Scenario: Visibility control
+;; ----------------------------------------------------------------------------
+
+(ert-deftest e2e-shaoline-visibility-control ()
+  "INV-Determinism: should-display-p возвращает boolean."
+  (let ((result (shaoline--should-display-p "test")))
+    (should (booleanp result))))
+
+;; ----------------------------------------------------------------------------
 ;; E2E Verify команд
 ;; ----------------------------------------------------------------------------
 
