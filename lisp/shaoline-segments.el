@@ -178,12 +178,21 @@ When truncation occurs, an ellipsis character (…) is appended."
 
 (shaoline-define-segment shaoline-segment-position (&optional &key with-column)
   "Current position.  По умолчанию только строка; колонку добавляем,
-когда WITH-COLUMN ненулев."
-  (propertize
-   (if with-column
-       (format "[%d:%d]" (line-number-at-pos) (current-column))
-     (format "[%d]" (line-number-at-pos)))
-   'face 'shaoline-mode-face))
+когда WITH-COLUMN ненулев.
+Cached with TTL to reduce flicker during rapid cursor movement."
+  (let ((ttl (or (and (boundp 'shaoline-update-debounce)
+                      (numberp shaoline-update-debounce)
+                      shaoline-update-debounce)
+                 0.5)))
+    (shaoline--cached-call
+     (shaoline--cache-key "position" (buffer-name) (line-number-at-pos) (current-column))
+     ttl
+     (lambda ()
+       (propertize
+        (if with-column
+            (format "[%d:%d]" (line-number-at-pos) (current-column))
+          (format "[%d]" (line-number-at-pos)))
+        'face 'shaoline-mode-face)))))
 
 (shaoline-define-segment shaoline-segment-encoding ()
   "File encoding and EOL type."

@@ -90,12 +90,12 @@ Structure: ((:left segment ...) (:center segment ...) (:right segment ...))"
   :group 'shaoline)
 
 ;; Performance wisdom
-(defcustom shaoline-update-debounce 0.25
+(defcustom shaoline-update-debounce 0.5
   "Seconds to wait between updates.  Increased for better performance."
   :type 'float
   :group 'shaoline)
 
-(defcustom shaoline-cache-ttl 2.0
+(defcustom shaoline-cache-ttl 5.0
   "Default TTL for segment caches.  Impermanence with purpose."
   :type 'float
   :group 'shaoline)
@@ -128,9 +128,16 @@ the line is composed."
   :type 'boolean
   :group 'shaoline)
 
-(defcustom shaoline-tray-refresh-interval 0.5
-  "Minimum seconds between tray margin recalculations.
-Reduced from 1.5 to 0.5 for faster reaction to tray changes."
+(defcustom shaoline-tray-refresh-interval 5.0
+  "Minimum seconds between tray margin recalculations."
+  :type 'float
+  :group 'shaoline)
+
+(defcustom shaoline-yang-reassert-min-interval 1.0
+  "Minimum seconds between yang reassertion message calls.
+Applies to all four yang reassert paths (`shaoline--reassert-yang-visibility',
+yang-timer, guard-visibility, post-command-restore) to prevent echo-area
+flicker from redundant message calls."
   :type 'float
   :group 'shaoline)
 
@@ -326,11 +333,22 @@ It is especially important during hot reload workflows that temporarily
   (unless (boundp 'shaoline-hide-modeline)
     (setq shaoline-hide-modeline t))
   (unless (boundp 'shaoline-update-debounce)
-    (setq shaoline-update-debounce 0.25))
+    (setq shaoline-update-debounce 0.5))
   (unless (boundp 'shaoline-cache-ttl)
-    (setq shaoline-cache-ttl 2.0))
+    (setq shaoline-cache-ttl 5.0))
   (unless (boundp 'shaoline-right-margin)
     (setq shaoline-right-margin 1))
+  ;; Performance tuning — consulted from hot paths (compose, reassert).
+  (unless (boundp 'shaoline-compose-cache-ttl)
+    (setq shaoline-compose-cache-ttl 2.0))
+  (unless (boundp 'shaoline-compose-min-interval)
+    (setq shaoline-compose-min-interval 0.5))
+  (unless (boundp 'shaoline-yang-reassert-min-interval)
+    (setq shaoline-yang-reassert-min-interval 1.0))
+  (unless (boundp 'shaoline-message-update-delay)
+    (setq shaoline-message-update-delay 0.5))
+  (unless (boundp 'shaoline-tray-refresh-interval)
+    (setq shaoline-tray-refresh-interval 5.0))
   ;; Strategy table is consulted from hot paths (effects/strategy).
   (unless (boundp 'shaoline--strategies)
     (setq shaoline--strategies
@@ -655,22 +673,28 @@ Align perfectly to WIDTH."
 (defvar shaoline--composing-p nil
   "Non-nil while Shaoline is composing its line; suppress side effects.")
 
-(defcustom shaoline-compose-cache-ttl 0.5
+(defcustom shaoline-compose-cache-ttl 2.0
   "Seconds to cache full composed line to avoid recomputing expensive segments.
 
 This cache helps when external callers (for example, tab-bar/tab plugins)
-call `shaoline-compose' frequently in short bursts.  A small TTL (half a
-second by default) preserves responsiveness while avoiding repeated
-evaluation of heavy segments."
+call `shaoline-compose' frequently in short bursts.  A two-second TTL
+preserves responsiveness while avoiding repeated evaluation of heavy segments."
   :type 'float
   :group 'shaoline)
 
 (defvar shaoline--compose-cache (make-hash-table :test 'equal)
   "Cache mapping a string key to (cons composed-string timestamp).")
 
-(defcustom shaoline-compose-min-interval 0.2
+(defcustom shaoline-compose-min-interval 0.5
   "Minimum interval in seconds between real recompositions.
 When hit repeatedly within this window, =shaoline-compose' returns the cached line."
+  :type 'float
+  :group 'shaoline)
+
+(defcustom shaoline-message-update-delay 0.5
+  "Seconds to wait after a message before updating the echo-message segment.
+Used by `shaoline--schedule-msg-update' to avoid overwriting the original
+message in echo-area too aggressively."
   :type 'float
   :group 'shaoline)
 
@@ -700,15 +724,15 @@ by =shaoline-compose-min-interval= to smooth out bursts."
   (unless (boundp 'shaoline--last-compose-time)
     (setq shaoline--last-compose-time 0.0))
   (unless (boundp 'shaoline-compose-cache-ttl)
-    (setq shaoline-compose-cache-ttl 0.5))
+    (setq shaoline-compose-cache-ttl 2.0))
   (unless (boundp 'shaoline-compose-min-interval)
-    (setq shaoline-compose-min-interval 0.2))
+    (setq shaoline-compose-min-interval 0.5))
   (unless (boundp 'shaoline-right-margin)
     (setq shaoline-right-margin 1))
   (unless (boundp 'shaoline-with-tray)
     (setq shaoline-with-tray t))
   (unless (boundp 'shaoline-tray-refresh-interval)
-    (setq shaoline-tray-refresh-interval 1.5))
+    (setq shaoline-tray-refresh-interval 5.0))
   (unless (boundp 'shaoline--last-margin-refresh-time)
     (setq shaoline--last-margin-refresh-time 0))
   (unless (boundp 'shaoline-tray-fixed-chars)

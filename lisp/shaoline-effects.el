@@ -87,7 +87,12 @@ void-variable errors."
     (setq shaoline--original-default-modeline nil))
   ;; Effect log is pushed to from many paths; must never be void.
   (unless (boundp 'shaoline--effect-log)
-    (setq shaoline--effect-log nil)))
+    (setq shaoline--effect-log nil))
+  ;; Tuning knobs used from hot paths; must never be void.
+  (unless (boundp 'shaoline-yang-reassert-min-interval)
+    (setq shaoline-yang-reassert-min-interval 1.0))
+  (unless (boundp 'shaoline-message-update-delay)
+    (setq shaoline-message-update-delay 0.5)))
 
 (defun shaoline--schedule-msg-update ()
   "Schedule a single debounced update for recent message bursts."
@@ -95,7 +100,11 @@ void-variable errors."
   (unless shaoline--msg-update-timer
     (setq shaoline--msg-update-timer
           (run-with-timer
-           0.2 nil
+           (or (and (boundp 'shaoline-message-update-delay)
+                    (numberp shaoline-message-update-delay)
+                    shaoline-message-update-delay)
+               0.5)
+           nil
            (lambda ()
              (setq shaoline--msg-update-timer nil)
              (when (fboundp 'shaoline--debounced-update)
@@ -418,7 +427,9 @@ Preserved modes are left untouched (kept as the original default)."
     (push (cons 'post-command-hook #'shaoline--reassert-yang-visibility) shaoline--hook-registry)
     ;; Periodic gentle reassert; keep a dedicated variable but ensure cleanup
     (setq shaoline--yang-timer
-          (run-with-timer 0.3 0.3 #'shaoline--maybe-reassert-yang-after-timer)))
+          (run-with-timer shaoline-yang-reassert-min-interval
+                          shaoline-yang-reassert-min-interval
+                          #'shaoline--maybe-reassert-yang-after-timer)))
   (unless (eq strategy 'yang)
     (remove-hook 'post-command-hook #'shaoline--reassert-yang-visibility)
     (setq shaoline--hook-registry
@@ -450,7 +461,6 @@ Preserved modes are left untouched (kept as the original default)."
 
     ;; Yang mode: gentle echo area reclaim
     (when (shaoline--resolve-setting 'always-visible)
-      (shaoline--attach-hook 'post-command-hook #'shaoline--post-command-restore)
       (shaoline--attach-hook 'window-selection-change-functions
                              (lambda (&rest _)
                                (unless (shaoline--should-yield-echo-area-p)
@@ -635,14 +645,20 @@ Runs only on successful evaluation, so it stays out of error backtraces."
 
 (defun shaoline--reassert-yang-visibility ()
   "Forcefully re-display last Shaoline line if echo area lost it."
+  (shaoline--ensure-shared-vars)
   (when (and shaoline-mode
              (shaoline--resolve-setting 'always-visible)
              (not (shaoline--should-yield-echo-area-p))
              (shaoline--echo-area-stable-p))
-    (let* ((content (shaoline--state-get :last-content))
+    (let* ((min-int (if (boundp 'shaoline-yang-reassert-min-interval)
+                        shaoline-yang-reassert-min-interval
+                      1.0))
+           (since-last (- (float-time) shaoline--last-display-time))
+           (content (shaoline--state-get :last-content))
            (cur (current-message))
            (ours (and cur (get-text-property 0 'shaoline-origin cur))))
-      (when (and content
+      (when (and (> since-last min-int)
+                 content
                  (not (string-empty-p content))
                  (or (null cur) (not ours)))
         (shaoline--log "yang-reassert: cur=%s ours=%s content-len=%s"
