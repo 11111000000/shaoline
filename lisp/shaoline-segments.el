@@ -46,6 +46,13 @@
 (declare-function project-roots "project")
 (declare-function vc-git--symbolic-ref "vc-git")
 
+;; map.el (Emacs 28+): used to navigate the cached session state in
+;; `shaoline--gptel-sessions-collect'. The runtime path requires Emacs
+;; 28+ (see AGENTS.md), so the symbols are always defined when the
+;; code runs; declare them so the byte compiler stops warning.
+(declare-function map-elt "map")
+(declare-function map-nested-elt "map")
+
 ;; ---------------------------------------------------------------------------
 ;; Icon helper – local to Shaoline
 ;; ---------------------------------------------------------------------------
