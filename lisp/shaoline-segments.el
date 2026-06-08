@@ -31,6 +31,7 @@
 (declare-function flymake-diagnostics "flymake")
 (declare-function gptel-backend-name "gptel")
 (declare-function lunar-new-moon-on-or-after "lunar")
+(declare-function shaoline--get-current-keys "shaoline-effects")
 
 ;; ----------------------------------------------------------------------------
 ;; 一 Core Dependencies — Essential Elements
