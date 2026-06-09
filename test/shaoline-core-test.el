@@ -316,5 +316,28 @@
   (should (facep 'shaoline-buffer-face))
   (should (facep 'shaoline-mode-face)))
 
+;; ----------------------------------------------------------------------------
+;; Test: compose-cache key invalidates on point/keys change
+;; ----------------------------------------------------------------------------
+
+(ert-deftest shaoline-compose-cache-key-includes-line-and-keys ()
+  "Two consecutive calls with the same buffer/width/margin but
+different line numbers or current-keys must produce different
+cache keys. Without this the modeline stays stuck on an old
+line number until the TTL expires."
+  (with-temp-buffer
+    (insert "a\nb\nc\nd\ne\nf\ng\nh\ni\nj")
+    (goto-char (point-min))
+    (let* ((k1 (progn
+                (setq-local shaoline--current-keys nil)
+                (shaoline--compose-cache-key 80)))
+           (k2 (progn
+                (forward-line 3)
+                (setq-local shaoline--current-keys "C-x")
+                (shaoline--compose-cache-key 80))))
+      (should (stringp k1))
+      (should (stringp k2))
+      (should-not (string= k1 k2)))))
+
 (provide 'shaoline-core-test)
 ;;; shaoline-core-test.el ends here

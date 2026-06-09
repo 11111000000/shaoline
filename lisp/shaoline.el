@@ -702,11 +702,19 @@ message in echo-area too aggressively."
   "Timestamp of the last real composition.")
 
 (defun shaoline--compose-cache-key (&optional width)
-  "Produce a cache key for the current buffer/frame WIDTH."
-  (format "%s|%s|%s"
+  "Produce a cache key for the current buffer/frame WIDTH.
+Includes line/column/current-keys so the cache invalidates on point
+movement or prefix-key changes; without these the cache returns a
+stale composed string whose line number is one or two positions
+behind, and the visible modeline lags the cursor."
+  (format "%s|%s|%s|%s|%s|%s"
           (buffer-name)
           (or width (frame-width))
-          shaoline-right-margin))
+          shaoline-right-margin
+          (line-number-at-pos)
+          (current-column)
+          (or (and (boundp 'shaoline--current-keys) shaoline--current-keys)
+              "")))
 
 (defun shaoline-compose (&optional width)
   "纯 Pure composition function — the heart of Shaoline.

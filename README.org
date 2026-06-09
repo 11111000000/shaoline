@@ -181,7 +181,13 @@ Tune refresh: ~(setq shaoline-tray-refresh-interval 1.5)~
 2. /Why does the line vanish on M-x?/
    Minibuffer is talking, Shaoline bows.
 3. /Echo area flickers!/
-   Some package spams ~(message nil)~. Turn on ~shaoline-debug~.
+   In Emacs 30+ Shaoline installs ~clear-message-function~ so
+   packages that spam ~(message nil)~ (e.g. ~agent-shell-active-message-hide~)
+   cannot erase the modeline: the guard returns ~dont-clear-message~
+   whenever the echo content carries the ~shaoline-origin~ property.
+   On older Emacps there is no such hook, so the advice-trampoline
+   blocks the empty message instead. If you still see flicker, turn on
+   ~shaoline-debug~ to capture the offending call.
 4. /TTY support?/
    Yes; icons degrade to text, serenity remains.
 5. /Force update?/ – =M-x shaoline-refresh=.

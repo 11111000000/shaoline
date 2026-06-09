@@ -232,5 +232,94 @@
     (shaoline--cleanup-all-effects)
     (should (null shaoline--active-effects))))
 
+;; ----------------------------------------------------------------------------
+;; Test: clear-message-function guard
+;; ----------------------------------------------------------------------------
+
+(ert-deftest shaoline-clear-message-guard-protects-shaoline-content ()
+  "When current-message is shaoline's, guard returns `dont-clear-message'.
+This is the mechanism that prevents external `(message nil)' calls
+(e.g. agent-shell-active-message-hide) from erasing shaoline's
+modeline from the echo area."
+  (cl-letf (((symbol-function 'shaoline--resolve-setting)
+             (lambda (setting) (eq setting 'always-visible)))
+            ((symbol-function 'current-message)
+             (lambda () (propertize "🤖 pro-nix" 'shaoline-origin t))))
+    (let ((shaoline-mode t))
+      (should (eq (shaoline--clear-message-guard) 'dont-clear-message)))))
+
+(ert-deftest shaoline-clear-message-guard-allows-external-clear ()
+  "When current-message is not shaoline's, guard returns nil."
+  (cl-letf (((symbol-function 'shaoline--resolve-setting)
+             (lambda (setting) (eq setting 'always-visible)))
+            ((symbol-function 'current-message)
+             (lambda () "external message")))
+    (let ((shaoline-mode t))
+      (should (null (shaoline--clear-message-guard))))))
+
+(ert-deftest shaoline-clear-message-guard-inactive-without-always-visible ()
+  "In yin/pure strategies the guard is permissive even for shaoline content."
+  (cl-letf (((symbol-function 'shaoline--resolve-setting)
+             (lambda (setting) (and (eq setting 'use-hooks) t)))
+            ((symbol-function 'current-message)
+             (lambda () (propertize "🤖 pro-nix" 'shaoline-origin t))))
+    (let ((shaoline-mode t))
+      (should (null (shaoline--clear-message-guard))))))
+
+(ert-deftest shaoline-clear-message-guard-inactive-when-shaoline-mode-off ()
+  "When shaoline-mode is off, the guard is permissive."
+  (cl-letf (((symbol-function 'shaoline--resolve-setting)
+             (lambda (setting) (eq setting 'always-visible)))
+            ((symbol-function 'current-message)
+             (lambda () (propertize "🤖 pro-nix" 'shaoline-origin t))))
+    (let ((shaoline-mode nil))
+      (should (null (shaoline--clear-message-guard))))))
+
+(ert-deftest shaoline-clear-message-guard-inactive-without-current-message ()
+  "When echo area is empty, the guard is permissive."
+  (cl-letf (((symbol-function 'shaoline--resolve-setting)
+             (lambda (setting) (eq setting 'always-visible)))
+            ((symbol-function 'current-message) (lambda () nil)))
+    (let ((shaoline-mode t))
+      (should (null (shaoline--clear-message-guard))))))
+
+;; ----------------------------------------------------------------------------
+;; Test: reassert throttle through shaoline--last-display-time
+;; ----------------------------------------------------------------------------
+
+(ert-deftest shaoline-reassert-updates-last-display-time ()
+  "A real re-assert must bump `shaoline--last-display-time' so subsequent
+external (message nil) attacks don't see a stale anchor."
+  (cl-letf (((symbol-function 'shaoline--resolve-setting)
+             (lambda (setting) (eq setting 'always-visible)))
+            ((symbol-function 'shaoline--should-yield-echo-area-p) (lambda () nil))
+            ((symbol-function 'shaoline--echo-area-stable-p) (lambda () t))
+            ((symbol-function 'current-message) (lambda () nil))
+            ((symbol-function 'message) (lambda (&rest _) nil))
+            ((symbol-function 'shaoline--log) (lambda (&rest _) nil)))
+    (let ((shaoline-mode t)
+          (shaoline--last-display-time 0))
+      (shaoline--state-put :last-content "test content")
+      (shaoline--reassert-yang-visibility)
+      (should (> shaoline--last-display-time 0)))))
+
+(ert-deftest shaoline-reassert-skipped-when-our-line-already-in-echo ()
+  "When the current message is ours, re-assert must not run, and
+therefore must not bump `shaoline--last-display-time'."
+  (cl-letf (((symbol-function 'shaoline--resolve-setting)
+             (lambda (setting) (eq setting 'always-visible)))
+            ((symbol-function 'shaoline--should-yield-echo-area-p) (lambda () nil))
+            ((symbol-function 'shaoline--echo-area-stable-p) (lambda () t))
+            ((symbol-function 'current-message)
+             (lambda () (propertize "test content" 'shaoline-origin t)))
+            ((symbol-function 'message) (lambda (&rest _) nil))
+            ((symbol-function 'shaoline--log) (lambda (&rest _) nil)))
+    (let ((shaoline-mode t)
+          (shaoline--last-display-time 0))
+      (shaoline--state-put :last-content "test content")
+      (shaoline--reassert-yang-visibility)
+      ;; Not bumped because re-assert was a no-op.
+      (should (= shaoline--last-display-time 0)))))
+
 (provide 'shaoline-effects-test)
 ;;; shaoline-effects-test.el ends here

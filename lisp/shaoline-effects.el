@@ -181,6 +181,20 @@ And optional BODY."
     (shaoline--state-put :last-content "")
     (push 'clear shaoline--active-effects)))
 
+(defun shaoline--clear-message-guard ()
+  "Hook for `clear-message-function' (Emacs 30+).
+Return `dont-clear-message' to keep the echo area when its current
+content is shaoline's, so external `(message nil)' calls (e.g. from
+agent-shell's active-message cleanup) do not erase the modeline.
+Return nil (or anything non-special) to let Emacs clear normally."
+  (let ((cur (current-message)))
+    (if (and cur
+             (get-text-property 0 'shaoline-origin cur)
+             (bound-and-true-p shaoline-mode)
+             (shaoline--resolve-setting 'always-visible))
+        'dont-clear-message
+      nil)))
+
 ;; ----------------------------------------------------------------------------
 ;; Timer Effects — Temporal Manifestations
 ;; ----------------------------------------------------------------------------
@@ -453,6 +467,14 @@ Preserved modes are left untouched (kept as the original default)."
           shaoline--advice-registry)
     (push '(advice . message) shaoline--active-effects))
 
+  ;; Hook Emacs 30+ `clear-message-function' so external (message nil)
+  ;; calls (agent-shell-active-message-hide, etc.) cannot erase our
+  ;; echo. This is more reliable than the advice-trampoline because
+  ;; Emacs itself skips the `echo_area_buffer[0] = Qnil' assignment
+  ;; in xdisp.c when our guard returns `dont-clear-message'.
+  (unless (eq clear-message-function #'shaoline--clear-message-guard)
+    (setq clear-message-function #'shaoline--clear-message-guard))
+
 
   (when (shaoline--resolve-setting 'use-hooks)
     (shaoline--attach-hook 'post-command-hook #'shaoline--smart-post-command-update)
@@ -517,6 +539,9 @@ Preserved modes are left untouched (kept as the original default)."
     (cancel-timer shaoline--yang-timer)
     (setq shaoline--yang-timer nil))
   (remove-hook 'post-command-hook #'shaoline--reassert-yang-visibility)
+  ;; Release the `clear-message-function' hook if we own it.
+  (when (eq clear-message-function #'shaoline--clear-message-guard)
+    (setq clear-message-function nil))
   ;; Do *not* clear while always-visible – prevents one-frame blink.
   (unless (shaoline--resolve-setting 'always-visible)
     (shaoline--clear-echo-area))
@@ -650,21 +675,22 @@ Runs only on successful evaluation, so it stays out of error backtraces."
              (shaoline--resolve-setting 'always-visible)
              (not (shaoline--should-yield-echo-area-p))
              (shaoline--echo-area-stable-p))
-    (let* ((min-int (if (boundp 'shaoline-yang-reassert-min-interval)
-                        shaoline-yang-reassert-min-interval
-                      1.0))
-           (since-last (- (float-time) shaoline--last-display-time))
-           (content (shaoline--state-get :last-content))
+    (let* ((content (shaoline--state-get :last-content))
            (cur (current-message))
            (ours (and cur (get-text-property 0 'shaoline-origin cur))))
-      (when (and (> since-last min-int)
-                 content
+      (when (and content
                  (not (string-empty-p content))
                  (or (null cur) (not ours)))
         (shaoline--log "yang-reassert: cur=%s ours=%s content-len=%s"
                        (and cur (substring-no-properties cur 0 (min (length cur) 60)))
                        (and ours t)
                        (length content))
+        ;; Update the throttle anchor only on a real re-assert. This
+        ;; keeps the timer in sync with what the user actually sees
+        ;; (no orphan `last-display-time' from blocked `preserve-empty-message'
+        ;; calls) and prevents the 1–2 s "disappear" window when an
+        ;; external `(message nil)' slips through.
+        (setq shaoline--last-display-time (float-time))
         (let ((tagged (propertize content 'shaoline-origin t))
               (message-log-max nil)
               (resize-mini-windows nil)

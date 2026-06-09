@@ -64,6 +64,39 @@ Shaoline — функциональный минималистичный mode-li
 - **Exit**: Работает в EXWM без ручной настройки
 - **Proof**: Визуальная проверка в EXWM
 
+### [Frozen] Защита echo-area от внешних `(message nil)`
+- **Choice**: В Emacs 30+ ставим `clear-message-function` в `shaoline--clear-message-guard`,
+  который возвращает `dont-clear-message`, если в echo лежит наша строка
+  (свойство `shaoline-origin`). На более старых Emacs работает advice-обёртка
+  `shaoline--advice-preserve-empty-message` (depth 100, блокирует оригинальный
+  `message` для пустого/nil формата).
+- **Status**: Frozen
+- **Exit**: N/A (стабильный контракт: наш контент в echo не стирается чужим кодом)
+- **Proof**: `make test-effects` — 5 тестов `shaoline-clear-message-guard-*`:
+  - `protects-shaoline-content` (guard возвращает `dont-clear-message`)
+  - `allows-external-clear` (пропускает чужой `(message ...)`)
+  - `inactive-without-always-visible` (в yin стратегии пропускает)
+  - `inactive-when-shaoline-mode-off` (при выключенном `shaoline-mode` пропускает)
+  - `inactive-without-current-message` (пустой echo — пропускает)
+
+### [Frozen] Compose-cache key включает динамику
+- **Choice**: `shaoline--compose-cache-key` теперь включает `line-number-at-pos`,
+  `current-column` и `shaoline--current-keys` помимо `buffer/width/right-margin`.
+  Без этого кеш возвращал устаревший composed-стринг, и модель-лайн отставал
+  от курсора на TTL окно (0.5–2 с).
+- **Status**: Frozen
+- **Proof**: `make test-core` — `shaoline-compose-cache-key-includes-line-and-keys`
+
+### [Frozen] Reassert через `last-display-time`
+- **Choice**: `shaoline--reassert-yang-visibility` больше не дросселирует по
+  `since-last > min-int` от now; вместо этого при реальном re-assert обновляет
+  `shaoline--last-display-time` (= текущее время). Это устраняет баг рассинхронизации,
+  при котором заблокированный `preserve-empty-message` сбрасывал throttle-anchor,
+  и модель-лайн «залипал» на 1–2 с после внешнего `(message nil)`.
+- **Status**: Frozen
+- **Proof**: `make test-effects` — `shaoline-reassert-updates-last-display-time` и
+  `shaoline-reassert-skipped-when-our-line-already-in-echo`
+
 ---
 
 ## Критерии голографичности
@@ -77,4 +110,4 @@ Shaoline — функциональный минималистичный mode-li
 
 ---
 
-Last Updated: 2026-04-12
+Last Updated: 2026-06-10
