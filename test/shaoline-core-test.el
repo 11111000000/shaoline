@@ -339,5 +339,46 @@ line number until the TTL expires."
       (should (stringp k2))
       (should-not (string= k1 k2)))))
 
+;; ----------------------------------------------------------------------------
+;; Test: shaoline--echo-area-busy-p detects active minibuffer
+;; ----------------------------------------------------------------------------
+
+(ert-deftest shaoline-echo-area-busy-p-active-minibuffer-from-regular-buffer ()
+  "Regression for pro-nix: a shaoline timer / hook firing from a
+*regular* buffer must still see the echo area as busy when a
+minibuffer is active. The old code only checked `(minibufferp)' /
+`minibuffer-depth', both of which describe the *current* buffer; for
+a timer scheduled in the source buffer those return nil/0 even while
+`M-x' (or any completion) is in flight, which let shaoline redraw
+its line on top of the `M-x ' prompt."
+  (cl-letf (((symbol-function 'minibufferp) (lambda () nil))
+            ((symbol-function 'minibuffer-depth) (lambda () 0))
+            ((symbol-function 'active-minibuffer-window) (lambda () t))
+            ((symbol-function 'cursor-in-echo-area) nil)
+            ((symbol-function 'isearch-mode) nil))
+    (let ((shaoline--echo-area-input-depth 0))
+      (should (shaoline--echo-area-busy-p)))))
+
+(ert-deftest shaoline-echo-area-busy-p-clean-when-nothing-active ()
+  "Sanity check: with no minibuffer / isearch / echo cursor /
+shaoline input, the echo area must be reported free."
+  (cl-letf (((symbol-function 'minibufferp) (lambda () nil))
+            ((symbol-function 'minibuffer-depth) (lambda () 0))
+            ((symbol-function 'active-minibuffer-window) (lambda () nil))
+            ((symbol-function 'cursor-in-echo-area) nil)
+            ((symbol-function 'isearch-mode) nil))
+    (let ((shaoline--echo-area-input-depth 0))
+      (should-not (shaoline--echo-area-busy-p)))))
+
+(ert-deftest shaoline-echo-area-busy-p-current-buffer-is-minibuffer ()
+  "Backward compat: when the current buffer *is* the minibuffer,
+busy-p must still return t."
+  (cl-letf (((symbol-function 'minibufferp) (lambda () t))
+            ((symbol-function 'minibuffer-depth) (lambda () 1))
+            ((symbol-function 'active-minibuffer-window) (lambda () t))
+            ((symbol-function 'cursor-in-echo-area) t)
+            ((symbol-function 'isearch-mode) nil))
+    (should (shaoline--echo-area-busy-p))))
+
 (provide 'shaoline-core-test)
 ;;; shaoline-core-test.el ends here

@@ -917,21 +917,27 @@ No sliding refresh."
 Без перечисления команд и regex; полагаемся на универсальные
 системные индикаторы:
 
-  • `minibuffer-depth'>0              → минибуфер действительно активен
-  • `cursor-in-echo-area'             → курсор мигает в echo-area
-  • `shaoline--echo-area-input-depth' → мы внутри `read-event', запущенного
+  • `minibufferp'                    → текущий буфер является минибуфером
+  • `minibuffer-depth'>0             → минибуфер действительно активен
+  • `active-minibuffer-window'       → минибуфер активен *независимо* от
+                                       current-buffer (важно для таймеров
+                                       и хуков, которые срабатывают в
+                                       исходном буфере, когда активен
+                                       минибуфер, напр. `M-x' + vertico)
+  • `cursor-in-echo-area'            → курсор мигает в echo-area
+  • `shaoline--echo-area-input-depth'→ мы внутри `read-event', запущенного
                                        из echo-area (см.  advice)
-  • `isearch-mode'                    → инкрементальный поиск занимает echo-area"
+  • `isearch-mode'                   → инкрементальный поиск занимает echo-area"
   (let* ((minibufp (minibufferp))
          (mb-depth (> (minibuffer-depth) 0))
-         (active-mini (active-minibuffer-window)) ; диагностический журнал
+         (active-mini (active-minibuffer-window))
          (cursor cursor-in-echo-area)
          (ee-depth (> (if (boundp 'shaoline--echo-area-input-depth)
                           shaoline--echo-area-input-depth
                         0)
                       0))
          (isearch (and (boundp 'isearch-mode) isearch-mode))
-         (busy (or minibufp mb-depth cursor ee-depth isearch)))
+         (busy (or minibufp mb-depth active-mini cursor ee-depth isearch)))
     ;; Логуем только при смене состояния, чтобы не шуметь
     (when (not (eq busy (if (boundp 'shaoline--last-busy-log-state)
                             shaoline--last-busy-log-state

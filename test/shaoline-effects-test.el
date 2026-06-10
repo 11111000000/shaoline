@@ -299,6 +299,7 @@ agent-shell-active-message-hide) from erasing shaoline's own modeline
 echo-area is dominated by the completion UI there, and we must yield."
   (let ((calls 0))
     (cl-letf (((symbol-function 'minibufferp) (lambda () t))
+              ((symbol-function 'active-minibuffer-window) (lambda () t))
               ((symbol-function 'shaoline--ensure-shared-vars) (lambda () nil))
               ((symbol-function 'shaoline--log) (lambda (&rest _) nil)))
       (let ((shaoline--allow-empty-message nil))
@@ -309,12 +310,45 @@ echo-area is dominated by the completion UI there, and we must yield."
     ;; calls stays at 0 and the test fails — that is the regression.
     (should (= calls 1))))
 
+(ert-deftest shaoline-preserve-empty-message-allows-when-minibuffer-active-from-regular-buffer ()
+  "Regression for pro-nix: `(message nil)' called from a regular
+buffer (e.g. from a shaoline timer / `minibuffer-setup-hook' running
+in the source buffer) MUST pass through when a minibuffer is active.
+
+Real-world flow that broke:
+  1. User presses `M-x'.
+  2. Minibuffer is activated, vertico/consult runs `minibuffer-setup-hook'.
+  3. Completion UI calls `(message nil)' from the *source* buffer to
+     clear the echo area for the candidate overlay.
+  4. `shaoline--advice-preserve-empty-message' is called with
+     `current-buffer' = source buffer (so `minibufferp' = nil) but
+     `active-minibuffer-window' non-nil.
+  5. The guard previously checked `(minibufferp)' and wrongly
+     suppressed the clear → candidate list invisible until first
+     character is typed.
+  6. The fix: yield when `active-minibuffer-window' is non-nil, not
+     when the current buffer is a minibuffer."
+  (let ((calls 0))
+    (cl-letf (((symbol-function 'minibufferp) (lambda () nil))    ; source buffer
+              ((symbol-function 'active-minibuffer-window)        ; minibuffer is up
+               (lambda () t))
+              ((symbol-function 'shaoline--ensure-shared-vars) (lambda () nil))
+              ((symbol-function 'shaoline--log) (lambda (&rest _) nil)))
+      (let ((shaoline--allow-empty-message nil))
+        (shaoline--advice-preserve-empty-message
+         (lambda (&rest _) (setq calls (1+ calls)) nil)
+         nil)))
+    ;; orig MUST be called once. The old `(not (minibufferp))' check
+    ;; suppressed this; the new `(not (active-minibuffer-window))' lets it through.
+    (should (= calls 1))))
+
 (ert-deftest shaoline-preserve-empty-message-blocks-in-regular-buffer ()
   "In a regular (non-minibuffer) buffer, `(message nil)' must still be
 suppressed. This is the *original* purpose of the guard — protecting
 shaoline's modeline from external `(message nil)' attacks."
   (let ((calls 0))
     (cl-letf (((symbol-function 'minibufferp) (lambda () nil))
+              ((symbol-function 'active-minibuffer-window) (lambda () nil))
               ((symbol-function 'shaoline--ensure-shared-vars) (lambda () nil))
               ((symbol-function 'shaoline--log) (lambda (&rest _) nil)))
       (let ((shaoline--allow-empty-message nil))
@@ -329,6 +363,7 @@ shaoline's modeline from external `(message nil)' attacks."
 they are how completion UIs reset the echo area between renders."
   (let ((calls 0))
     (cl-letf (((symbol-function 'minibufferp) (lambda () t))
+              ((symbol-function 'active-minibuffer-window) (lambda () t))
               ((symbol-function 'shaoline--ensure-shared-vars) (lambda () nil))
               ((symbol-function 'shaoline--log) (lambda (&rest _) nil)))
       (let ((shaoline--allow-empty-message nil))
