@@ -70,14 +70,20 @@ Shaoline — функциональный минималистичный mode-li
   (свойство `shaoline-origin`). На более старых Emacs работает advice-обёртка
   `shaoline--advice-preserve-empty-message` (depth 100, блокирует оригинальный
   `message` для пустого/nil формата).
+- **Yielding rule (minibuffer)**: в ОБОИХ механизмах — guard и advice — мы
+  пропускаем очистку, когда `minibufferp` истинно. В minibuffer echo-областью
+  владеет вертикальный completion UI (Vertico/Consult/Corfu), и блокировка
+  `(message nil)` приводит к тому, что список кандидатов рендерится пустым
+  до первого ввода символа. В обычных буферах guard по-прежнему защищает
+  нашу модель-лайн от внешних атак.
 - **Status**: Frozen
-- **Exit**: N/A (стабильный контракт: наш контент в echo не стирается чужим кодом)
-- **Proof**: `make test-effects` — 5 тестов `shaoline-clear-message-guard-*`:
-  - `protects-shaoline-content` (guard возвращает `dont-clear-message`)
-  - `allows-external-clear` (пропускает чужой `(message ...)`)
-  - `inactive-without-always-visible` (в yin стратегии пропускает)
-  - `inactive-when-shaoline-mode-off` (при выключенном `shaoline-mode` пропускает)
-  - `inactive-without-current-message` (пустой echo — пропускает)
+- **Exit**: N/A (стабильный контракт: наш контент в echo не стирается чужим кодом,
+  но в minibuffer UI completion имеет приоритет)
+- **Proof**: `make test-effects`:
+  - `shaoline-clear-message-guard-*` (5 тестов, поведение guard-а)
+  - `shaoline-preserve-empty-message-allows-in-minibuffer` (advice пропускает в minibuffer)
+  - `shaoline-preserve-empty-message-blocks-in-regular-buffer` (advice блокирует в обычном буфере)
+  - `shaoline-preserve-empty-message-allows-empty-in-minibuffer` (пустые строки в minibuffer)
 
 ### [Frozen] Compose-cache key включает динамику
 - **Choice**: `shaoline--compose-cache-key` теперь включает `line-number-at-pos`,

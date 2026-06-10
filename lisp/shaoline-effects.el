@@ -270,6 +270,13 @@ If the first arg to `message' is nil or an empty/whitespace-only
 string and `shaoline--allow-empty-message' is nil, suppress the
 call; otherwise forward to ORIG with ARGS.
 
+Yields to the minibuffer: when a completion UI (Vertico/Consult/Corfu)
+owns the echo area, `(message nil)' and empty-string clears must pass
+through so the candidate overlay can repaint. Without this, the
+candidate list comes up empty until the user types a character (which
+forces a redraw through a different path). See
+`shaoline-preserve-empty-message-allows-in-minibuffer' test.
+
 Fail-open: if anything goes wrong (e.g. hot reload / makunbound), do not
 brick Emacs — just call ORIG."
   (condition-case _err
@@ -277,13 +284,17 @@ brick Emacs — just call ORIG."
         (shaoline--ensure-shared-vars)
         (let* ((fmt (car args)))
           (cond
-           ;; nil means clear; block unless explicitly allowed
-           ((and (null fmt) (not (bound-and-true-p shaoline--allow-empty-message)))
+           ;; nil means clear; block unless explicitly allowed OR we are
+           ;; in the minibuffer (a completion UI is in charge of the echo).
+           ((and (null fmt)
+                 (not (bound-and-true-p shaoline--allow-empty-message))
+                 (not (minibufferp)))
             nil)
-           ;; empty/whitespace strings — block unless explicitly allowed
+           ;; empty/whitespace strings — same yielding rule.
            ((and (stringp fmt)
                  (string-empty-p (string-trim (format "%s" fmt)))
-                 (not (bound-and-true-p shaoline--allow-empty-message)))
+                 (not (bound-and-true-p shaoline--allow-empty-message))
+                 (not (minibufferp)))
             nil)
            ;; anything else — pass through
            (t

@@ -283,6 +283,60 @@ modeline from the echo area."
     (let ((shaoline-mode t))
       (should (null (shaoline--clear-message-guard))))))
 
+(ert-deftest shaoline-preserve-empty-message-allows-in-minibuffer ()
+  "When minibuffer is active, `shaoline--advice-preserve-empty-message'
+must NOT block `(message nil)' calls.
+
+Vertical completion UIs (Vertico, Consult, Corfu in minibuffer) rely on
+`(message nil)' being able to clear the echo area so the candidate
+overlay can repaint. If we suppress that clear, the display comes up
+empty until the user types a character (which forces a redraw through
+a different path — that's the symptom observed in pro-nix).
+
+The guard exists to prevent external `(message nil)' calls (e.g.
+agent-shell-active-message-hide) from erasing shaoline's own modeline
+*in regular buffers*. The minibuffer is a separate concern: the
+echo-area is dominated by the completion UI there, and we must yield."
+  (let ((calls 0))
+    (cl-letf (((symbol-function 'minibufferp) (lambda () t))
+              ((symbol-function 'shaoline--ensure-shared-vars) (lambda () nil))
+              ((symbol-function 'shaoline--log) (lambda (&rest _) nil)))
+      (let ((shaoline--allow-empty-message nil))
+        (shaoline--advice-preserve-empty-message
+         (lambda (&rest _) (setq calls (1+ calls)) nil)
+         nil)))
+    ;; orig MUST be called once (in minibuffer). If the guard blocked it,
+    ;; calls stays at 0 and the test fails — that is the regression.
+    (should (= calls 1))))
+
+(ert-deftest shaoline-preserve-empty-message-blocks-in-regular-buffer ()
+  "In a regular (non-minibuffer) buffer, `(message nil)' must still be
+suppressed. This is the *original* purpose of the guard — protecting
+shaoline's modeline from external `(message nil)' attacks."
+  (let ((calls 0))
+    (cl-letf (((symbol-function 'minibufferp) (lambda () nil))
+              ((symbol-function 'shaoline--ensure-shared-vars) (lambda () nil))
+              ((symbol-function 'shaoline--log) (lambda (&rest _) nil)))
+      (let ((shaoline--allow-empty-message nil))
+        (shaoline--advice-preserve-empty-message
+         (lambda (&rest _) (setq calls (1+ calls)) nil)
+         nil)))
+    ;; orig must NOT be called in a regular buffer.
+    (should (= calls 0))))
+
+(ert-deftest shaoline-preserve-empty-message-allows-empty-in-minibuffer ()
+  "In a minibuffer, even empty/whitespace strings must pass through —
+they are how completion UIs reset the echo area between renders."
+  (let ((calls 0))
+    (cl-letf (((symbol-function 'minibufferp) (lambda () t))
+              ((symbol-function 'shaoline--ensure-shared-vars) (lambda () nil))
+              ((symbol-function 'shaoline--log) (lambda (&rest _) nil)))
+      (let ((shaoline--allow-empty-message nil))
+        (shaoline--advice-preserve-empty-message
+         (lambda (&rest _) (setq calls (1+ calls)) nil)
+         "")))
+    (should (= calls 1))))
+
 ;; ----------------------------------------------------------------------------
 ;; Test: reassert throttle through shaoline--last-display-time
 ;; ----------------------------------------------------------------------------
