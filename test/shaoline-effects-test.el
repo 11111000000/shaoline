@@ -32,12 +32,59 @@
 (ert-deftest shaoline-display-effect ()
   "Test display effect with tagging."
   (shaoline--state-put :last-content "")
+  (setq shaoline--active-effects nil)
 
-  ;; Mock should-display-p to return true
-  (cl-letf (((symbol-function 'shaoline--should-display-p) (lambda (content) t)))
+  ;; Mock should-display-p to return true; current-message is nil (no echo)
+  (cl-letf (((symbol-function 'shaoline--should-display-p) (lambda (content) t))
+            ((symbol-function 'current-message) (lambda () nil)))
     (shaoline--display "test content")
     (should (string= (shaoline--state-get :last-content) "test content"))
     (should (member 'display shaoline--active-effects))))
+
+(ert-deftest shaoline-display-skips-when-content-unchanged-and-ours-in-echo ()
+  "When shaoline's last content visually equals the new content (ignoring
+text-properties from compose regeneration) AND the echo-area still shows
+our message, `shaoline--display' must skip the `(message ...)' call.
+
+This eliminates flicker on every cursor-move: previously compose regenerated
+timestamps/cache values that produced a different (by `equal') string each
+time even when the visible characters were identical, so display always
+re-rendered — causing the echo-area to blink."
+  (shaoline--state-put :last-content "test content")
+  (setq shaoline--active-effects nil)
+  (let ((calls 0))
+    (cl-letf (((symbol-function 'shaoline--should-display-p) (lambda (_) t))
+              ((symbol-function 'current-message)
+               (lambda () (propertize "test content" 'shaoline-origin t)))
+              ((symbol-function 'message)
+               (lambda (&rest _) (setq calls (1+ calls)) nil))
+              ((symbol-function 'shaoline--log) (lambda (&rest _) nil)))
+      ;; Pass a *different-property* but visually identical string
+      (let ((same-visual-different-props
+             (propertize "test content" 'compose-timestamp 12345)))
+        (shaoline--display same-visual-different-props)))
+    ;; No (message ...) call → no flicker
+    (should (= calls 0))
+    ;; last-content is NOT updated (we skipped the display)
+    (should (string= (shaoline--state-get :last-content) "test content"))
+    ;; display effect not pushed
+    (should-not (member 'display shaoline--active-effects))))
+
+(ert-deftest shaoline-display-rerenders-when-content-actually-changed ()
+  "When content visually changes (e.g. line number changed), display must
+re-render even if echo-area still shows our message."
+  (shaoline--state-put :last-content "test [12] content")
+  (setq shaoline--active-effects nil)
+  (let ((calls 0))
+    (cl-letf (((symbol-function 'shaoline--should-display-p) (lambda (_) t))
+              ((symbol-function 'current-message)
+               (lambda () (propertize "test [12] content" 'shaoline-origin t)))
+              ((symbol-function 'message)
+               (lambda (&rest _) (setq calls (1+ calls)) nil))
+              ((symbol-function 'shaoline--log) (lambda (&rest _) nil)))
+      (shaoline--display "test [13] content"))
+    (should (= calls 1))
+    (should (string= (shaoline--state-get :last-content) "test [13] content"))))
 
 (ert-deftest shaoline-clear-effect ()
   "Test clear echo area effect."

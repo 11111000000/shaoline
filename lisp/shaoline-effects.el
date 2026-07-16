@@ -158,19 +158,31 @@ And optional BODY."
 (shaoline-defeffect shaoline--display (content)
   "Display CONTENT in echo area with Shaoline tagging, избегая лишних перерисовок."
   (shaoline--log "shaoline--display called in buffer: %s, content: %s" (buffer-name) content)
-  (when (and (not (bound-and-true-p shaoline--composing-p))
-             (shaoline--should-display-p content)
-             (not (equal content (current-message))))   ; уже показываем? не трогаем.
-    (shaoline--state-put :last-content content)
-    (setq shaoline--last-display-time (float-time))
-    (let* ((tagged (propertize content 'shaoline-origin t))
-           (message-log-max nil)
-           (resize-mini-windows nil)
-           (max-mini-window-height 1)
-           (message-truncate-lines t))
-      (shaoline--log "shaoline--display actually displaying: %s" tagged)
-      (message "%s" tagged)
-      (push 'display shaoline--active-effects))))
+  (let* ((last (shaoline--state-get :last-content))
+         ;; Compare visual content (without text properties) to avoid flicker
+         ;; when compose regenerates timestamps/cache values that change the
+         ;; string's property list but not its visible characters.
+         (same-visual (and (stringp content)
+                           (stringp last)
+                           (equal (substring-no-properties content)
+                                  (substring-no-properties last))))
+         (ours-in-echo (let ((cur (current-message)))
+                         (and cur
+                              (get-text-property 0 'shaoline-origin cur))))
+         (skip (and same-visual ours-in-echo)))
+    (when (and (not (bound-and-true-p shaoline--composing-p))
+               (shaoline--should-display-p content)
+               (not skip))
+      (shaoline--state-put :last-content content)
+      (setq shaoline--last-display-time (float-time))
+      (let* ((tagged (propertize content 'shaoline-origin t))
+             (message-log-max nil)
+             (resize-mini-windows nil)
+             (max-mini-window-height 1)
+             (message-truncate-lines t))
+        (shaoline--log "shaoline--display actually displaying: %s" tagged)
+        (message "%s" tagged)
+        (push 'display shaoline--active-effects)))))
 
 (shaoline-defeffect shaoline--clear-echo-area ()
   "Clear echo area if it currently displays Shaoline content."
