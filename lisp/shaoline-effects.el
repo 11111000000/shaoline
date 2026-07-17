@@ -717,10 +717,23 @@ Runs only on successful evaluation, so it stays out of error backtraces."
              (shaoline--echo-area-stable-p))
     (let* ((content (shaoline--state-get :last-content))
            (cur (current-message))
-           (ours (and cur (get-text-property 0 'shaoline-origin cur))))
+           (ours (and cur (get-text-property 0 'shaoline-origin cur)))
+           ;; Skip if `cur' is already ours AND visually equal to
+           ;; `content'.  Without this check, an external `(message nil)'
+           ;; (from corfu, eldoc, agent-shell-active-message-hide, etc.)
+           ;; that races with our re-assertion produces a single-frame
+           ;; echo-area flicker: `cur' is briefly nil, we draw our
+           ;; string, but visually it's identical to what the user just
+           ;; saw.  Same-visual comparison strips text-properties (which
+           ;; `compose' regenerates on every call due to timestamps,
+           ;; cache values, etc.) and is idempotent.
+           (same-visual (and ours content (stringp content)
+                              (string= (substring-no-properties content)
+                                       (substring-no-properties cur)))))
       (when (and content
                  (not (string-empty-p content))
-                 (or (null cur) (not ours)))
+                 (or (null cur) (not ours))
+                 (not same-visual))
         (shaoline--log "yang-reassert: cur=%s ours=%s content-len=%s"
                        (and cur (substring-no-properties cur 0 (min (length cur) 60)))
                        (and ours t)
@@ -731,9 +744,9 @@ Runs only on successful evaluation, so it stays out of error backtraces."
         ;; calls) and prevents the 1–2 s "disappear" window when an
         ;; external `(message nil)' slips through.
         (setq shaoline--last-display-time (float-time))
-        (let ((tagged (propertize content 'shaoline-origin t))
-              (message-log-max nil)
-              (resize-mini-windows nil)
+        (let* ((tagged (propertize content 'shaoline-origin t))
+               (message-log-max nil)
+               (resize-mini-windows nil)
               (max-mini-window-height 1)
               (message-truncate-lines t))
           (message "%s" tagged))))))
