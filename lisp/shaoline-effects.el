@@ -708,13 +708,50 @@ Runs only on successful evaluation, so it stays out of error backtraces."
 
 
 
+(defcustom shaoline-minibuffer-trigger-commands
+  '(execute-extended-command find-file save-buffer
+    eval-expression eval-defun eval-last-sexp eval-buffer
+    write-file insert-file read-file
+    yank-pop
+    completing-read
+    read-from-minibuffer
+    describe-variable describe-function
+    find-library locate-library
+    apropos-documentation)
+  "Commands known to open a minibuffer.
+Reassert skips when `this-command' or `last-command' is in this list,
+preventing one-frame flicker where shaoline overlays the soon-to-appear
+minibuffer prompt."
+  :type '(repeat symbol)
+  :group 'shaoline)
+
+(defun shaoline--minibuffer-trigger-cmd-p (cmd)
+  "Return non-nil when CMD is known to open a minibuffer soon.
+Checks the explicit list `shaoline-minibuffer-trigger-commands', the
+`consult-' and `minibuffer-' name prefixes (covers consult-imenu,
+consult-xref, consult-yank-pop, etc.), and `M-x' / `M-:' via
+`execute-extended-command' / `eval-expression'."
+  (and (symbolp cmd)
+       (let ((name (symbol-name cmd)))
+         (or (memq cmd shaoline-minibuffer-trigger-commands)
+             (string-prefix-p "consult-" name)
+             (string-prefix-p "minibuffer-" name)))))
+
 (defun shaoline--reassert-yang-visibility ()
   "Forcefully re-display last Shaoline line if echo area lost it."
   (shaoline--ensure-shared-vars)
   (when (and shaoline-mode
              (shaoline--resolve-setting 'always-visible)
              (not (shaoline--should-yield-echo-area-p))
-             (shaoline--echo-area-stable-p))
+             (shaoline--echo-area-stable-p)
+             ;; Skip if this/previous command opens a minibuffer: at
+             ;; post-command-hook time the minibuffer is not yet active
+             ;; (shaoline--echo-area-busy-p returns nil), so drawing
+             ;; would overlay the soon-to-be-rendered prompt and get
+             ;; erased by minibuffer-setup, leaving the user with an
+             ;; empty minibuffer until they type the first filter char.
+             (not (shaoline--minibuffer-trigger-cmd-p this-command))
+             (not (shaoline--minibuffer-trigger-cmd-p last-command)))
     (let* ((content (shaoline--state-get :last-content))
            (cur (current-message))
            (ours (and cur (get-text-property 0 'shaoline-origin cur)))

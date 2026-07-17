@@ -457,5 +457,106 @@ therefore must not bump `shaoline--last-display-time'."
       ;; Not bumped because re-assert was a no-op.
       (should (= shaoline--last-display-time 0)))))
 
+(ert-deftest shaoline-reassert-skips-when-this-command-opens-minibuffer ()
+  "When `this-command' is `execute-extended-command' (M-x), `find-file'
+(C-x C-f), or any consult-* / minibuffer-* prefixed command, re-assert
+must NOT draw over the soon-to-appear minibuffer prompt.
+
+Real-world flow that broke (fixed here):
+  1. User presses `M-x'.
+  2. `execute-extended-command' is queued; `post-command-hook' fires.
+  3. `shaoline--echo-area-busy-p' returns nil (minibuffer not active yet),
+     `shaoline--should-yield-echo-area-p' returns nil.
+  4. `shaoline--reassert-yang-visibility' redraws shaoline over the
+     about-to-be-rendered `M-x ' prompt.
+  5. `minibuffer-setup-hook' then erases our line.
+  6. User sees an empty echo-area until they type the first filter char
+     (which triggers `completing-read' to refresh the candidate list).
+  7. With this fix: re-assert must skip when `this-command' is a known
+     minibuffer trigger."
+  (let ((message-called nil)
+        (cmds '(execute-extended-command find-file save-buffer
+                eval-expression eval-defun eval-last-sexp)))
+    (cl-letf (((symbol-function 'shaoline--resolve-setting)
+               (lambda (s) (eq s 'always-visible)))
+              ((symbol-function 'shaoline--should-yield-echo-area-p) (lambda () nil))
+              ((symbol-function 'shaoline--echo-area-stable-p) (lambda () t))
+              ((symbol-function 'current-message) (lambda () nil))
+              ((symbol-function 'message)
+               (lambda (&rest _) (setq message-called t)))
+              ((symbol-function 'shaoline--log) (lambda (&rest _) nil)))
+      ;; Pre-populate state so a non-skipping re-assert would call `message'.
+      (let ((shaoline-mode t)
+            (shaoline--last-display-time 0))
+        (shaoline--state-put :last-content "test content")
+        (dolist (cmd cmds)
+          (let ((message-called nil)
+                (this-command cmd)
+                (last-command 'forward-line))
+            (shaoline--reassert-yang-visibility)
+            (should-not message-called))))))
+  ;; Also test the dynamic shortcuts: consult-* and minibuffer-* prefixes.
+  (let ((message-called nil))
+    (cl-letf (((symbol-function 'shaoline--resolve-setting)
+               (lambda (s) (eq s 'always-visible)))
+              ((symbol-function 'shaoline--should-yield-echo-area-p) (lambda () nil))
+              ((symbol-function 'shaoline--echo-area-stable-p) (lambda () t))
+              ((symbol-function 'current-message) (lambda () nil))
+              ((symbol-function 'message)
+               (lambda (&rest _) (setq message-called t)))
+              ((symbol-function 'shaoline--log) (lambda (&rest _) nil)))
+      (let ((shaoline-mode t)
+            (shaoline--last-display-time 0))
+        (shaoline--state-put :last-content "test content")
+        (dolist (cmd '(consult-find-file consult-apropos
+                       minibuffer-complete minibuffer-completion-help))
+          (let ((message-called nil)
+                (this-command cmd)
+                (last-command 'forward-line))
+            (shaoline--reassert-yang-visibility)
+            (should-not message-called))))))
+  ;; Negative case: a non-minibuffer command must NOT be skipped.
+  (let ((message-called nil))
+    (cl-letf (((symbol-function 'shaoline--resolve-setting)
+               (lambda (s) (eq s 'always-visible)))
+              ((symbol-function 'shaoline--should-yield-echo-area-p) (lambda () nil))
+              ((symbol-function 'shaoline--echo-area-stable-p) (lambda () t))
+              ((symbol-function 'current-message) (lambda () nil))
+              ((symbol-function 'message)
+               (lambda (&rest _) (setq message-called t)))
+              ((symbol-function 'shaoline--log) (lambda (&rest _) nil)))
+      (let ((shaoline-mode t)
+            (shaoline--last-display-time 0))
+        (shaoline--state-put :last-content "test content")
+        (let ((this-command 'forward-line)
+              (last-command 'previous-line))
+          (setq message-called nil)
+          (shaoline--reassert-yang-visibility)
+          (should message-called))))))
+
+(ert-deftest shaoline-reassert-skips-when-last-command-opened-minibuffer ()
+  "When `last-command' is `execute-extended-command' (cancelled M-x), re-assert
+must still skip. The user is back at the source buffer after `abort',
+but the minibuffer clean-up may not have fully settled, and any stragglers
+on the echo-area would confuse the user."
+  (let ((message-called nil))
+    (cl-letf (((symbol-function 'shaoline--resolve-setting)
+               (lambda (s) (eq s 'always-visible)))
+              ((symbol-function 'shaoline--should-yield-echo-area-p) (lambda () nil))
+              ((symbol-function 'shaoline--echo-area-stable-p) (lambda () t))
+              ((symbol-function 'current-message) (lambda () nil))
+              ((symbol-function 'message)
+               (lambda (&rest _) (setq message-called t)))
+              ((symbol-function 'shaoline--log) (lambda (&rest _) nil)))
+      (let ((shaoline-mode t)
+            (shaoline--last-display-time 0))
+        (shaoline--state-put :last-content "test content")
+        ;; last = execute-extended-command (cancelled M-x), this = next command.
+        (let ((this-command 'forward-line)
+              (last-command 'execute-extended-command))
+          (setq message-called nil)
+          (shaoline--reassert-yang-visibility)
+          (should-not message-called))))))
+
 (provide 'shaoline-effects-test)
 ;;; shaoline-effects-test.el ends here
