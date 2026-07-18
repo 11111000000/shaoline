@@ -86,6 +86,65 @@ re-render even if echo-area still shows our message."
     (should (= calls 1))
     (should (string= (shaoline--state-get :last-content) "test [13] content"))))
 
+(ert-deftest shaoline-display-skips-when-snapshot-already-set ()
+  "Race-free skip: if `shaoline--last-displayed-content' equals the new
+content (substring-no-properties), shaoline--display must skip even if
+the live `current-message' is empty or owned by another module
+(e.g. corfu cleared it between cursor-move and our redraw).
+
+This is the scenario that produced the cursor-move flicker on pro-nix:
+corfu-auto--post-command erased our message between our snapshot and our
+redraw, so `current-message' was no longer ours, but `compose' had not
+changed.  Comparing against `current-message' alone falsely concluded
+the echo-area had lost our line."
+  (let ((calls 0))
+    (cl-letf (((symbol-function 'shaoline--should-display-p) (lambda (_) t))
+              ((symbol-function 'current-message)
+               ;; Live echo-area has been replaced by foreign content.
+               (lambda () (propertize "corfu popup" 'face 'corfu)))
+              ((symbol-function 'message)
+               (lambda (&rest _) (setq calls (1+ calls)) nil))
+              ((symbol-function 'shaoline--log) (lambda (&rest _) nil)))
+      ;; We drew this exact content last time.
+      (setq shaoline--last-displayed-content "test content")
+      ;; Same content again → skip.
+      (shaoline--display "test content"))
+    (should (= calls 0))))
+
+(ert-deftest shaoline-display-rerenders-when-snapshot-differs ()
+  "If our snapshot differs from the new content, redraw even if
+`current-message' is empty or foreign.  Otherwise corfu's erase would
+permanently hide our line."
+  (let ((calls 0))
+    (cl-letf (((symbol-function 'shaoline--should-display-p) (lambda (_) t))
+              ((symbol-function 'current-message)
+               (lambda () (propertize "foreign" 'face 'tooltip)))
+              ((symbol-function 'message)
+               (lambda (&rest _) (setq calls (1+ calls)) nil))
+              ((symbol-function 'shaoline--log) (lambda (&rest _) nil)))
+      ;; Last draw was "test [12] content"; new content has new position.
+      (setq shaoline--last-displayed-content "test [12] content")
+      (shaoline--display "test [13] content"))
+    (should (= calls 1))
+    ;; Snapshot updates to the freshly drawn content.
+    (should (string= shaoline--last-displayed-content "test [13] content"))))
+
+(ert-deftest shaoline-clear-echo-area-resets-snapshot ()
+  "`shaoline--clear-echo-area' must reset `shaoline--last-displayed-content'
+so the next display/redraw is not treated as a no-op."
+  (let ((cleared nil))
+    (cl-letf (((symbol-function 'shaoline--allow-empty-message) nil)
+              ((symbol-function 'message)
+               (lambda (&rest _) (setq cleared t) nil))
+              ((symbol-function 'shaoline--log) (lambda (&rest _) nil)))
+      (setq shaoline--last-displayed-content "test content")
+      ;; current-message is our string → clear should fire.
+      (cl-letf (((symbol-function 'current-message)
+                 (lambda () (propertize "test content" 'shaoline-origin t))))
+        (shaoline--clear-echo-area)))
+    (should cleared)
+    (should (string= shaoline--last-displayed-content ""))))
+
 (ert-deftest shaoline-clear-effect ()
   "Test clear echo area effect."
   (shaoline--state-put :last-content "some content")

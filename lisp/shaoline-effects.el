@@ -23,6 +23,26 @@
 ;; Byte-compiler hints and forward declarations
 (defvar shaoline--last-display-time 0
   "Time (float) когда Shaoline в последний раз вызвала `message'.")
+
+(defvar shaoline--last-displayed-content ""
+  "Substring-no-properties of the last shaoline line drawn to the echo-area.
+Reassert-yang-visibility and shaoline--display compare the freshly-composed
+shaoline line against this snapshot instead of `current-message'.  Comparing
+against the live echo-area is unreliable because corfu, flyspell, eldoc,
+agent-shell-active-message and other modules routinely clear and rewrite
+the echo-area between cursor-move and our re-assertion.  In that race,
+naive `current-message' comparison saw `cur=nil' (or non-ours), concluded
+the echo-area had lost our line, and redrew — producing a single-frame
+flicker.  Comparing against this internal snapshot instead removes the
+race: reassert only fires when `shaoline-compose' itself has produced
+something new, regardless of what other modules are doing to the
+echo-area at the same instant.")
+
+(defvar shaoline--last-displayed-content-time 0
+  "Float time at which `shaoline--last-displayed-content' was set.
+Used by `shaoline-reassert-throttle-seconds' to delay re-draws of
+the same content (cheap idempotency) but not first-draws after a long
+idle period (must not appear frozen).")
 ;; shaoline--yang-timer, shaoline--restore-timer and shaoline--last-movement-update
 ;; are declared in shaoline-compat-vars.el
 
@@ -158,23 +178,35 @@ And optional BODY."
 (shaoline-defeffect shaoline--display (content)
   "Display CONTENT in echo area with Shaoline tagging, избегая лишних перерисовок."
   (shaoline--log "shaoline--display called in buffer: %s, content: %s" (buffer-name) content)
-  (let* ((last (shaoline--state-get :last-content))
-         ;; Compare visual content (without text properties) to avoid flicker
-         ;; when compose regenerates timestamps/cache values that change the
-         ;; string's property list but not its visible characters.
-         (same-visual (and (stringp content)
-                           (stringp last)
-                           (equal (substring-no-properties content)
-                                  (substring-no-properties last))))
-         (ours-in-echo (let ((cur (current-message)))
-                         (and cur
-                              (get-text-property 0 'shaoline-origin cur))))
-         (skip (and same-visual ours-in-echo)))
+  (let* ((content-np (and (stringp content) (substring-no-properties content)))
+         (last-draw shaoline--last-displayed-content)
+         ;; Two skip checks (any one is enough):
+         ;;  1. `already-drawn': we drew this exact visual content on a
+         ;;     previous call (race-free snapshot).  Handles the case
+         ;;     where corfu/flyspell/eldoc cleared the echo-area between
+         ;;     calls — we trust our own snapshot, not the live
+         ;;     `current-message'.
+         ;;  2. `ours-in-echo': the live echo-area still has our message
+         ;;     and matches.  Handles the case where nothing changed and
+         ;;     the snapshot is also a match.
+         ;; Either condition skips.  We also accept the legacy
+         ;; `same-visual' (== ours-in-echo) for symmetry with
+         ;; `shaoline--reassert-yang-visibility'.
+         (already-drawn (and (stringp content-np)
+                             (string= content-np last-draw)))
+         (cur (current-message))
+         (ours-in-echo (and cur
+                            (get-text-property 0 'shaoline-origin cur)
+                            (string= (substring-no-properties cur)
+                                     content-np)))
+         (skip (or already-drawn ours-in-echo)))
     (when (and (not (bound-and-true-p shaoline--composing-p))
                (shaoline--should-display-p content)
                (not skip))
       (shaoline--state-put :last-content content)
-      (setq shaoline--last-display-time (float-time))
+      (setq shaoline--last-display-time (float-time)
+            shaoline--last-displayed-content (or content-np "")
+            shaoline--last-displayed-content-time (float-time))
       (let* ((tagged (propertize content 'shaoline-origin t))
              (message-log-max nil)
              (resize-mini-windows nil)
@@ -185,12 +217,17 @@ And optional BODY."
         (push 'display shaoline--active-effects)))))
 
 (shaoline-defeffect shaoline--clear-echo-area ()
-  "Clear echo area if it currently displays Shaoline content."
+  "Clear echo area if it currently displays Shaoline content.
+Also resets `shaoline--last-displayed-content' so the next
+`shaoline--display' / `shaoline--reassert-yang-visibility' is not
+treated as a no-op."
   (when (and (current-message)
              (get-text-property 0 'shaoline-origin (current-message)))
     (let ((shaoline--allow-empty-message t)) ; conscious, whitelisted clear
       (message nil))
     (shaoline--state-put :last-content "")
+    (setq shaoline--last-displayed-content ""
+          shaoline--last-displayed-content-time 0)
     (push 'clear shaoline--active-effects)))
 
 (defun shaoline--clear-message-guard ()
@@ -585,7 +622,11 @@ Preserved modes are left untouched (kept as the original default)."
   ;; Do *not* clear while always-visible – prevents one-frame blink.
   (unless (shaoline--resolve-setting 'always-visible)
     (shaoline--clear-echo-area))
-  (setq shaoline--active-effects nil))
+  (setq shaoline--active-effects nil)
+  ;; Reset the snapshot so a future activation doesn't think we already drew
+  ;; the current compose output.
+  (setq shaoline--last-displayed-content ""
+        shaoline--last-displayed-content-time 0))
 
 ;; ----------------------------------------------------------------------------
 ;; Message Capture Advice
@@ -755,22 +796,19 @@ consult-xref, consult-yank-pop, etc.), and `M-x' / `M-:' via
     (let* ((content (shaoline--state-get :last-content))
            (cur (current-message))
            (ours (and cur (get-text-property 0 'shaoline-origin cur)))
-           ;; Skip if `cur' is already ours AND visually equal to
-           ;; `content'.  Without this check, an external `(message nil)'
-           ;; (from corfu, eldoc, agent-shell-active-message-hide, etc.)
-           ;; that races with our re-assertion produces a single-frame
-           ;; echo-area flicker: `cur' is briefly nil, we draw our
-           ;; string, but visually it's identical to what the user just
-           ;; saw.  Same-visual comparison strips text-properties (which
-           ;; `compose' regenerates on every call due to timestamps,
-           ;; cache values, etc.) and is idempotent.
-           (same-visual (and ours content (stringp content)
-                              (string= (substring-no-properties content)
-                                       (substring-no-properties cur)))))
+           (content-np (and (stringp content) (substring-no-properties content)))
+           ;; Skip when we already drew this exact visual content AND the
+           ;; live echo-area still shows it.  Comparison goes through
+           ;; `substring-no-properties' because `compose' regenerates text-
+           ;; properties (cache values, timestamps) on every call.
+           (ours-and-same (and ours
+                                (string= (substring-no-properties cur)
+                                         content-np))))
       (when (and content
                  (not (string-empty-p content))
-                 (or (null cur) (not ours))
-                 (not same-visual))
+                 (or (null cur)            ; echo-area cleared by another module
+                     (not ours)           ; echo-area has foreign content
+                     (not ours-and-same))) ; echo-area still ours but contents differ
         (shaoline--log "yang-reassert: cur=%s ours=%s content-len=%s"
                        (and cur (substring-no-properties cur 0 (min (length cur) 60)))
                        (and ours t)
@@ -780,12 +818,14 @@ consult-xref, consult-yank-pop, etc.), and `M-x' / `M-:' via
         ;; (no orphan `last-display-time' from blocked `preserve-empty-message'
         ;; calls) and prevents the 1–2 s "disappear" window when an
         ;; external `(message nil)' slips through.
-        (setq shaoline--last-display-time (float-time))
+        (setq shaoline--last-display-time (float-time)
+              shaoline--last-displayed-content (or content-np "")
+              shaoline--last-displayed-content-time (float-time))
         (let* ((tagged (propertize content 'shaoline-origin t))
                (message-log-max nil)
                (resize-mini-windows nil)
-              (max-mini-window-height 1)
-              (message-truncate-lines t))
+               (max-mini-window-height 1)
+               (message-truncate-lines t))
           (message "%s" tagged))))))
 
 (defun shaoline--maybe-reassert-yang-after-timer ()
@@ -1072,19 +1112,32 @@ Reduced list focusing on major state changes.")
         (shaoline-update t)))))
 
 (defun shaoline--display-cached ()
-  "Display last cached content immediately without recomputation."
+  "Display last cached content immediately without recomputation.
+Skips when we already drew this exact visual content (race-free
+snapshot check; see `shaoline--last-displayed-content')."
   (shaoline--ensure-shared-vars)
-  (let ((content (shaoline--state-get :last-content)))
-    (shaoline--log "display-cached: content-len=%s"
-                   (and (stringp content) (length content)))
+  (let* ((content (shaoline--state-get :last-content))
+         (content-np (and (shaoline--state-get :last-content)
+                           (substring-no-properties
+                            (shaoline--state-get :last-content))))
+         (already-drawn (and content-np
+                             (string= content-np
+                                      shaoline--last-displayed-content))))
+    (shaoline--log "display-cached: content-len=%s already-drawn=%s"
+                   (and (stringp content) (length content))
+                   already-drawn)
     (when (and (not (bound-and-true-p shaoline--composing-p))
-               content (not (string-empty-p content)))
+               content (not (string-empty-p content))
+               (not already-drawn))
       (let* ((tagged (propertize content 'shaoline-origin t))
              (message-log-max nil)
              (resize-mini-windows nil)
              (max-mini-window-height 1)
              (message-truncate-lines t))
-        (message "%s" tagged)))))
+        (message "%s" tagged)
+        (setq shaoline--last-display-time (float-time)
+              shaoline--last-displayed-content (or content-np "")
+              shaoline--last-displayed-content-time (float-time))))))
 
 
 ;; ----------------------------------------------------------------------------
