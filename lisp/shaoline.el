@@ -598,40 +598,80 @@ For full dynamic adaptation, reload after theme changes."
 ;; ----------------------------------------------------------------------------
 
 (defun shaoline--collect-side (side)
-  "Collect all segments for SIDE (:left, :center, :right)."
+  "Collect all segments for SIDE (:left, :center, :right).
+Each segment is truncated to `shaoline--resolve-segment-max-width'
+characters to prevent individual long segments (git-branch paths,
+buffer names, large emoji clusters, etc.) from overflowing the
+layout and forcing the trailing `truncate-string-to-width' call in
+`shaoline--compose-line' to cut mid-grapheme, which renders as `\\$'
+in the echo area."
   (let* ((segments (cdr (assoc side shaoline-segments)))
          (results (mapcar #'shaoline--call-segment
                           (or segments
                               (plist-get shaoline-segments side)
-                              '()))))
+                              '())))
+         (max-w (shaoline--resolve-segment-max-width)))
     (shaoline--log "shaoline--collect-side %s in buffer: %s: %S" side (buffer-name) results)
-    results))
+    (if (null max-w)
+        results
+      (mapcar (lambda (s)
+                (if (and (stringp s) (> (string-width s) max-w))
+                    (truncate-string-to-width s max-w nil nil "…")
+                  s))
+              results))))
 
 (defun shaoline--calculate-layout (left center right width)
   "Calculate optimal layout for LEFT CENTER RIGHT segments given total WIDTH.
-Returns (left-str center-str right-str) as pure function."
+Returns (left-str center-str right-str) as pure function.
+
+Each side is shrunk proportionally when their combined natural width
+exceeds WIDTH minus gap and right-margin.  This complements the
+per-segment cap applied in `shaoline--collect-side'; the cap stops
+any single segment from blowing up the layout, this function stops
+any pair (or trio) from blowing up the combined width."
   (let* ((left-str (string-join (remove "" left) " "))
          (right-str (string-join (remove "" right) " "))
          (center-str (string-join (remove "" center) " "))
          (left-w (string-width left-str))
          (right-w (string-width right-str))
+         (center-w (string-width center-str))
          ;; Account for gaps and right margin more precisely
          (left-gap (if (string-empty-p left-str) 0 1))
          (right-gap (if (string-empty-p right-str) 0 1))
          (reserved-space (+ left-w right-w left-gap right-gap shaoline-right-margin))
-         (available (max 0 (- width reserved-space)))
-         (truncated-center
-          (cond
-           ;; No room for center — return empty, avoid ellipsis overflow
-           ((<= available 0) "")
-           ;; Truncate with ellipsis only if there's space for it
-           ((> (string-width center-str) available)
-            (truncate-string-to-width center-str available nil nil (if (> available 1) "…" "")))
-           (t center-str))))
-    (shaoline--log "layout-dbg: width=%s rm=%s left=%s(%s) right=%s(%s) reserved=%s available=%s"
+         (overflow (- reserved-space width))
+         ;; If the natural layout already overflows, scale left/right/center
+         ;; proportionally so the final concat fits WIDTH exactly.
+         (scale-factor (if (> overflow 0)
+                          (max 0.05 (/ (- width left-gap right-gap shaoline-right-margin)
+                                          (max 1 (+ left-w right-w center-w))))
+                        1.0))
+         (scaled-left-w  (max 0 (floor (* left-w scale-factor))))
+         (scaled-right-w (max 0 (floor (* right-w scale-factor))))
+         (scaled-center-w (max 0 (floor (* center-w scale-factor))))
+         (truncate-with-ellipsis (lambda (s w)
+                                   (if (and (stringp s) (> (string-width s) w))
+                                       (truncate-string-to-width
+                                        s (max 1 w) nil nil
+                                        (if (> w 1) "…" ""))
+                                     s)))
+         (final-left   (funcall truncate-with-ellipsis left-str   scaled-left-w))
+         (final-right  (funcall truncate-with-ellipsis right-str  scaled-right-w))
+         (available-center (max 0 (- width (string-width final-left) (string-width final-right)
+                                   (if (string-empty-p final-left) 0 1)
+                                   (if (string-empty-p final-right) 0 1)
+                                   shaoline-right-margin)))
+         (final-center (if (or (string-empty-p final-left) (string-empty-p final-right))
+                          ;; No room for center — return empty, avoid ellipsis overflow
+                          ""
+                        (funcall truncate-with-ellipsis center-str available-center))))
+    (shaoline--log "layout-dbg: width=%s rm=%s left=%s(%s) right=%s(%s) center=%s(%s) scale=%s"
                    width shaoline-right-margin
-                   left-str left-w right-str right-w reserved-space available)
-    (list left-str truncated-center right-str)))
+                   final-left (string-width final-left)
+                   final-right (string-width final-right)
+                   final-center (string-width final-center)
+                   scale-factor)
+    (list final-left final-center final-right)))
 
 (defun shaoline--compose-line (left center right width)
   "Compose final modeline string from LEFT, CENTER and RIGHT.
@@ -664,10 +704,16 @@ Align perfectly to WIDTH."
     (shaoline--log "compose-line-dbg: left-w=%s right-w=%s rm=%s width=%s align-needed=%s"
                    left-w right-w shaoline-right-margin width align-needed)
     (shaoline--log "shaoline--compose-line result in buffer: %s: %S" (buffer-name) result)
-    ;; Respect requested WIDTH strictly to avoid echo-area wrapping.
+    ;; Per-segment cap (shaoline--collect-side) and proportional shrink
+    ;; (shaoline--calculate-layout) together guarantee that result is
+    ;; at most WIDTH chars; no trailing truncate is needed and no mid-
+    ;; grapheme cut is possible.  Defensive last-resort truncate is
+    ;; kept for unexpected mid-grapheme split (e.g. a segment returns
+    ;; text containing a half-surrogate) and replaces it with a `…'
+    ;; ellipsis instead of a `\\$' placeholder.
     (let ((max-out width))
       (if (> (string-width result) max-out)
-          (truncate-string-to-width result max-out nil nil "")
+          (truncate-string-to-width result max-out nil nil "…")
         result))))
 
 (defvar shaoline--composing-p nil
@@ -700,6 +746,36 @@ message in echo-area too aggressively."
 
 (defvar shaoline--last-compose-time 0.0
   "Timestamp of the last real composition.")
+
+(defcustom shaoline-segment-max-width nil
+  "Maximum width per side (left/center/right) in characters, applied
+inside `shaoline--collect-side'.
+
+If nil, computed automatically as
+  (max 8 (/ (- (frame-width) 4 shaoline-right-margin) 3))
+to keep each side at roughly a third of the available width minus the
+right margin.  Without per-segment truncation, long paths, branch
+names, or large emoji segments overflow the available width and the
+final `truncate-string-to-width' in `shaoline--compose-line' cuts
+mid-multi-byte-grapheme, leaving a stray `\\$' in the echo area.
+
+Set to an explicit integer to force a hard cap on every segment.
+Set to t to disable truncation entirely (segments may then overflow,
+falling back to the old truncate-as-safety-net behaviour)."
+  :type '(choice (const :tag "Auto (one third of frame width minus margin)" nil)
+                 (const :tag "Disabled" t)
+                 integer)
+  :group 'shaoline)
+
+(defun shaoline--resolve-segment-max-width ()
+  "Return the effective per-side width cap, or nil if disabled."
+  (let ((v shaoline-segment-max-width))
+    (cond
+     ((eq v t) nil)
+     ((null v)
+      (max 8 (/ (max 0 (- (frame-width) 4 shaoline-right-margin)) 3)))
+     ((integerp v) (max 1 v))
+     (t nil))))
 
 (defun shaoline--compose-cache-key (&optional width)
   "Produce a cache key for the current buffer/frame WIDTH.

@@ -282,6 +282,19 @@
          (layout (shaoline--calculate-layout '("A") (list long-center) '("B") 20)))
     (should (< (string-width (nth 1 layout)) 20))))
 
+(ert-deftest shaoline-collect-side-truncates-long-segments ()
+  "Each segment must be capped at `shaoline--resolve-segment-max-width'
+so that the final layout fits WIDTH.  Without this cap, a single long
+segment (git branch path, buffer name) can blow up the right side and
+the trailing `truncate-string-to-width' in `shaoline--compose-line'
+cuts mid-multi-byte-grapheme, leaving a `\\$' in the echo area."
+  (let ((shaoline-segment-max-width 10))
+    (let ((results (shaoline--collect-side :left)))
+      (dolist (r results)
+        (should (or (null r) (stringp r)))
+        (when (stringp r)
+          (should (<= (string-width r) 10)))))))
+
 ;; ----------------------------------------------------------------------------
 ;; Test: Basic segments
 ;; ----------------------------------------------------------------------------
