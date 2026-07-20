@@ -211,6 +211,14 @@ And optional BODY."
              (message-log-max nil)
              (resize-mini-windows nil)
              (max-mini-window-height 1)
+             ;; `message-truncate-lines t' tells emacs to truncate the
+             ;; echo-area line to one row instead of wrapping it.  We
+             ;; always pre-truncate our content to the actual echo-area
+             ;; width in `shaoline--compose-line', so emacs sees a
+             ;; single-row string and never inserts a `\$' placeholder
+             ;; here.  Without `t' (default `nil') emacs wraps the line
+             ;; and renders a duplicate of the trailing emoji (e.g. two
+             ;; `🌒' on the second row) instead of truncating cleanly.
              (message-truncate-lines t))
         (shaoline--log "shaoline--display actually displaying: %s" tagged)
         (message "%s" tagged)
@@ -825,8 +833,15 @@ consult-xref, consult-yank-pop, etc.), and `M-x' / `M-:' via
                (message-log-max nil)
                (resize-mini-windows nil)
                (max-mini-window-height 1)
+               ;; See comment in `shaoline--display' about
+               ;; `message-truncate-lines t' — see that block for
+               ;; the full rationale.  Briefly: nil wraps the line
+               ;; and renders a duplicate of the trailing emoji
+               ;; (e.g. two `🌒' on a second row); t truncates to one
+               ;; row.  We pre-truncate our content so emacs never
+               ;; inserts a `\$' placeholder.
                (message-truncate-lines t))
-          (message "%s" tagged))))))
+           (message "%s" tagged))))))
 
 (defun shaoline--maybe-reassert-yang-after-timer ()
   "Backup timer to restore Shaoline if some other code cleared it."
@@ -1134,7 +1149,7 @@ snapshot check; see `shaoline--last-displayed-content')."
              (resize-mini-windows nil)
              (max-mini-window-height 1)
              (message-truncate-lines t))
-        (message "%s" tagged)
+          (message "%s" tagged)
         (setq shaoline--last-display-time (float-time)
               shaoline--last-displayed-content (or content-np "")
               shaoline--last-displayed-content-time (float-time))))))

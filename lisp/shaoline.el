@@ -711,7 +711,18 @@ Align perfectly to WIDTH."
     ;; kept for unexpected mid-grapheme split (e.g. a segment returns
     ;; text containing a half-surrogate) and replaces it with a `…'
     ;; ellipsis instead of a `\\$' placeholder.
-    (let ((max-out width))
+    ;;
+    ;; `effective-width' reserves a column for the active mode-line
+    ;; (or any other line emacs renders in the echo-area).  When WIDTH
+    ;; is the full frame-width but the mode-line consumes a column,
+    ;; emacs would otherwise wrap the line and add a second `…' for
+    ;; the wrapped second row.  Subtracting 1 column keeps the
+    ;; truncated result strictly within the single echo-area row.
+    (let* ((mode-line-column (if (and (boundp 'mode-line-format)
+                                       mode-line-format
+                                       (frame-parameter nil 'mode-line-format))
+                                 1 0))
+           (max-out (max 1 (- width mode-line-column))))
       (if (> (string-width result) max-out)
           (truncate-string-to-width result max-out nil nil "…")
         result))))
