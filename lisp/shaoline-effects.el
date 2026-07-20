@@ -211,7 +211,16 @@ And optional BODY."
              (message-log-max nil)
              (resize-mini-windows nil)
              (max-mini-window-height 1)
-             (message-truncate-lines t))
+             ;; `message-truncate-lines t' caused emacs to insert a literal
+             ;; `\$' placeholder whenever our line exceeded the echo-area
+             ;; width — the user reported "moon is hidden, after the
+             ;; clock there is a `$'".  `nil' tells emacs to wrap the
+             ;; line to the next echo-area row, which we never use
+             ;; anyway because `resize-mini-windows = nil' and
+             ;; `max-mini-window-height = 1'.  Combined with the
+             ;; `truncate-line-when-window-too-narrow' default this keeps
+             ;; the echo area at exactly one row, no `\$'.
+             (message-truncate-lines nil))
         (shaoline--log "shaoline--display actually displaying: %s" tagged)
         (message "%s" tagged)
         (push 'display shaoline--active-effects)))))
@@ -808,7 +817,16 @@ consult-xref, consult-yank-pop, etc.), and `M-x' / `M-:' via
                  (not (string-empty-p content))
                  (or (null cur)            ; echo-area cleared by another module
                      (not ours)           ; echo-area has foreign content
-                     (not ours-and-same))) ; echo-area still ours but contents differ
+                     (not ours-and-same))  ; echo-area still ours but contents differ
+                 ;; Avoid redrawing on every keystroke: if the same content
+                 ;; was drawn very recently, the empty/foreign echo-area is
+                 ;; almost certainly a transient race (corfu/eldoc clearing
+                 ;; between cursor-move and our reassert).  Skip it; the
+                 ;; guard timer will reclaim the echo area if it stays clear.
+                 (not (and content-np
+                           (string= content-np shaoline--last-displayed-content)
+                           (< (- (float-time) shaoline--last-displayed-content-time)
+                              0.3))))
         (shaoline--log "yang-reassert: cur=%s ours=%s content-len=%s"
                        (and cur (substring-no-properties cur 0 (min (length cur) 60)))
                        (and ours t)
@@ -825,8 +843,12 @@ consult-xref, consult-yank-pop, etc.), and `M-x' / `M-:' via
                (message-log-max nil)
                (resize-mini-windows nil)
                (max-mini-window-height 1)
-               (message-truncate-lines t))
-          (message "%s" tagged))))))
+               ;; See comment in `shaoline--display' about
+               ;; `message-truncate-lines nil' — prevents emacs from
+               ;; appending a literal `\$' placeholder at the end of
+               ;; long shaoline lines.
+               (message-truncate-lines nil))
+           (message "%s" tagged))))))
 
 (defun shaoline--maybe-reassert-yang-after-timer ()
   "Backup timer to restore Shaoline if some other code cleared it."
@@ -1028,8 +1050,15 @@ Reduced list focusing on major state changes.")
 (defvar shaoline--movement-commands
   '(next-line previous-line forward-char backward-char
               beginning-of-line end-of-line scroll-up-command scroll-down-command
-              dired-next-line dired-previous-line)
-  "Movement commands that should update regularly.")
+              dired-next-line dired-previous-line
+              self-insert-command newline newline-and-indent
+              delete-char delete-backward-char backward-delete-char-untabify)
+  "Commands that should update regularly but with debouncing.
+
+Includes cursor movement and text insertion/deletion.  These are
+frequent and would cause echo-area flicker if every key press redrew
+Shaoline, so `shaoline--should-update-after-command-p' throttles them
+with `shaoline-update-debounce'.")
 
 ;; ---------------------------------------------------------------------------
 ;; Update–decision helper — основной фильтр мерцания
@@ -1133,8 +1162,8 @@ snapshot check; see `shaoline--last-displayed-content')."
              (message-log-max nil)
              (resize-mini-windows nil)
              (max-mini-window-height 1)
-             (message-truncate-lines t))
-        (message "%s" tagged)
+             (message-truncate-lines nil))
+         (message "%s" tagged)
         (setq shaoline--last-display-time (float-time)
               shaoline--last-displayed-content (or content-np "")
               shaoline--last-displayed-content-time (float-time))))))
