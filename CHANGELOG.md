@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.3.7 — 2026-07-24
+
+- Keep adaptive as a stable strategy instead of repeatedly reinstalling yin/yang effects.
+- Install one consistent hook and timer set across context changes.
+- Trim the composed line against the actual echo-area pixel width.
+- Make hook registration idempotent and cancel stale yang timers.
+- Set single-line truncation in the minibuffer buffer used by the echo area.
+
 ## 3.3.6 — 2026-07-24
 
 - Use the actual echo-area window width instead of the frame width.

@@ -202,15 +202,12 @@ live reload), Emacs can get stuck in repeated void-variable errors."
     (setq shaoline--monitor-timer nil)))
 
 (defun shaoline--check-strategy-adaptation ()
-  "Check if strategy should be adapted based on context change."
-  (when (and (eq (or (and (boundp 'shaoline-mode-strategy) shaoline-mode-strategy)
-                  'yang)
-              'adaptive)
-           (shaoline--context-changed-p))
-    (let* ((current (shaoline--state-get :strategy))
-           (optimal (shaoline--adaptive-strategy-selection)))
-      (unless (eq current optimal)
-        (shaoline--transition-to-strategy optimal 0.5)))))
+  "Refresh adaptive context without reinstalling effects."
+  (when (eq (or (and (boundp 'shaoline-mode-strategy) shaoline-mode-strategy)
+                'yang)
+            'adaptive)
+    (shaoline--context-changed-p)))
+
 
 ;; ----------------------------------------------------------------------------
 ;; Traffic Shaping — Preventing Update Storms
@@ -285,12 +282,12 @@ live reload), Emacs can get stuck in repeated void-variable errors."
   (shaoline--transition-to-strategy 'yang))
 
 (defun shaoline-switch-to-adaptive ()
-  "Switch to adaptive strategy."
+  "Switch to adaptive strategy without replacing the active effects."
   (interactive)
   (setq shaoline-mode-strategy 'adaptive)
   (shaoline--start-context-monitoring)
-  (shaoline--transition-to-strategy
-   (shaoline--adaptive-strategy-selection)))
+  (shaoline--state-put :strategy 'adaptive)
+  (shaoline--apply-strategy 'adaptive))
 
 (defun shaoline-performance-report ()
   "Display performance metrics."

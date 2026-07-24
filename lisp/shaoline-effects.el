@@ -214,6 +214,9 @@ And optional BODY."
               (resize-mini-windows nil)
               (max-mini-window-height 1)
               (message-truncate-lines t))
+         (with-current-buffer (window-buffer (minibuffer-window (selected-frame)))
+           (setq-local message-truncate-lines t))
+
          (shaoline--log "shaoline--display actually displaying: %s" tagged)
          (message "%s" tagged)
          (push 'display shaoline--active-effects)))))
@@ -283,10 +286,12 @@ Return nil (or anything non-special) to let Emacs clear normally."
   "Registry of attached hooks.")
 
 (shaoline-defeffect shaoline--attach-hook (hook-name function)
-  "Attach FUNCTION to HOOK-NAME."
+  "Attach FUNCTION to HOOK-NAME exactly once and record it only when active."
+  (remove-hook hook-name function)
   (add-hook hook-name function)
-  (push (cons hook-name function) shaoline--hook-registry)
-  (push `(hook . ,hook-name) shaoline--active-effects))
+  (when (member function (symbol-value hook-name))
+    (push (cons hook-name function) shaoline--hook-registry)
+    (push `(hook . ,hook-name) shaoline--active-effects)))
 
 (shaoline-defeffect shaoline--detach-hook (hook-name function)
   "Detach FUNCTION from HOOK-NAME."
@@ -514,16 +519,20 @@ Preserved modes are left untouched (kept as the original default)."
   ;; Yang re-assertion: keep Shaoline permanently visible.
   ;; Register hook in our registry so it is reliably removed on deactivate.
   ;; ------------------------------------------------------------------
-  (when (eq strategy 'yang)
-    ;; Add with high priority; also record in our registry for cleanup
+  (when (memq strategy '(yang adaptive))
+    (remove-hook 'post-command-hook #'shaoline--reassert-yang-visibility)
     (add-hook 'post-command-hook #'shaoline--reassert-yang-visibility -100)
-    (push (cons 'post-command-hook #'shaoline--reassert-yang-visibility) shaoline--hook-registry)
-    ;; Periodic gentle reassert; keep a dedicated variable but ensure cleanup
+    (when (member #'shaoline--reassert-yang-visibility post-command-hook)
+      (push (cons 'post-command-hook #'shaoline--reassert-yang-visibility)
+            shaoline--hook-registry))
+    (when (and (boundp 'shaoline--yang-timer)
+               (timerp shaoline--yang-timer))
+      (cancel-timer shaoline--yang-timer))
     (setq shaoline--yang-timer
           (run-with-timer shaoline-yang-reassert-min-interval
                           shaoline-yang-reassert-min-interval
                           #'shaoline--maybe-reassert-yang-after-timer)))
-  (unless (eq strategy 'yang)
+  (unless (memq strategy '(yang adaptive))
     (remove-hook 'post-command-hook #'shaoline--reassert-yang-visibility)
     (setq shaoline--hook-registry
           (assq-delete-all 'post-command-hook shaoline--hook-registry))
@@ -555,13 +564,15 @@ Preserved modes are left untouched (kept as the original default)."
     (setq clear-message-function #'shaoline--clear-message-guard))
 
 
-  (when (shaoline--resolve-setting 'use-hooks)
+  (when (or (eq strategy 'adaptive)
+            (shaoline--resolve-setting 'use-hooks))
     (shaoline--attach-hook 'post-command-hook #'shaoline--smart-post-command-update)
     (shaoline--attach-hook 'after-save-hook #'shaoline--debounced-update)
     (shaoline--attach-hook 'window-configuration-change-hook #'shaoline--debounced-update)
 
     ;; Yang mode: gentle echo area reclaim
-    (when (shaoline--resolve-setting 'always-visible)
+    (when (or (eq strategy 'adaptive)
+              (shaoline--resolve-setting 'always-visible))
       (shaoline--attach-hook 'window-selection-change-functions
                              (lambda (&rest _)
                                (unless (shaoline--should-yield-echo-area-p)
@@ -576,7 +587,8 @@ Preserved modes are left untouched (kept as the original default)."
       (shaoline--attach-hook 'post-command-hook #'shaoline--capture-prefix-keys-post)
       (shaoline--attach-hook 'pre-command-hook #'shaoline--capture-prefix-keys-pre)))
 
-  (when (shaoline--resolve-setting 'use-advice)
+  (when (or (eq strategy 'adaptive)
+            (shaoline--resolve-setting 'use-advice))
     (shaoline--attach-advice #'message :around #'shaoline--advice-capture-message)
     (shaoline--attach-advice #'minibuffer-message :around #'shaoline--advice-capture-minibuffer-message)
     (shaoline--attach-advice #'read-event :around #'shaoline--advice-read-event)
@@ -588,12 +600,11 @@ Preserved modes are left untouched (kept as the original default)."
 
   ;; `shaoline--advice-preserve-empty-message' is already installed above with proper depth.
 
-  (when (shaoline--resolve-setting 'use-timers)
+  (when (or (eq strategy 'adaptive)
+            (shaoline--resolve-setting 'use-timers))
     (shaoline--start-timer 'update 1.0 t #'shaoline-update)
     ;; More conservative guard timing
-    (let ((guard-interval (if (shaoline--resolve-setting 'always-visible)
-                              0.5          ; Реже — меньше конфликтов
-                            0.7)))
+    (let ((guard-interval 1.0))
       (shaoline--start-timer 'guard guard-interval t #'shaoline--guard-visibility)))
 
   (when (shaoline--resolve-setting 'hide-modelines)
@@ -1093,12 +1104,15 @@ snapshot check; see `shaoline--last-displayed-content')."
                 content (not (string-empty-p content))
                 (not already-visible))
 
-      (let* ((tagged (propertize content 'shaoline-origin t))
-             (message-log-max nil)
-             (resize-mini-windows nil)
-             (max-mini-window-height 1)
-             (message-truncate-lines t))
-          (message "%s" tagged)
+       (let* ((tagged (propertize content 'shaoline-origin t))
+              (message-log-max nil)
+              (resize-mini-windows nil)
+              (max-mini-window-height 1)
+              (message-truncate-lines t))
+         (with-current-buffer (window-buffer (minibuffer-window (selected-frame)))
+           (setq-local message-truncate-lines t))
+         (message "%s" tagged)
+
         (setq shaoline--last-display-time (float-time)
               shaoline--last-displayed-content (or content-np "")
               shaoline--last-displayed-content-time (float-time))))))

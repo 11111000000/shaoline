@@ -1,6 +1,6 @@
 ;;; shaoline.el --- Functional minimalist echo-area modeline -*- lexical-binding: t; -*-
 
-;; Version: 3.3.6
+;; Version: 3.3.7
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: convenience, mode-line, battery, clock, git, gptel, moon, project, tao
 ;; Copyright (C) 2025 Peter
@@ -780,15 +780,20 @@ falling back to the old truncate-as-safety-net behaviour)."
      (t nil))))
 
 (defun shaoline--echo-area-width ()
-  "Return the usable character width of the echo-area window."
-  (let ((window (or (and (active-minibuffer-window)
-                         (active-minibuffer-window))
-                    (and (window-live-p (minibuffer-window (selected-frame)))
-                         (minibuffer-window (selected-frame)))
-                    (selected-window))))
-    (if (window-live-p window)
-        (window-body-width window)
-      80)))
+  "Return a conservative width in columns for the echo-area window."
+  (let* ((window (or (and (active-minibuffer-window)
+                          (active-minibuffer-window))
+                     (and (window-live-p (minibuffer-window (selected-frame)))
+                          (minibuffer-window (selected-frame)))
+                     (selected-window)))
+         (pixel-width (and (window-live-p window)
+                           (let ((edges (window-body-pixel-edges window)))
+                             (- (nth 2 edges) (nth 0 edges)))))
+         (char-width (and (window-live-p window)
+                          (frame-char-width (window-frame window)))))
+    (max 1 (if (and pixel-width char-width (> char-width 0))
+               (floor (/ pixel-width (float char-width)))
+             (if (window-live-p window) (window-body-width window) 80)))))
 
 (defun shaoline--target-width (&optional width)
   "Return a conservative single-line layout width for optional WIDTH."
@@ -797,6 +802,22 @@ falling back to the old truncate-as-safety-net behaviour)."
 (defun shaoline--visible-width (string)
   "Return STRING's display width without display alignment properties."
   (string-width (substring-no-properties string)))
+
+(defun shaoline--fit-pixel-width (string)
+  "Trim STRING until it fits the echo-area pixel width."
+  (if (or (not (display-graphic-p))
+          (not (fboundp 'string-pixel-width)))
+      string
+    (let* ((window (or (active-minibuffer-window)
+                       (minibuffer-window (selected-frame))))
+           (edges (and (window-live-p window) (window-body-pixel-edges window)))
+           (limit (and edges (max 1 (- (nth 2 edges) (nth 0 edges)
+                                      (* 2 (frame-char-width))))))
+           (result string))
+      (while (and limit (> (length result) 1)
+                  (> (string-pixel-width result) limit))
+        (setq result (substring result 0 -1)))
+      result)))
 
 (defun shaoline--compose-cache-key (&optional width)
   "Produce a cache key for the current buffer/frame WIDTH.
@@ -870,7 +891,9 @@ by =shaoline-compose-min-interval= to smooth out bursts."
                  (left (shaoline--collect-side :left))
                  (center (shaoline--collect-side :center))
                  (right (shaoline--collect-side :right))
-                 (result (shaoline--compose-line left center right target-width)))
+                  (result (shaoline--fit-pixel-width
+                           (shaoline--compose-line left center right target-width))))
+
             (puthash key (cons result now) shaoline--compose-cache)
             (setq shaoline--last-compose-time now)
             result)))))))
