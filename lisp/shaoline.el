@@ -1,6 +1,6 @@
 ;;; shaoline.el --- Functional minimalist echo-area modeline -*- lexical-binding: t; -*-
 
-;; Version: 3.3.7
+;; Version: 3.3.8
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: convenience, mode-line, battery, clock, git, gptel, moon, project, tao
 ;; Copyright (C) 2025 Peter
@@ -804,7 +804,7 @@ falling back to the old truncate-as-safety-net behaviour)."
   (string-width (substring-no-properties string)))
 
 (defun shaoline--fit-pixel-width (string)
-  "Trim STRING until it fits the echo-area pixel width."
+  "Trim STRING while preserving the rightmost content."
   (if (or (not (display-graphic-p))
           (not (fboundp 'string-pixel-width)))
       string
@@ -814,10 +814,17 @@ falling back to the old truncate-as-safety-net behaviour)."
            (limit (and edges (max 1 (- (nth 2 edges) (nth 0 edges)
                                       (* 2 (frame-char-width))))))
            (result string))
-      (while (and limit (> (length result) 1)
-                  (> (string-pixel-width result) limit))
-        (setq result (substring result 0 -1)))
+      (while (and limit (> (string-pixel-width result) limit))
+        (let* ((last-space (cl-position ?\s result :from-end t))
+               (space (and last-space
+                            (cl-position ?\s result :from-end t
+                                         :end last-space))))
+          (if space
+              (setq result (concat (substring result 0 space)
+                                   (substring result (1+ space))))
+            (setq result (substring result 0 -1)))))
       result)))
+
 
 (defun shaoline--compose-cache-key (&optional width)
   "Produce a cache key for the current buffer/frame WIDTH.

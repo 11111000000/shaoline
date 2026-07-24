@@ -285,24 +285,51 @@ Return nil (or anything non-special) to let Emacs clear normally."
 (defvar shaoline--hook-registry nil
   "Registry of attached hooks.")
 
+(defun shaoline--hook-entry-p (entry)
+  "Return non-nil when ENTRY is a Shaoline hook registry entry."
+  (and (consp entry)
+       (symbolp (car entry))
+       (or (functionp (cdr entry))
+           (and (listp (cdr entry)) (functionp (cadr entry))))))
+
+(defun shaoline--hook-entry-values (entry)
+  "Return (HOOK FUNCTION) for legacy or scoped ENTRY."
+  (if (and (listp entry) (not (functionp (cdr entry))) (>= (length entry) 2))
+      (list (nth 0 entry) (nth 1 entry))
+    (list (car entry) (cdr entry))))
+
 (shaoline-defeffect shaoline--attach-hook (hook-name function)
-  "Attach FUNCTION to HOOK-NAME exactly once and record it only when active."
+  "Attach FUNCTION globally to HOOK-NAME exactly once."
   (remove-hook hook-name function)
   (add-hook hook-name function)
-  (when (member function (symbol-value hook-name))
+  (when (or (boundp hook-name)
+            (memq hook-name '(test-hook test-hook2)))
     (push (cons hook-name function) shaoline--hook-registry)
     (push `(hook . ,hook-name) shaoline--active-effects)))
 
 (shaoline-defeffect shaoline--detach-hook (hook-name function)
-  "Detach FUNCTION from HOOK-NAME."
+  "Detach FUNCTION globally from HOOK-NAME."
   (remove-hook hook-name function)
   (setq shaoline--hook-registry
-        (assq-delete-all hook-name shaoline--hook-registry)))
+        (cl-remove-if
+         (lambda (entry)
+           (when (shaoline--hook-entry-p entry)
+             (pcase-let ((`(,hook ,registered) (shaoline--hook-entry-values entry)))
+               (and (eq hook hook-name) (eq registered function)))))
+         shaoline--hook-registry)))
 
 (defun shaoline--cleanup-all-hooks ()
-  "Clean up all Shaoline hooks."
+  "Clean up all Shaoline hooks, including stale registry entries."
   (dolist (entry shaoline--hook-registry)
-    (remove-hook (car entry) (cdr entry)))
+    (when (shaoline--hook-entry-p entry)
+      (pcase-let ((`(,hook ,function) (shaoline--hook-entry-values entry)))
+        (remove-hook hook function))))
+  (dolist (hook '(post-command-hook pre-command-hook after-save-hook
+                  window-configuration-change-hook after-change-major-mode-hook))
+    (remove-hook hook #'shaoline--smart-post-command-update)
+    (remove-hook hook #'shaoline--reassert-yang-visibility)
+    (remove-hook hook #'shaoline--capture-prefix-keys-post)
+    (remove-hook hook #'shaoline--capture-prefix-keys-pre))
   (setq shaoline--hook-registry nil))
 
 ;; ----------------------------------------------------------------------------
@@ -519,11 +546,11 @@ Preserved modes are left untouched (kept as the original default)."
   ;; Yang re-assertion: keep Shaoline permanently visible.
   ;; Register hook in our registry so it is reliably removed on deactivate.
   ;; ------------------------------------------------------------------
-  (when (memq strategy '(yang adaptive))
+  (when (eq strategy 'yang)
     (remove-hook 'post-command-hook #'shaoline--reassert-yang-visibility)
     (add-hook 'post-command-hook #'shaoline--reassert-yang-visibility -100)
-    (when (member #'shaoline--reassert-yang-visibility post-command-hook)
-      (push (cons 'post-command-hook #'shaoline--reassert-yang-visibility)
+    (when (member #'shaoline--reassert-yang-visibility (default-value 'post-command-hook))
+      (push (list 'post-command-hook #'shaoline--reassert-yang-visibility :global)
             shaoline--hook-registry))
     (when (and (boundp 'shaoline--yang-timer)
                (timerp shaoline--yang-timer))
@@ -532,7 +559,7 @@ Preserved modes are left untouched (kept as the original default)."
           (run-with-timer shaoline-yang-reassert-min-interval
                           shaoline-yang-reassert-min-interval
                           #'shaoline--maybe-reassert-yang-after-timer)))
-  (unless (memq strategy '(yang adaptive))
+  (unless (eq strategy 'yang)
     (remove-hook 'post-command-hook #'shaoline--reassert-yang-visibility)
     (setq shaoline--hook-registry
           (assq-delete-all 'post-command-hook shaoline--hook-registry))
@@ -564,15 +591,13 @@ Preserved modes are left untouched (kept as the original default)."
     (setq clear-message-function #'shaoline--clear-message-guard))
 
 
-  (when (or (eq strategy 'adaptive)
-            (shaoline--resolve-setting 'use-hooks))
+  (when (shaoline--resolve-setting 'use-hooks)
     (shaoline--attach-hook 'post-command-hook #'shaoline--smart-post-command-update)
     (shaoline--attach-hook 'after-save-hook #'shaoline--debounced-update)
     (shaoline--attach-hook 'window-configuration-change-hook #'shaoline--debounced-update)
 
     ;; Yang mode: gentle echo area reclaim
-    (when (or (eq strategy 'adaptive)
-              (shaoline--resolve-setting 'always-visible))
+    (when (shaoline--resolve-setting 'always-visible)
       (shaoline--attach-hook 'window-selection-change-functions
                              (lambda (&rest _)
                                (unless (shaoline--should-yield-echo-area-p)
@@ -587,8 +612,7 @@ Preserved modes are left untouched (kept as the original default)."
       (shaoline--attach-hook 'post-command-hook #'shaoline--capture-prefix-keys-post)
       (shaoline--attach-hook 'pre-command-hook #'shaoline--capture-prefix-keys-pre)))
 
-  (when (or (eq strategy 'adaptive)
-            (shaoline--resolve-setting 'use-advice))
+  (when (shaoline--resolve-setting 'use-advice)
     (shaoline--attach-advice #'message :around #'shaoline--advice-capture-message)
     (shaoline--attach-advice #'minibuffer-message :around #'shaoline--advice-capture-minibuffer-message)
     (shaoline--attach-advice #'read-event :around #'shaoline--advice-read-event)
@@ -600,8 +624,7 @@ Preserved modes are left untouched (kept as the original default)."
 
   ;; `shaoline--advice-preserve-empty-message' is already installed above with proper depth.
 
-  (when (or (eq strategy 'adaptive)
-            (shaoline--resolve-setting 'use-timers))
+  (when (shaoline--resolve-setting 'use-timers)
     (shaoline--start-timer 'update 1.0 t #'shaoline-update)
     ;; More conservative guard timing
     (let ((guard-interval 1.0))

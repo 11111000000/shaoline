@@ -42,6 +42,17 @@
     (should (<= (string-width result) 40))))
 
 
+(ert-deftest shaoline-fit-pixel-width-preserves-rightmost-segment ()
+  "Pixel fitting removes spacer columns before the rightmost content."
+  (cl-letf (((symbol-function 'display-graphic-p) (lambda () t))
+            ((symbol-function 'active-minibuffer-window) (lambda () nil))
+            ((symbol-function 'minibuffer-window) (lambda (_) nil))
+            ((symbol-function 'selected-window) (lambda () nil))
+            ((symbol-function 'window-body-pixel-edges) (lambda (_) '(0 0 100 20)))
+            ((symbol-function 'frame-char-width) (lambda (&optional _) 10)))
+    (let ((result (shaoline--fit-pixel-width "left                 🌓")))
+      (should (string-suffix-p "🌓" result)))))
+
 (ert-deftest shaoline-compose-segment-errors-graceful ()
   "Segment errors are handled gracefully in composition."
   (puthash 'error-segment
@@ -49,10 +60,7 @@
            shaoline--segment-registry)
   (let* ((shaoline-segments '((:left error-segment shaoline-segment-buffer-name)))
          (result (shaoline-compose)))
-    (should (stringp result))
-    ;; We only guarantee that some visible text is produced
-    (should (stringp result))
-    ))
+    (should (stringp result))))
 
 ;; ----------------------------------------------------------------------------
 ;; Test: State management

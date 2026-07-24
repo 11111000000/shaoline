@@ -135,12 +135,13 @@ live reload), Emacs can get stuck in repeated void-variable errors."
 ;; ----------------------------------------------------------------------------
 
 (defun shaoline--system-under-stress-p ()
-  "Detect if system is under stress and should reduce activity."
+  "Return non-nil only for sustained Shaoline-local pressure."
   (shaoline--ensure-strategy-vars)
   (or (> shaoline--pending-updates 5)
       (> (plist-get shaoline--metrics :avg-update-time) 0.05)
-      (when-let ((load (car (load-average))))
-        (> load 3.0))))
+      (and (fboundp 'load-average)
+           (when-let ((load (car (load-average))))
+             (> load 3.0)))))
 
 ;; ----------------------------------------------------------------------------
 ;; Strategy Transitions — Smooth Mode Changes

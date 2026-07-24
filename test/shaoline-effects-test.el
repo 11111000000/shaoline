@@ -205,21 +205,29 @@ so the next display/redraw is not treated as a no-op."
 ;; Test: Hook effects
 ;; ----------------------------------------------------------------------------
 
+(ert-deftest shaoline-hook-registry-global-entry-is-reconciled ()
+  "Global hook registry entries use an explicit scope marker."
+  (setq shaoline--hook-registry nil)
+  (defun shaoline-test-global-hook () nil)
+  (shaoline--attach-hook 'post-command-hook #'shaoline-test-global-hook)
+  (should (cl-some (lambda (entry)
+                     (and (eq (car entry) 'post-command-hook)
+                          (eq (if (functionp (cdr entry))
+                                  (cdr entry)
+                                (cadr entry))
+                              #'shaoline-test-global-hook)))
+                   shaoline--hook-registry)))
+
 (ert-deftest shaoline-hook-effects ()
   "Test hook attach and detach effects."
   (setq shaoline--hook-registry nil)
-
-  ;; Test function
   (defun test-hook-function () (message "test"))
-
-  ;; Attach hook
   (shaoline--attach-hook 'test-hook 'test-hook-function)
   (should (member '(test-hook . test-hook-function) shaoline--hook-registry))
   (should (member '(hook . test-hook) shaoline--active-effects))
-
-  ;; Detach hook
   (shaoline--detach-hook 'test-hook 'test-hook-function)
   (should-not (assoc 'test-hook shaoline--hook-registry)))
+
 
 (ert-deftest shaoline-hook-cleanup ()
   "Test cleanup of all hooks."

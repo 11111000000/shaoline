@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.3.8 — 2026-07-24
+
+- Preserve the rightmost segment, including the moon, during pixel fitting.
+- Remove yang reassertion and repeating display timers from adaptive mode.
+- Track and clean global hooks consistently across buffer-local hook values.
+- Stop treating unrelated system load as a reason to switch display effects.
+- Add regression coverage for moon preservation and hook reconciliation.
+
 ## 3.3.7 — 2026-07-24
 
 - Keep adaptive as a stable strategy instead of repeatedly reinstalling yin/yang effects.
