@@ -175,8 +175,8 @@ And optional BODY."
 ;; Display Effects — Echo Area Manifestation
 ;; ----------------------------------------------------------------------------
 
-(shaoline-defeffect shaoline--display (content)
-  "Display CONTENT in echo area with Shaoline tagging, избегая лишних перерисовок."
+(defun shaoline--display (content)
+  "Display CONTENT in echo area with Shaoline tagging, avoiding redundant redraws."
   (shaoline--log "shaoline--display called in buffer: %s, content: %s" (buffer-name) content)
   (let* ((content-np (and (stringp content) (substring-no-properties content)))
          (last-draw shaoline--last-displayed-content)
@@ -195,11 +195,13 @@ And optional BODY."
          (already-drawn (and (stringp content-np)
                              (string= content-np last-draw)))
          (cur (current-message))
-         (ours-in-echo (and cur
-                            (get-text-property 0 'shaoline-origin cur)
-                            (string= (substring-no-properties cur)
-                                     content-np)))
-         (skip (or already-drawn ours-in-echo)))
+          (ours-in-echo (and cur
+                             (get-text-property 0 'shaoline-origin cur)
+                             (string= (substring-no-properties cur)
+                                      content-np)))
+          (already-visible (and already-drawn ours-in-echo))
+          (skip already-visible))
+
     (when (and (not (bound-and-true-p shaoline--composing-p))
                (shaoline--should-display-p content)
                (not skip))
@@ -207,22 +209,14 @@ And optional BODY."
       (setq shaoline--last-display-time (float-time)
             shaoline--last-displayed-content (or content-np "")
             shaoline--last-displayed-content-time (float-time))
-      (let* ((tagged (propertize content 'shaoline-origin t))
-             (message-log-max nil)
-             (resize-mini-windows nil)
-             (max-mini-window-height 1)
-             ;; `message-truncate-lines t' tells emacs to truncate the
-             ;; echo-area line to one row instead of wrapping it.  We
-             ;; always pre-truncate our content to the actual echo-area
-             ;; width in `shaoline--compose-line', so emacs sees a
-             ;; single-row string and never inserts a `\$' placeholder
-             ;; here.  Without `t' (default `nil') emacs wraps the line
-             ;; and renders a duplicate of the trailing emoji (e.g. two
-             ;; `🌒' on the second row) instead of truncating cleanly.
-             (message-truncate-lines t))
-        (shaoline--log "shaoline--display actually displaying: %s" tagged)
-        (message "%s" tagged)
-        (push 'display shaoline--active-effects)))))
+       (let* ((tagged (propertize content 'shaoline-origin t))
+              (message-log-max nil)
+              (resize-mini-windows nil)
+              (max-mini-window-height 1)
+              (message-truncate-lines t))
+         (shaoline--log "shaoline--display actually displaying: %s" tagged)
+         (message "%s" tagged)
+         (push 'display shaoline--active-effects)))))
 
 (shaoline-defeffect shaoline--clear-echo-area ()
   "Clear echo area if it currently displays Shaoline content.
@@ -793,55 +787,20 @@ consult-xref, consult-yank-pop, etc.), and `M-x' / `M-:' via
              (shaoline--resolve-setting 'always-visible)
              (not (shaoline--should-yield-echo-area-p))
              (shaoline--echo-area-stable-p)
-             ;; Skip if this/previous command opens a minibuffer: at
-             ;; post-command-hook time the minibuffer is not yet active
-             ;; (shaoline--echo-area-busy-p returns nil), so drawing
-             ;; would overlay the soon-to-be-rendered prompt and get
-             ;; erased by minibuffer-setup, leaving the user with an
-             ;; empty minibuffer until they type the first filter char.
              (not (shaoline--minibuffer-trigger-cmd-p this-command))
              (not (shaoline--minibuffer-trigger-cmd-p last-command)))
     (let* ((content (shaoline--state-get :last-content))
            (cur (current-message))
-           (ours (and cur (get-text-property 0 'shaoline-origin cur)))
            (content-np (and (stringp content) (substring-no-properties content)))
-           ;; Skip when we already drew this exact visual content AND the
-           ;; live echo-area still shows it.  Comparison goes through
-           ;; `substring-no-properties' because `compose' regenerates text-
-           ;; properties (cache values, timestamps) on every call.
-           (ours-and-same (and ours
-                                (string= (substring-no-properties cur)
-                                         content-np))))
+           (ours-and-same (and cur
+                                (get-text-property 0 'shaoline-origin cur)
+                                (string= (substring-no-properties cur) content-np))))
       (when (and content
                  (not (string-empty-p content))
-                 (or (null cur)            ; echo-area cleared by another module
-                     (not ours)           ; echo-area has foreign content
-                     (not ours-and-same))) ; echo-area still ours but contents differ
-        (shaoline--log "yang-reassert: cur=%s ours=%s content-len=%s"
-                       (and cur (substring-no-properties cur 0 (min (length cur) 60)))
-                       (and ours t)
-                       (length content))
-        ;; Update the throttle anchor only on a real re-assert. This
-        ;; keeps the timer in sync with what the user actually sees
-        ;; (no orphan `last-display-time' from blocked `preserve-empty-message'
-        ;; calls) and prevents the 1–2 s "disappear" window when an
-        ;; external `(message nil)' slips through.
-        (setq shaoline--last-display-time (float-time)
-              shaoline--last-displayed-content (or content-np "")
-              shaoline--last-displayed-content-time (float-time))
-        (let* ((tagged (propertize content 'shaoline-origin t))
-               (message-log-max nil)
-               (resize-mini-windows nil)
-               (max-mini-window-height 1)
-               ;; See comment in `shaoline--display' about
-               ;; `message-truncate-lines t' — see that block for
-               ;; the full rationale.  Briefly: nil wraps the line
-               ;; and renders a duplicate of the trailing emoji
-               ;; (e.g. two `🌒' on a second row); t truncates to one
-               ;; row.  We pre-truncate our content so emacs never
-               ;; inserts a `\$' placeholder.
-               (message-truncate-lines t))
-           (message "%s" tagged))))))
+                 (not ours-and-same))
+        (shaoline--state-put :last-content content)
+        (shaoline--display content)))))
+
 
 (defun shaoline--maybe-reassert-yang-after-timer ()
   "Backup timer to restore Shaoline if some other code cleared it."
@@ -1051,27 +1010,17 @@ Reduced list focusing on major state changes.")
 ;; ---------------------------------------------------------------------------
 
 (defun shaoline--should-update-after-command-p (command)
-  "Return non-nil when Shaoline should run an *update* after COMMAND.
-
-Логика:
-1. НЕ обновляем если echo-area занята или нестабильна
-2. Команды из `shaoline--commands-requiring-update` — всегда.
-3. «Движение» (`shaoline--movement-commands`) — не чаще, чем раз в
-   `shaoline-update-debounce` секунд.
-4. В остальных случаях полагаемся на `shaoline--significant-change-p`."
+  "Return non-nil when Shaoline should update after COMMAND."
   (shaoline--ensure-shared-vars)
-  (and
-   ;; Основное правило: НЕ обновляем если echo-area должна быть свободной
-   (not (shaoline--should-yield-echo-area-p))
-   (cond
-    ;; Явно важные события
-    ((memq command shaoline--commands-requiring-update) t)
-    ;; Частые перемещения курсора — тротлим
-    ((memq command shaoline--movement-commands)
-     (> (- (float-time) shaoline--last-movement-update)
-        (or (and (boundp 'shaoline-update-debounce) shaoline-update-debounce) 0.25)))
-    ;; Всё остальное — по изменению значимого состояния
-    (t (shaoline--significant-change-p)))))
+  (and (not (shaoline--should-yield-echo-area-p))
+       (cond
+        ((memq command shaoline--commands-requiring-update) t)
+        ((memq command shaoline--movement-commands)
+         (> (- (float-time) shaoline--last-movement-update)
+            (or (and (boundp 'shaoline-update-debounce)
+                     shaoline-update-debounce)
+                0.25)))
+        (t (shaoline--significant-change-p)))))
 
 ;; shaoline--last-movement-update is declared near the top of this file.
 ;; (kept there to ensure early declaration before any references)
@@ -1087,17 +1036,12 @@ Reduced list focusing on major state changes.")
                  (shaoline--echo-area-busy-p)
                  (shaoline--should-yield-echo-area-p))
 
-  (when (shaoline--should-update-after-command-p this-command)
-    ;; Record command and time for rate limiting
-    (shaoline--state-put :last-command this-command)
-    (shaoline--state-put :last-update-time (float-time))
-
-    ;; Update movement timestamp if needed
-    (when (memq this-command shaoline--movement-commands)
-      (setq shaoline--last-movement-update (float-time)))
-
-    ;; repaint right here – no extra 0.1 s gap
-    (shaoline-update)))
+    (when (shaoline--should-update-after-command-p this-command)
+      (shaoline--state-put :last-command this-command)
+      (shaoline--state-put :last-update-time (float-time))
+      (when (memq this-command shaoline--movement-commands)
+        (setq shaoline--last-movement-update (float-time)))
+      (shaoline-update)))
 
 ;; ----------------------------------------------------------------------------
 ;; Guard Timer — Gentle Persistence
@@ -1132,18 +1076,23 @@ Skips when we already drew this exact visual content (race-free
 snapshot check; see `shaoline--last-displayed-content')."
   (shaoline--ensure-shared-vars)
   (let* ((content (shaoline--state-get :last-content))
-         (content-np (and (shaoline--state-get :last-content)
-                           (substring-no-properties
-                            (shaoline--state-get :last-content))))
+         (content-np (and content (substring-no-properties content)))
+         (current (current-message))
+         (ours-in-echo (and current
+                            (get-text-property 0 'shaoline-origin current)
+                            (string= (substring-no-properties current)
+                                     content-np)))
          (already-drawn (and content-np
                              (string= content-np
-                                      shaoline--last-displayed-content))))
-    (shaoline--log "display-cached: content-len=%s already-drawn=%s"
-                   (and (stringp content) (length content))
-                   already-drawn)
-    (when (and (not (bound-and-true-p shaoline--composing-p))
-               content (not (string-empty-p content))
-               (not already-drawn))
+                                      shaoline--last-displayed-content)))
+         (already-visible (and already-drawn ours-in-echo)))
+     (shaoline--log "display-cached: content-len=%s already-visible=%s"
+                    (and (stringp content) (length content))
+                    already-visible)
+     (when (and (not (bound-and-true-p shaoline--composing-p))
+                content (not (string-empty-p content))
+                (not already-visible))
+
       (let* ((tagged (propertize content 'shaoline-origin t))
              (message-log-max nil)
              (resize-mini-windows nil)

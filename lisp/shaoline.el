@@ -1,6 +1,6 @@
 ;;; shaoline.el --- Functional minimalist echo-area modeline -*- lexical-binding: t; -*-
 
-;; Version: 3.3.4
+;; Version: 3.3.6
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: convenience, mode-line, battery, clock, git, gptel, moon, project, tao
 ;; Copyright (C) 2025 Peter
@@ -632,9 +632,10 @@ any pair (or trio) from blowing up the combined width."
   (let* ((left-str (string-join (remove "" left) " "))
          (right-str (string-join (remove "" right) " "))
          (center-str (string-join (remove "" center) " "))
-         (left-w (string-width left-str))
-         (right-w (string-width right-str))
-         (center-w (string-width center-str))
+          (left-w (shaoline--visible-width left-str))
+          (right-w (shaoline--visible-width right-str))
+          (center-w (shaoline--visible-width center-str))
+
          ;; Account for gaps and right margin more precisely
          (left-gap (if (string-empty-p left-str) 0 1))
          (right-gap (if (string-empty-p right-str) 0 1))
@@ -657,7 +658,8 @@ any pair (or trio) from blowing up the combined width."
                                      s)))
          (final-left   (funcall truncate-with-ellipsis left-str   scaled-left-w))
          (final-right  (funcall truncate-with-ellipsis right-str  scaled-right-w))
-         (available-center (max 0 (- width (string-width final-left) (string-width final-right)
+          (available-center (max 0 (- width (shaoline--visible-width final-left) (shaoline--visible-width final-right)
+
                                    (if (string-empty-p final-left) 0 1)
                                    (if (string-empty-p final-right) 0 1)
                                    shaoline-right-margin)))
@@ -667,9 +669,10 @@ any pair (or trio) from blowing up the combined width."
                         (funcall truncate-with-ellipsis center-str available-center))))
     (shaoline--log "layout-dbg: width=%s rm=%s left=%s(%s) right=%s(%s) center=%s(%s) scale=%s"
                    width shaoline-right-margin
-                   final-left (string-width final-left)
-                   final-right (string-width final-right)
-                   final-center (string-width final-center)
+                    final-left (shaoline--visible-width final-left)
+                    final-right (shaoline--visible-width final-right)
+                    final-center (shaoline--visible-width final-center)
+
                    scale-factor)
     (list final-left final-center final-right)))
 
@@ -682,50 +685,38 @@ Align perfectly to WIDTH."
          (right-str (nth 2 layout))
          (left-w (string-width left-str))
          (right-w (string-width right-str))
-         (gap-left (if (string-empty-p left-str) "" " "))
-         (align-needed (not (string-empty-p right-str)))
-         (result
-          (concat
-           left-str
-           ;; If center is empty, reuse gap-left as the align spacer to avoid an extra extra char.
-           (if (and align-needed (string-empty-p center-str) (not (string-empty-p gap-left)))
-               (propertize gap-left 'display
-                           `(space :align-to (- right ,(+ right-w shaoline-right-margin))))
-             gap-left)
-           center-str
-           ;; Only insert a separate align space when center has content.
-           (when (and align-needed (not (string-empty-p center-str)))
-             (propertize " " 'display
-                         `(space :align-to (- right ,(+ right-w shaoline-right-margin)))))
-           right-str)))
+          (gap-left (if (string-empty-p left-str) "" " "))
+          (align-needed (not (string-empty-p right-str)))
+          (natural-gap (if align-needed
+                           (make-string
+                            (max 0 (- width left-w right-w
+                                    (if (string-empty-p center-str) 0 (string-width center-str))
+                                    (if (string-empty-p left-str) 0 1)
+                                    (if (string-empty-p center-str) 0 1)
+                                    shaoline-right-margin))
+                            ?\ )
+                         ""))
+          (result
+           (concat
+            left-str
+            gap-left
+            center-str
+            natural-gap
+            right-str)))
+
     ;; Store rendered segment widths for shaoline-available-center-width
     (shaoline--state-put :last-left-width left-w)
     (shaoline--state-put :last-right-width right-w)
     (shaoline--log "compose-line-dbg: left-w=%s right-w=%s rm=%s width=%s align-needed=%s"
                    left-w right-w shaoline-right-margin width align-needed)
     (shaoline--log "shaoline--compose-line result in buffer: %s: %S" (buffer-name) result)
-    ;; Per-segment cap (shaoline--collect-side) and proportional shrink
-    ;; (shaoline--calculate-layout) together guarantee that result is
-    ;; at most WIDTH chars; no trailing truncate is needed and no mid-
-    ;; grapheme cut is possible.  Defensive last-resort truncate is
-    ;; kept for unexpected mid-grapheme split (e.g. a segment returns
-    ;; text containing a half-surrogate) and replaces it with a `…'
-    ;; ellipsis instead of a `\\$' placeholder.
-    ;;
-    ;; `effective-width' reserves a column for the active mode-line
-    ;; (or any other line emacs renders in the echo-area).  When WIDTH
-    ;; is the full frame-width but the mode-line consumes a column,
-    ;; emacs would otherwise wrap the line and add a second `…' for
-    ;; the wrapped second row.  Subtracting 1 column keeps the
-    ;; truncated result strictly within the single echo-area row.
-    (let* ((mode-line-column (if (and (boundp 'mode-line-format)
-                                       mode-line-format
-                                       (frame-parameter nil 'mode-line-format))
-                                 1 0))
-           (max-out (max 1 (- width mode-line-column))))
-      (if (> (string-width result) max-out)
-          (truncate-string-to-width result max-out nil nil "…")
-        result))))
+     ;; The target width already reserves the final column for echo-area
+     ;; continuation/truncation markers.
+     (let ((max-out (max 1 (- width 1))))
+       (if (> (shaoline--visible-width result) max-out)
+           (truncate-string-to-width result max-out nil nil "…")
+         result))))
+
 
 (defvar shaoline--composing-p nil
   "Non-nil while Shaoline is composing its line; suppress side effects.")
@@ -780,13 +771,32 @@ falling back to the old truncate-as-safety-net behaviour)."
 
 (defun shaoline--resolve-segment-max-width ()
   "Return the effective per-side width cap, or nil if disabled."
-  (let ((v shaoline-segment-max-width))
+  (let* ((v shaoline-segment-max-width))
     (cond
      ((eq v t) nil)
      ((null v)
-      (max 8 (/ (max 0 (- (frame-width) 4 shaoline-right-margin)) 3)))
+      (max 8 (/ (max 0 (- (shaoline--echo-area-width) 4 shaoline-right-margin)) 3)))
      ((integerp v) (max 1 v))
      (t nil))))
+
+(defun shaoline--echo-area-width ()
+  "Return the usable character width of the echo-area window."
+  (let ((window (or (and (active-minibuffer-window)
+                         (active-minibuffer-window))
+                    (and (window-live-p (minibuffer-window (selected-frame)))
+                         (minibuffer-window (selected-frame)))
+                    (selected-window))))
+    (if (window-live-p window)
+        (window-body-width window)
+      80)))
+
+(defun shaoline--target-width (&optional width)
+  "Return a conservative single-line layout width for optional WIDTH."
+  (max 1 (- (or width (shaoline--echo-area-width) 80) 2)))
+
+(defun shaoline--visible-width (string)
+  "Return STRING's display width without display alignment properties."
+  (string-width (substring-no-properties string)))
 
 (defun shaoline--compose-cache-key (&optional width)
   "Produce a cache key for the current buffer/frame WIDTH.
@@ -796,7 +806,7 @@ stale composed string whose line number is one or two positions
 behind, and the visible modeline lags the cursor."
   (format "%s|%s|%s|%s|%s|%s"
           (buffer-name)
-          (or width (frame-width))
+          (shaoline--target-width width)
           shaoline-right-margin
           (line-number-at-pos)
           (current-column)
@@ -839,8 +849,9 @@ by =shaoline-compose-min-interval= to smooth out bursts."
     (shaoline--refresh-right-margin)
     (let* ((key (shaoline--compose-cache-key width))
            (entry (gethash key shaoline--compose-cache)))
-      (shaoline--log "compose-dbg: begin key=%s width=%s prev-rm=%s rm=%s Δmargin=%.2fs interval=%.2fs"
-                     key (or width (frame-width)) prev-rm shaoline-right-margin
+       (shaoline--log "compose-dbg: begin key=%s width=%s prev-rm=%s rm=%s Δmargin=%.2fs interval=%.2fs"
+                      key (shaoline--target-width width) prev-rm shaoline-right-margin
+
                      (- now shaoline--last-margin-refresh-time) shaoline-tray-refresh-interval)
       (cond
        ;; Normal TTL hit
@@ -853,8 +864,9 @@ by =shaoline-compose-min-interval= to smooth out bursts."
         (car entry))
        (t
         ;; Real recomposition
-        (let ((shaoline--composing-p t))
-          (let* ((target-width (or width (frame-width) 80))
+         (let ((shaoline--composing-p t))
+           (let* ((target-width (shaoline--target-width width))
+
                  (left (shaoline--collect-side :left))
                  (center (shaoline--collect-side :center))
                  (right (shaoline--collect-side :right))

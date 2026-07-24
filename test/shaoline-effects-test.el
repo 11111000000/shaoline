@@ -52,6 +52,7 @@ time even when the visible characters were identical, so display always
 re-rendered — causing the echo-area to blink."
   (shaoline--state-put :last-content "test content")
   (setq shaoline--active-effects nil)
+  (setq shaoline--last-displayed-content "test content")
   (let ((calls 0))
     (cl-letf (((symbol-function 'shaoline--should-display-p) (lambda (_) t))
               ((symbol-function 'current-message)
@@ -70,9 +71,20 @@ re-rendered — causing the echo-area to blink."
     ;; display effect not pushed
     (should-not (member 'display shaoline--active-effects))))
 
+(ert-deftest shaoline-display-cached-redraws-after-echo-was-cleared ()
+  "Cached content is redrawn when the echo-area no longer contains it."
+  (let ((calls 0))
+    (setq shaoline--last-displayed-content "test content")
+    (shaoline--state-put :last-content "test content")
+    (cl-letf (((symbol-function 'current-message) (lambda () nil))
+              ((symbol-function 'message) (lambda (&rest _) (setq calls (1+ calls)) nil))
+              ((symbol-function 'shaoline--log) (lambda (&rest _) nil)))
+      (shaoline--display-cached))
+    (should (= calls 1))))
+
 (ert-deftest shaoline-display-rerenders-when-content-actually-changed ()
-  "When content visually changes (e.g. line number changed), display must
-re-render even if echo-area still shows our message."
+  "When content visually changes, display must re-render even if echo-area still shows our message."
+
   (shaoline--state-put :last-content "test [12] content")
   (setq shaoline--active-effects nil)
   (let ((calls 0))
@@ -107,9 +119,11 @@ the echo-area had lost our line."
               ((symbol-function 'shaoline--log) (lambda (&rest _) nil)))
       ;; We drew this exact content last time.
       (setq shaoline--last-displayed-content "test content")
-      ;; Same content again → skip.
-      (shaoline--display "test content"))
-    (should (= calls 0))))
+       ;; Same content again with foreign echo → redraw.
+       (shaoline--display "test content"))
+
+     (should (= calls 1))))
+
 
 (ert-deftest shaoline-display-rerenders-when-snapshot-differs ()
   "If our snapshot differs from the new content, redraw even if

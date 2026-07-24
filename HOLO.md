@@ -112,7 +112,12 @@ Shaoline — функциональный минималистичный mode-li
 - **Status**: Frozen
 - **Proof**: `make test-core` — `shaoline-compose-cache-key-includes-line-and-keys`
 
-### [Frozen] Reassert через `last-display-time`
+### [Frozen] Echo-area width and visibility snapshot
+- **Choice**: Implicit composition width follows `window-body-width` of the echo-area window, reserves the final column for single-row output, and deduplicates only while the tagged Shaoline content remains visible in `current-message`.
+- **Status**: Frozen
+- **Exit**: N/A
+- **Proof**: `make test-core` — `shaoline-compose-uses-echo-area-width`, `shaoline-layout-reserves-final-column`; `make test-effects` — `shaoline-display-cached-redraws-after-echo-was-cleared`
+
 - **Choice**: `shaoline--reassert-yang-visibility` больше не дросселирует по
   `since-last > min-int` от now; вместо этого при реальном re-assert обновляет
   `shaoline--last-display-time` (= текущее время). Это устраняет баг рассинхронизации,

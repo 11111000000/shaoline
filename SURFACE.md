@@ -34,8 +34,8 @@
 
 ### shaoline-compose
 - **Stability**: [FROZEN]
-- **Spec**: Композиция сегментов в строку mode-line (pure function)
-- **Proof**: `make test-core` — тест shaoline-compose-output-is-string
+- **Spec**: Композиция сегментов в строку mode-line (pure function); без явного WIDTH использует ширину echo-area и оставляет один столбец справа для однострочного вывода
+- **Proof**: `make test-core` — тесты `shaoline-compose-output-is-string`, `shaoline-compose-uses-echo-area-width`, `shaoline-layout-reserves-final-column`
 - **Invariant**: INV-Pure-Segments, INV-Determinism
 
 ### shaoline-define-segment

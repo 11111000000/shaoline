@@ -60,7 +60,8 @@ buffer actually displayed, preventing the brief echo-area flash."
                (shaoline--log "shaoline-update: force=%s permit=%s buffer=%s"
                               force permit (buffer-name))
                (when permit
-                 (let ((content (condition-case _e (shaoline-compose) (error ""))))
+                (let ((content (condition-case _e (shaoline-compose) (error ""))))
+
                    (shaoline--log "shaoline-update: composed len=%s"
                                   (and (stringp content) (length content)))
                    (when (and (stringp content)

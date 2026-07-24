@@ -29,9 +29,18 @@
     ;; Shorter width should not exceed the limit significantly
     (should (<= (string-width result-40) 50)))) ; Some tolerance
 
-;; ----------------------------------------------------------------------------
-;; Test: Segment errors do not break composition
-;; ----------------------------------------------------------------------------
+(ert-deftest shaoline-compose-uses-echo-area-width ()
+  "Implicit composition width follows the echo-area window rather than frame-width."
+  (cl-letf (((symbol-function 'shaoline--echo-area-width) (lambda () 80)))
+    (should (= (shaoline--target-width nil) 78)))
+  (cl-letf (((symbol-function 'shaoline--echo-area-width) (lambda () 40)))
+    (should (= (shaoline--target-width nil) 38))))
+
+(ert-deftest shaoline-layout-reserves-final-column ()
+  "The layout leaves the final echo-area column available for truncation."
+  (let ((result (shaoline--compose-line '("left") (list (make-string 100 ?x)) '("right") 40)))
+    (should (<= (string-width result) 40))))
+
 
 (ert-deftest shaoline-compose-segment-errors-graceful ()
   "Segment errors are handled gracefully in composition."
