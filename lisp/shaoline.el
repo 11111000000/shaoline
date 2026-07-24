@@ -682,27 +682,33 @@ Align perfectly to WIDTH."
   (let* ((layout (shaoline--calculate-layout left center right width))
          (left-str (nth 0 layout))
          (center-str (nth 1 layout))
-         (right-str (nth 2 layout))
-         (left-w (string-width left-str))
-         (right-w (string-width right-str))
+          (right-str (shaoline--pad-right-block (nth 2 layout)))
+
+          (left-w (shaoline--visible-width left-str))
+
+          (right-w (shaoline--visible-width right-str))
           (gap-left (if (string-empty-p left-str) "" " "))
           (align-needed (not (string-empty-p right-str)))
+          (right-gap "")
           (natural-gap (if align-needed
                            (make-string
                             (max 0 (- width left-w right-w
-                                    (if (string-empty-p center-str) 0 (string-width center-str))
+                                    (if (string-empty-p center-str) 0 (shaoline--visible-width center-str))
                                     (if (string-empty-p left-str) 0 1)
                                     (if (string-empty-p center-str) 0 1)
                                     shaoline-right-margin))
                             ?\ )
                          ""))
+
           (result
            (concat
             left-str
             gap-left
-            center-str
-            natural-gap
-            right-str)))
+             center-str
+             natural-gap
+             right-gap
+             right-str)))
+
 
     ;; Store rendered segment widths for shaoline-available-center-width
     (shaoline--state-put :last-left-width left-w)
@@ -780,53 +786,69 @@ falling back to the old truncate-as-safety-net behaviour)."
      (t nil))))
 
 (defun shaoline--echo-area-width ()
-  "Return a conservative width in columns for the echo-area window."
-  (let* ((window (or (and (active-minibuffer-window)
-                          (active-minibuffer-window))
-                     (and (window-live-p (minibuffer-window (selected-frame)))
-                          (minibuffer-window (selected-frame)))
-                     (selected-window)))
-         (pixel-width (and (window-live-p window)
-                           (let ((edges (window-body-pixel-edges window)))
-                             (- (nth 2 edges) (nth 0 edges)))))
-         (char-width (and (window-live-p window)
-                          (frame-char-width (window-frame window)))))
-    (max 1 (if (and pixel-width char-width (> char-width 0))
-               (floor (/ pixel-width (float char-width)))
-             (if (window-live-p window) (window-body-width window) 80)))))
+  "Return the full frame width used by the shared echo area."
+  (let ((frame (selected-frame)))
+    (max 1 (if (display-graphic-p)
+               (floor (/ (frame-pixel-width frame)
+                         (float (frame-char-width frame))))
+             (frame-width frame)))))
 
 (defun shaoline--target-width (&optional width)
   "Return a conservative single-line layout width for optional WIDTH."
   (max 1 (- (or width (shaoline--echo-area-width) 80) 2)))
 
+(defun shaoline--pad-stable-right (segments)
+  "Pad variable-width right segments without changing their separation."
+  (let ((battery (nth 6 segments)))
+    (when (stringp battery)
+      (setf (nth 6 segments)
+            (shaoline--fixed-width battery 6)))
+    segments))
+
 (defun shaoline--visible-width (string)
   "Return STRING's display width without display alignment properties."
   (string-width (substring-no-properties string)))
 
+(defcustom shaoline-right-block-width 64
+  "Fixed character width reserved for the complete right-side block."
+  :type 'integer
+  :group 'shaoline)
+
+(defun shaoline--pad-right-block (string)
+  "Pad STRING to a fixed pixel width while preserving its content."
+  (let* ((target (max 1 shaoline-right-block-width))
+         (current (shaoline--visible-width string)))
+    (if (< current target)
+        (concat (make-string (- target current) ?\s) string)
+      string)))
+
+(defcustom shaoline-right-margin-pixels 9
+  "Fixed pixel margin between the moon and the right frame edge."
+  :type 'integer
+  :group 'shaoline)
+
+(defun shaoline--frame-content-pixel-width ()
+  "Return the frame pixel width available to Shaoline."
+  (max 1 (- (frame-pixel-width) shaoline-right-margin-pixels)))
+
 (defun shaoline--fit-pixel-width (string)
-  "Trim STRING while preserving the rightmost content."
+  "Trim only the elastic spacer before the right-side block."
   (if (or (not (display-graphic-p))
           (not (fboundp 'string-pixel-width)))
       string
-    (let* ((window (or (active-minibuffer-window)
-                       (minibuffer-window (selected-frame))))
-           (edges (and (window-live-p window) (window-body-pixel-edges window)))
-           (limit (and edges (max 1 (- (nth 2 edges) (nth 0 edges)
-                                      (* 2 (frame-char-width))))))
-           (result string))
-      (while (and limit (> (string-pixel-width result) limit))
-        (let* ((last-space (cl-position ?\s result :from-end t))
-               (space (and last-space
-                            (cl-position ?\s result :from-end t
-                                         :end last-space))))
-          (if space
-              (setq result (concat (substring result 0 space)
-                                   (substring result (1+ space))))
-            (setq result (substring result 0 -1)))))
+    (let ((limit (shaoline--frame-content-pixel-width))
+          (result string))
+      (while (and (> (string-pixel-width result) limit)
+                  (string-match "  +" result))
+        (let ((pos (match-beginning 0)))
+          (setq result (concat (substring result 0 pos)
+                               (substring result (1+ pos))))))
       result)))
 
 
+
 (defun shaoline--compose-cache-key (&optional width)
+
   "Produce a cache key for the current buffer/frame WIDTH.
 Includes line/column/current-keys so the cache invalidates on point
 movement or prefix-key changes; without these the cache returns a
@@ -897,7 +919,8 @@ by =shaoline-compose-min-interval= to smooth out bursts."
 
                  (left (shaoline--collect-side :left))
                  (center (shaoline--collect-side :center))
-                 (right (shaoline--collect-side :right))
+          (right (shaoline--pad-stable-right (shaoline--collect-side :right)))
+
                   (result (shaoline--fit-pixel-width
                            (shaoline--compose-line left center right target-width))))
 
@@ -1120,19 +1143,20 @@ No sliding refresh."
       ;; Стабильна достаточно долго
       (> (- now last) delay))))
 
+(defun shaoline--should-yield-for-minibuffer-p ()
+  "Return non-nil when Shaoline must yield to minibuffer completion."
+      (or (active-minibuffer-window)
+          (> (minibuffer-depth) 0)
+          (and (fboundp 'shaoline--minibuffer-trigger-cmd-p)
+               (or (shaoline--minibuffer-trigger-cmd-p this-command)
+                   (shaoline--minibuffer-trigger-cmd-p last-command)))))
+
 (defun shaoline--should-yield-echo-area-p ()
   "Comprehensive logic for when Shaoline should yield echo-area."
   (let* ((busy (shaoline--echo-area-busy-p))
-         (cmds (if (boundp 'shaoline--input-sensitive-commands)
-                   shaoline--input-sensitive-commands
-                 nil))
-         (this (memq this-command cmds))
-         (last (memq last-command cmds))
-         (yield (or busy this last)))
-    (when yield
-      (shaoline--log "yield-echo-area: busy=%s this=%s last=%s this-cmd=%s last-cmd=%s"
-                     busy this last this-command last-command))
+         (yield (or busy (shaoline--should-yield-for-minibuffer-p))))
     yield))
+
 
 ;; Public initialization function (useful feature from legacy)
 ;;;###autoload

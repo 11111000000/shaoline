@@ -170,11 +170,12 @@ When truncation occurs, an ellipsis character (…) is appended."
    (lambda ()
      (cond
       ;; GUI with icons
-      ((and (display-graphic-p)
-            (bound-and-true-p shaoline-enable-dynamic-segments)
-            (featurep 'all-the-icons)
-            major-mode)
-       (shaoline--icon #'all-the-icons-icon-for-mode major-mode))
+       ((and (display-graphic-p)
+             (bound-and-true-p shaoline-enable-dynamic-segments)
+             (featurep 'all-the-icons)
+             major-mode)
+        (concat (shaoline--icon #'all-the-icons-icon-for-mode major-mode) " "))
+
       ;; TTY fallback
       (major-mode
        (propertize (format-mode-line mode-name) 'face 'shaoline-mode-face))
