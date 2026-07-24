@@ -236,18 +236,19 @@ treated as a no-op."
     (push 'clear shaoline--active-effects)))
 
 (defun shaoline--clear-message-guard ()
-  "Hook for `clear-message-function' (Emacs 30+).
-Return `dont-clear-message' to keep the echo area when its current
-content is shaoline's, so external `(message nil)' calls (e.g. from
-agent-shell's active-message cleanup) do not erase the modeline.
-Return nil (or anything non-special) to let Emacs clear normally."
-  (let ((cur (current-message)))
-    (if (and cur
-             (get-text-property 0 'shaoline-origin cur)
-             (bound-and-true-p shaoline-mode)
-             (shaoline--resolve-setting 'always-visible))
-        'dont-clear-message
-      nil)))
+  "Yield unconditionally while minibuffer owns the echo area."
+  (if (or (active-minibuffer-window)
+          (> (minibuffer-depth) 0)
+          (and (fboundp 'shaoline--minibuffer-trigger-cmd-p)
+               (or (shaoline--minibuffer-trigger-cmd-p this-command)
+                   (shaoline--minibuffer-trigger-cmd-p last-command))))
+      nil
+    (let ((cur (current-message)))
+      (when (and cur
+                 (get-text-property 0 'shaoline-origin cur)
+                 (bound-and-true-p shaoline-mode)
+                 (shaoline--resolve-setting 'always-visible))
+        'dont-clear-message))))
 
 ;; ----------------------------------------------------------------------------
 ;; Timer Effects — Temporal Manifestations
@@ -347,59 +348,21 @@ Return nil (or anything non-special) to let Emacs clear normally."
 
 ;; Inner-most guard to prevent unintended echo-area clears
 (defun shaoline--advice-preserve-empty-message (orig &rest args)
-  "Block spurious clears of the echo area.
-
-If the first arg to `message' is nil or an empty/whitespace-only
-string and `shaoline--allow-empty-message' is nil, suppress the
-call; otherwise forward to ORIG with ARGS.
-
-Yields to the minibuffer: when a completion UI (Vertico/Consult/Corfu)
-owns the echo area, `(message nil)' and empty-string clears must pass
-through so the candidate overlay can repaint. Without this, the
-candidate list comes up empty until the user types a character
-(which forces a redraw through a different path).  See the
-`allows-in-minibuffer' and
-`allows-when-minibuffer-active-from-regular-buffer' tests.
-
-Important: the yield check is `(not (active-minibuffer-window))',
-NOT `(not (minibufferp))'. The completion UI is owned by the
-minibuffer even when `(message ...)' is called from a *source*
-buffer hook (e.g. vertico/consult `minibuffer-setup-hook', or a
-shaoline timer firing while `M-x' is in flight). The earlier
-`(minibufferp)' check mistakenly looked at the current buffer and
-let those clears through suppression, which is exactly the pro-nix
-regression.
-
-Fail-open: if anything goes wrong (e.g. hot reload / makunbound), do not
-brick Emacs — just call ORIG."
+  "Forward empty message clears whenever minibuffer ownership is pending or active."
   (condition-case _err
-      (progn
-        (shaoline--ensure-shared-vars)
-        (let* ((fmt (car args)))
-          (cond
-           ;; nil means clear; block unless explicitly allowed OR a
-           ;; minibuffer is active (a completion UI is in charge of
-           ;; the echo). We check `active-minibuffer-window' rather
-           ;; than `(minibufferp)' because `(message ...)' calls from
-           ;; hooks (vertico/consult `minibuffer-setup-hook',
-           ;; third-party packages, shaoline's own timers) run in the
-           ;; *source* buffer, where `minibufferp' is nil even while
-           ;; `M-x' is in flight. The completion UI still owns the
-           ;; echo and must be allowed to clear it.
-           ((and (null fmt)
-                 (not (bound-and-true-p shaoline--allow-empty-message))
-                 (not (active-minibuffer-window)))
-            nil)
-           ;; empty/whitespace strings — same yielding rule.
-           ((and (stringp fmt)
-                 (string-empty-p (string-trim (format "%s" fmt)))
-                 (not (bound-and-true-p shaoline--allow-empty-message))
-                 (not (active-minibuffer-window)))
-            nil)
-           ;; anything else — pass through
-           (t
-            (apply orig args)))))
+      (let ((fmt (car args)))
+        (if (or (active-minibuffer-window)
+                (and (fboundp 'shaoline--minibuffer-trigger-cmd-p)
+                     (or (shaoline--minibuffer-trigger-cmd-p this-command)
+                         (shaoline--minibuffer-trigger-cmd-p last-command))))
+            (apply orig args)
+          (if (or (bound-and-true-p shaoline--allow-empty-message)
+                  (and (stringp fmt)
+                       (not (string-empty-p (string-trim fmt)))))
+              (apply orig args)
+            nil)))
     (error (apply orig args))))
+
 
 ;; ────────────────────────────────────────────────────────────
 ;;  新 advice: расширяем систему advice
@@ -820,6 +783,7 @@ consult-xref, consult-yank-pop, etc.), and `M-x' / `M-:' via
   (when (and shaoline-mode
              (shaoline--resolve-setting 'always-visible)
              (not (shaoline--should-yield-echo-area-p))
+             (not (shaoline--should-yield-for-minibuffer-p))
              (shaoline--echo-area-stable-p)
              (not (shaoline--minibuffer-trigger-cmd-p this-command))
              (not (shaoline--minibuffer-trigger-cmd-p last-command)))
