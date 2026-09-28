@@ -1071,9 +1071,17 @@ Reduced list focusing on major state changes.")
 (defun shaoline--display-cached ()
   "Display last cached content immediately without recomputation.
 Skips when we already drew this exact visual content (race-free
-snapshot check; see `shaoline--last-displayed-content')."
+snapshot check; see `shaoline--last-displayed-content').
+Also skips when a minibuffer is active: do not race echo-area
+content against the minibuffer prompt, as that causes the
+vertico/corfu mini-window to grow to `max-mini-window-height'
+while still empty. `window-selection-change-functions' and
+`focus-in-hook' schedule this function via a 0.1s timer without
+re-checking the minibuffer state — this guard closes that race."
   (shaoline--ensure-shared-vars)
-  (let* ((content (shaoline--state-get :last-content))
+  (unless (or (active-minibuffer-window) (> (minibuffer-depth) 0))
+    (shaoline--log "display-cached: skipped (minibuffer active)")
+    (let* ((content (shaoline--state-get :last-content))
          (content-np (and content (substring-no-properties content)))
          (current (current-message))
          (ours-in-echo (and current
@@ -1102,7 +1110,7 @@ snapshot check; see `shaoline--last-displayed-content')."
 
         (setq shaoline--last-display-time (float-time)
               shaoline--last-displayed-content (or content-np "")
-              shaoline--last-displayed-content-time (float-time))))))
+              shaoline--last-displayed-content-time (float-time)))))))
 
 
 ;; ----------------------------------------------------------------------------

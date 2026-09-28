@@ -82,6 +82,33 @@ re-rendered — causing the echo-area to blink."
       (shaoline--display-cached))
     (should (= calls 1))))
 
+(ert-deftest shaoline-display-cached-skips-when-minibuffer-active ()
+  "`shaoline--display-cached' must be a no-op when a minibuffer is active.
+`window-selection-change-functions' and `focus-in-hook' schedule it via
+a 0.1s timer without re-checking the minibuffer state. Without this guard,
+the echo-area write races the minibuffer prompt / vertico overlay and
+paints an empty ~quarter-frame mini-window (Emacs 30, `grow-only' +
+`max-mini-window-height' = 0.25)."
+  (let ((calls 0))
+    (setq shaoline--last-displayed-content "")
+    (shaoline--state-put :last-content "test content")
+    (cl-letf (((symbol-function 'current-message) (lambda () nil))
+              ((symbol-function 'message) (lambda (&rest _) (setq calls (1+ calls)) nil))
+              ((symbol-function 'shaoline--log) (lambda (&rest _) nil))
+              ((symbol-function 'active-minibuffer-window) (lambda () t))
+              ((symbol-function 'minibuffer-depth) (lambda () 1)))
+      (shaoline--display-cached)
+      (should (= calls 0)))
+    ;; Sanity: without the simulated minibuffer, the call would have drawn.
+    (let ((calls 0))
+      (cl-letf (((symbol-function 'current-message) (lambda () nil))
+                ((symbol-function 'message) (lambda (&rest _) (setq calls (1+ calls)) nil))
+                ((symbol-function 'shaoline--log) (lambda (&rest _) nil))
+                ((symbol-function 'active-minibuffer-window) (lambda () nil))
+                ((symbol-function 'minibuffer-depth) (lambda () 0)))
+        (shaoline--display-cached)
+        (should (= calls 1))))))
+
 (ert-deftest shaoline-display-rerenders-when-content-actually-changed ()
   "When content visually changes, display must re-render even if echo-area still shows our message."
 

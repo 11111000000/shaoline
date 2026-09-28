@@ -126,3 +126,9 @@ Scenario: Активация и отображение mode-line с проект
 ---
 
 Last Updated: 2026-04-12
+
+### shaoline--display-cached guard against active minibuffer
+- **Stability**: [FLUID]
+- **Spec**: Returns immediately (no message write) while `(active-minibuffer-window)` is non-nil or `(minibuffer-depth) > 0`. Closes the race where `window-selection-change-functions` and `focus-in-hook` schedule the cached display via a 0.1 s timer without re-checking minibuffer state — without this, the echo write races the vertico overlay and paints a quarter-frame empty mini-window under Emacs 30 (`resize-mini-windows' = `grow-only' + `max-mini-window-height' = 0.25).
+- **Proof**: `make test-effects` — тесты `shaoline-display-cached-skips-when-minibuffer-active` (skip при активном минибуфере) и `shaoline-display-cached-redraws-after-echo-was-cleared` (нормальный путь не сломан).
+- **Invariant**: INV-Compat-Policy (аддитивное изменение поведения; побочный эффект: реже появляется «мигание» modeline при открытии минибуфера).
